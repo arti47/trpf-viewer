@@ -58,5 +58,5 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 
 ## Handoff / status
 - Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
-- TRPF facades styled from owner renderings (2026-10-24); roof crown +5.6 m estimated (owner OK'd estimate; replace with real height if known).
+- TRPF facades styled from owner renderings (2026-10-24); roof crown +5.6 m estimated (owner OK'd estimate; owner-confirmed on all 4 residential blocks 31A/31B/32A/33A; replace with real height if known).
 - Pages live from `main` root (`index.html` → app). App renders headless with no JS errors.
