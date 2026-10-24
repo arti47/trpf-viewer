@@ -68,13 +68,11 @@
       <span id="sunPill" class="text-[10px] mono bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded"></span>
       <select id="scenarioPreset" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 border border-slate-700">
         <option value="custom">-- Scenario --</option>
-        <option value="movein">Move-in end-2029: Marina East + E-side parcels unbuilt</option>
-        <option value="base" selected>#134 @ 27F, SW, Marina East GPR 5.6 / 30F cap</option>
-        <option value="today">Today: no new towers</option>
-        <option value="tall">Marina East 45–50F (same GPR → fewer blocks)</option>
-        <option value="low">Marina East 20–25F</option>
-        <option value="top">#134 @ 30F (top floor)</option>
-        <option value="allres">All reserve sites built (30–40F)</option>
+        <option value="movein">Move-in 2029: no new towers</option>
+        <option value="base" selected>Future: Marina East 25–30F + E condos</option>
+        <option value="tall">Future: Marina East 45–50F</option>
+        <option value="low">Future: Marina East 20–25F</option>
+        <option value="allres">Full build-out: + all reserves</option>
       </select>
     </div>
   </header>
@@ -1238,9 +1236,9 @@ let planMode = null;
 planCanvas.addEventListener('pointerdown', e => { const { x, y } = localXY(planCanvas, e), [vx, vy] = planXf().P(state.vx, state.vz); planMode = Math.hypot(x - vx, y - vy) < 16 ? 'move' : 'aim'; planCanvas.setPointerCapture(e.pointerId); applyPlan(e); });
 planCanvas.addEventListener('pointermove', e => { if (planMode) applyPlan(e); });
 ['pointerup', 'pointercancel'].forEach(t => planCanvas.addEventListener(t, () => { planMode = null; }));
-function applyPlan(e) { const { x, y } = localXY(planCanvas, e), [wx, wz] = planXf().W(x, y); if (planMode === 'move') { state.vx = Math.round(wx * 10) / 10; state.vz = Math.round(wz * 10) / 10; state.spot = null; custom(); } else state.heading = Math.round(bearingTo(state.vx, state.vz, wx, wz) * 2) / 2; renderAll(); }
+function applyPlan(e) { const { x, y } = localXY(planCanvas, e), [wx, wz] = planXf().W(x, y); if (planMode === 'move') { state.vx = Math.round(wx * 10) / 10; state.vz = Math.round(wz * 10) / 10; state.spot = null; } else state.heading = Math.round(bearingTo(state.vx, state.vz, wx, wz) * 2) / 2; renderAll(); }
 let profDrag = false;
-function applyProf(e) { const { y } = localXY(profileCanvas, e), m = lastMath; if (!m) return; const R = state.profileRange, inR = m.crossings.filter(c => c.sIn < R); const nearLm = m.landmarks.filter(r => angDiff(r.bearing, state.heading) < 4 && r.dist < R); const L = profileLayout(profileCanvas._w, profileCanvas._h, Math.max(120, m.hEye * 1.3, ...inR.map(c => c.h * 1.12), ...nearLm.map(r => r.lm.h * 1.15))); const elev = ((L.padTop + L.plotH - y) / L.plotH) * L.maxElev; state.obsFloor = clamp(Math.round((elev - EYE_OFFSET - VOID_DECK_HEIGHT) / FLOOR_HEIGHT) + 1, 1, 30); custom(); renderAll(); }
+function applyProf(e) { const { y } = localXY(profileCanvas, e), m = lastMath; if (!m) return; const R = state.profileRange, inR = m.crossings.filter(c => c.sIn < R); const nearLm = m.landmarks.filter(r => angDiff(r.bearing, state.heading) < 4 && r.dist < R); const L = profileLayout(profileCanvas._w, profileCanvas._h, Math.max(120, m.hEye * 1.3, ...inR.map(c => c.h * 1.12), ...nearLm.map(r => r.lm.h * 1.15))); const elev = ((L.padTop + L.plotH - y) / L.plotH) * L.maxElev; state.obsFloor = clamp(Math.round((elev - state.eyeOffset - VOID_DECK_HEIGHT) / FLOOR_HEIGHT) + 1, 1, 30); renderAll(); }
 profileCanvas.addEventListener('pointerdown', e => { if (localXY(profileCanvas, e).x > 90) return; profDrag = true; profileCanvas.setPointerCapture(e.pointerId); applyProf(e); });
 profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e); });
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
@@ -1250,7 +1248,7 @@ perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; co
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
 bind('headingSlider', v => { state.heading = parseFloat(v); }); bind('inlineHeading', v => { state.heading = parseFloat(v); });
-bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); custom(); }); bind('inlineFloor', v => { state.obsFloor = parseInt(v, 10); custom(); });
+bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); }); bind('inlineFloor', v => { state.obsFloor = parseInt(v, 10); });
 bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); }); bind('inlinePitch', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
 bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
@@ -1292,19 +1290,18 @@ function setExpanded(on) {
 }
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
+// Scenarios change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
-  movein: { floor: 27, me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
-  base: { floor: 27, me: [25, 30], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  today: { floor: 27, me: [25, 30], on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
-  tall: { floor: 27, me: [45, 50], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  low: { floor: 27, me: [20, 25], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  top: { floor: 30, me: [25, 30], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  allres: { floor: 27, me: [25, 30], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true } }
+  movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
+  base: { me: [25, 30], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  tall: { me: [45, 50], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  low: { me: [20, 25], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  allres: { me: [25, 30], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true } }
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
-  Object.assign(state, { vx: UNIT134[0], vz: UNIT134[1], spot: 'living', obsFloor: p.floor, heading: 220, pitchDeg: -1.5, spacing: 95, showExisting: true, showRoads: true });
+  Object.assign(state, { spacing: 95, showExisting: true, showRoads: true });
   state.dateStr = p.date || todayISO(); $('dateInput').value = state.dateStr;
-  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); setPosture('stand'); regen(); });
+  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); regen(); });
 function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(cssW * dpr)); cv.height = Math.max(1, Math.round(cssH * dpr)); cv._w = cssW; cv._h = cssH; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;
