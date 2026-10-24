@@ -213,6 +213,9 @@
         </div>
         <div id="insightBox" class="text-[11px] leading-relaxed bg-sky-950/40 border border-sky-800/50 text-sky-200/90 rounded-lg p-2.5 mb-2"></div>
         <div id="physicsReadout" class="text-[10px] mono leading-relaxed bg-slate-950/70 border border-slate-800 text-slate-400 rounded-lg p-2 mb-2.5"></div>
+        <div class="panel mb-2.5"><div class="flex justify-between items-center"><span class="text-[10px] font-semibold text-amber-300">Direct sun on window (year)</span><span id="sunNow" class="text-[10px] mono"></span></div>
+          <canvas id="sunChart" style="display:block;width:100%;height:150px;touch-action:none"></canvas>
+          <div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
         <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
         <div id="landmarkList" class="space-y-1 text-xs"></div>
         <div class="text-[9px] text-slate-500 mt-2 leading-snug">
@@ -477,7 +480,9 @@ function generateTowers() {
 /* ===================== SPATIAL GRID ===================== */
 const CELL = 40, GX0 = -5400, GZ0 = -4400, NI = Math.ceil(8200 / CELL), NJ = Math.ceil(6400 / CELL);
 let GRID = [], ALL = [], stampCtr = 1;
+let WORLD_VER = 0;
 function rebuildIndex() {
+  WORLD_VER++;
   ALL = (state.showExisting ? EXISTING : []).concat(state.showRoads ? DECKS : [], TRPF, towers);
   GRID = new Array(NI * NJ);
   for (const P of ALL) {
@@ -677,6 +682,63 @@ function computeSightlines() {
   return { cam, env, hEye, hFovRad: cam.hfov, vFovRad, hFovDeg: cam.hfov / DEG, vFovDeg: vFovRad / DEG, crossings, binding, gaze, dead, landmarks, occ: computeOcclusionMask(W, H), dh, dipDeg };
 }
 
+/* ===================== SUNLIGHT ON WINDOW ===================== */
+// Direct sun test at window centre (slab + 1.4m, W1 0.55–2.2m): sun above horizon, in front of the facade (horizontal incidence < 90°),
+// and the ray toward the sun unobstructed for 4km (same prisms as sightlines incl. new towers & TRPF). inc = cos of incidence on the glass.
+const winPoint = (x, z) => [x, getEyeHeight(state.obsFloor) - state.eyeOffset + 1.4, z];
+function sunOnWindow(x, z, normal, dateStr, hr) {
+  const sun = solarPosition(dateStr, hr); if (sun.elDeg <= 0) return { state: 'night' };
+  const v = compassToWorld(sun.azDeg, sun.elDeg), nx = Math.sin(normal * DEG), nz = Math.cos(normal * DEG), inc = v[0] * nx + v[2] * nz;
+  if (inc <= 0.02) return { state: 'behind', sun };
+  const p0 = winPoint(x + nx * 0.2, z + nz * 0.2), hit = segHit(p0, [p0[0] + v[0] * 4000, p0[1] + v[1] * 4000, p0[2] + v[2] * 4000], p0[0], p0[2]);
+  return hit ? { state: 'blocked', by: hit.P, sun, inc } : { state: 'direct', sun, inc };
+}
+const SUN_T0 = 6.5, SUN_T1 = 19.5, SUN_DT = 0.25;
+let sunCache = { key: '', grid: null };
+function sunWindow() { const sp = curSpot(); return sp ? { x: sp.x, z: sp.z, normal: sp.normal } : { x: state.vx, z: state.vz, normal: state.heading }; }
+function sunGrid() {
+  const W = sunWindow(), yr = state.dateStr.slice(0, 4), key = [W.x, W.z, W.normal, state.obsFloor, state.eyeOffset, yr, WORLD_VER].join('|');
+  if (sunCache.key === key) return sunCache.grid;
+  const grid = [];
+  for (let mo = 1; mo <= 12; mo++) { const ds = `${yr}-${String(mo).padStart(2, '0')}-15`, row = []; let hrs = 0;
+    for (let t = SUN_T0; t < SUN_T1 - 1e-6; t += SUN_DT) { const r = sunOnWindow(W.x, W.z, W.normal, ds, t + SUN_DT / 2); row.push(r); if (r.state === 'direct') hrs += SUN_DT; }
+    grid.push({ row, hrs }); }
+  sunCache = { key, grid }; return grid;
+}
+const sunChart = $('sunChart'), sunCtx = sunChart.getContext('2d');
+function drawSunChart() {
+  const w = sunChart._w, h = sunChart._h; if (!w) return; const ctx = sunCtx, grid = sunGrid(), L = 30, R = 34, T = 4, B = 14, cw = (w - L - R) / grid[0].row.length, ch = (h - T - B) / 12;
+  ctx.clearRect(0, 0, w, h); ctx.font = '9px "JetBrains Mono", monospace';
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  grid.forEach((g, i) => { g.row.forEach((c, j) => { ctx.fillStyle = c.state === 'direct' ? `rgba(251,191,36,${0.35 + 0.65 * c.inc})` : c.state === 'blocked' ? 'rgba(244,63,94,0.45)' : c.state === 'behind' ? '#1e293b' : '#05080f'; ctx.fillRect(L + j * cw, T + i * ch, Math.ceil(cw), Math.ceil(ch) - 1); });
+    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'right'; ctx.fillText(MON[i], L - 4, T + i * ch + ch * 0.75); ctx.textAlign = 'left'; ctx.fillStyle = g.hrs ? '#fbbf24' : '#475569'; ctx.fillText(`${g.hrs.toFixed(1)}h`, w - R + 3, T + i * ch + ch * 0.75); });
+  ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; for (let t = 7; t <= 19; t += 2) ctx.fillText(String(t).padStart(2, '0'), L + ((t - SUN_T0) / SUN_DT) * cw, h - 3);
+  const mo = +state.dateStr.slice(5, 7) - 1, x = L + ((state.hour - SUN_T0) / SUN_DT) * cw; ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.strokeRect(L - 0.5, T + mo * ch - 0.5, w - L - R + 1, ch);
+  if (state.hour >= SUN_T0 && state.hour <= SUN_T1) { ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, h - B); ctx.stroke(); }
+  const W = sunWindow(), now = sunOnWindow(W.x, W.z, W.normal, state.dateStr, state.hour), el = $('sunNow');
+  el.textContent = now.state === 'direct' ? `☀ direct now (${Math.round(Math.acos(Math.min(1, now.inc)) / DEG)}° incidence)` : now.state === 'blocked' ? `blocked now: ${pName(now.by).slice(0, 24)}` : now.state === 'behind' ? 'sun behind facade now' : 'sun down';
+  el.style.color = now.state === 'direct' ? '#fbbf24' : now.state === 'blocked' ? '#fb7185' : '#64748b';
+  sunChart._L = L; sunChart._R = R; sunChart._T = T; sunChart._B = B; sunChart._cw = cw; sunChart._ch = ch;
+}
+sunChart.addEventListener('pointerdown', e => { const { x, y } = localXY(sunChart, e), c = sunChart; const j = Math.floor((x - c._L) / c._cw), i = Math.floor((y - c._T) / c._ch); if (i < 0 || i > 11 || j < 0 || x > c._w - c._R) return;
+  state.dateStr = `${state.dateStr.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-15`; $('dateInput').value = state.dateStr; state.hour = Math.round((SUN_T0 + (j + 0.5) * SUN_DT) * 4) / 4; renderAll(); });
+// Plan overlay: sun path around the viewer (stereographic-ish: radius ∝ zenith angle), hour ticks, current sun ray (amber if window sunlit).
+function drawSunPath(ctx, m, vx, vy) {
+  const Rp = Math.min(planCanvas._w, planCanvas._h) * 0.42, pos = (ds, t) => { const s = solarPosition(ds, t); if (s.elDeg < 0) return null; const rr = Rp * (1 - s.elDeg / 90), a = s.azDeg * DEG; return [vx + rr * Math.sin(a), vy - rr * Math.cos(a)]; };
+  const yr = state.dateStr.slice(0, 4);
+  ctx.save(); ctx.strokeStyle = 'rgba(251,191,36,0.35)'; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(vx, vy, Rp, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  [[`${yr}-06-21`, 'Jun', 'rgba(251,146,60,0.7)'], [`${yr}-03-20`, 'Mar/Sep', 'rgba(250,204,21,0.6)'], [`${yr}-12-21`, 'Dec', 'rgba(56,189,248,0.7)'], [state.dateStr, '', '#fbbf24']].forEach(([ds, lab, col], k) => {
+    ctx.strokeStyle = col; ctx.lineWidth = k === 3 ? 2 : 1.2; ctx.beginPath(); let first = true, last = null;
+    for (let t = 6.5; t <= 19.5; t += 0.1) { const q = pos(ds, t); if (!q) { first = true; continue; } first ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); first = false; last = q; } ctx.stroke();
+    if (k === 3) { ctx.fillStyle = '#fde68a'; ctx.font = '8px "JetBrains Mono", monospace'; ctx.textAlign = 'center'; for (let t = 7; t <= 19; t++) { const q = pos(ds, t); if (q) { ctx.beginPath(); ctx.arc(q[0], q[1], 1.6, 0, Math.PI * 2); ctx.fill(); if (t % 2 === 1) ctx.fillText(String(t), q[0], q[1] - 4); } } }
+    else if (last) { ctx.fillStyle = col; ctx.font = '8px "JetBrains Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText(lab, last[0] + 3, last[1]); } });
+  const q = pos(state.dateStr, state.hour);
+  if (q) { const W = sunWindow(), now = sunOnWindow(W.x, W.z, W.normal, state.dateStr, state.hour), col = now.state === 'direct' ? '#ef4444' : '#fb923c';
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(q[0], q[1]); ctx.lineTo(vx, vy); ctx.stroke(); ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col; ctx.font = 'bold 9px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(now.state === 'direct' ? 'Direct sun' : 'No direct sun', 6, planCanvas._h - 6); }
+  ctx.restore();
+}
+
 /* ===================== DASHBOARD ===================== */
 const curSpot = () => UNIT_SPOTS.find(sp => sp.id === state.spot) || null;
 function setTag(el, text, tone) { const t = { ok: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', bad: 'bg-rose-500/15 text-rose-300 border-rose-500/30', mid: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }; el.textContent = text; el.className = `text-[10px] mono px-2 py-0.5 rounded border ${t[tone]}`; }
@@ -812,6 +874,7 @@ function drawPlan(m) {
   ctx.save(); ctx.setLineDash([4, 3]); ctx.strokeStyle = m.binding ? '#fb7185' : '#34d399'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(c[0], c[1]); ctx.stroke(); ctx.restore();
   const spP = curSpot(); if (spP) { const a = spP.normal * DEG, L2 = X.site ? 40 : 10; ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(vx - L2 * Math.cos(a), vy - L2 * Math.sin(a)); ctx.lineTo(vx + L2 * Math.cos(a), vy + L2 * Math.sin(a)); ctx.stroke(); }
   const [tx, ty] = P(UNIT134[0], UNIT134[1]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(tx, ty, 5, 0, Math.PI * 2); ctx.stroke();
+  drawSunPath(ctx, m, vx, vy);
   ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(vx, vy, 6, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.stroke();
   const sa = env.sun.azDeg * DEG, sx = w - 22, sy = 20; ctx.strokeStyle = env.sun.elDeg > 0 ? '#fbbf24' : '#64748b'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 12 * Math.sin(sa), sy - 12 * Math.cos(sa)); ctx.stroke(); ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(sx + 12 * Math.sin(sa), sy - 12 * Math.cos(sa), 3, 0, Math.PI * 2); ctx.fill();
@@ -1228,7 +1291,7 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1312,7 +1375,7 @@ function resizeCanvases() {
   sizeCanvas(profileCanvas, pp.clientWidth > 20 ? pp.clientWidth : 820, pp.clientHeight > 20 ? pp.clientHeight : 260);
   sizeCanvas(perspectiveCanvas, vp.clientWidth > 20 ? vp.clientWidth : 820, vp.clientHeight > 20 ? vp.clientHeight : 380);
   const pw = planCanvas.clientWidth > 20 ? planCanvas.clientWidth : 390, ph = state.planMode === 'site' ? (pw * 1009) / 1284 : (pw * (AREA.z1 - AREA.z0)) / (AREA.x1 - AREA.x0);
-  planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); renderNow();
+  planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); sizeCanvas(sunChart, sunChart.clientWidth > 20 ? sunChart.clientWidth : 390, 150); renderNow();
 }
 let initialized = false;
 function initApp() {
