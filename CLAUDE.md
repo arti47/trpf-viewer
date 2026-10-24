@@ -10,7 +10,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Progress reporting: do not narrate work; report only progress percentages (5%, 10%, … 100%). Final reply = "100%" + minimal result.
 - Every change must keep the app faithful to these rules/spec (physics, data, defaults above).
 - Git: after committing on the working branch, always merge into `main` and push `main` (owner standing instruction).
-- Batch changes per request. Keep this file current after every change (enforced by Stop hook `.claude/hooks/spec-sync.sh`: blocks finishing if the HTML is newer than this file).
+- Batch changes per request. Keep this file current after every change (enforced by Stop hook `.claude/hooks/spec-sync.sh`: git-based; blocks finishing if the HTML has uncommitted edits without CLAUDE.md edits, or its last commit is newer than CLAUDE.md's).
 
 ## Coordinate frame
 - Local metres: origin = TRPF URA parcel centroid (1.29682N, 103.87826E); x = East, z = North, y = up.
