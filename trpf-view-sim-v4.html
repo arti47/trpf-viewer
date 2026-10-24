@@ -111,6 +111,12 @@
           <input type="range" id="inlinePitch" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch">
           <span id="inlinePitchVal" class="mono text-xs font-bold text-sky-400 w-12 text-right"></span>
         </div>
+        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+          <span class="text-[11px] font-semibold text-amber-300 whitespace-nowrap">Time:</span>
+          <input type="range" id="inlineHour" min="5" max="23" step="0.25" value="13" class="amber" aria-label="Time">
+          <span id="inlineHourVal" class="mono text-xs font-bold text-amber-400 w-11 text-right"></span>
+          <input type="date" id="inlineDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700 mono" aria-label="Date">
+        </div>
       </div>
       <div class="canvas-pane-bottom">
         <div class="absolute top-2 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
@@ -784,7 +790,7 @@ function updateDashboard(m) {
   document.querySelectorAll('.range-btn').forEach(b => { b.className = `range-btn px-1.5 py-0.5 rounded border ${+b.dataset.range === state.profileRange ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`; });
   $('planSiteBtn').style.borderColor = state.planMode === 'site' ? '#34d399' : ''; $('planAreaBtn').style.borderColor = state.planMode === 'area' ? '#34d399' : '';
   $('visVal').textContent = `${state.visibilityKm} km`; $('visSlider').value = state.visibilityKm;
-  $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour;
+  $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour; $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateInput').value = state.dateStr;
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
   GROUPS.forEach(g => { const s = state.groups[g.id]; document.querySelector(`.g-on[data-g="${g.id}"]`).checked = s.on;
     document.querySelector(`.g-rng[data-g="${g.id}"][data-k="min"]`).value = s.min; document.querySelector(`.g-rng[data-g="${g.id}"][data-k="max"]`).value = s.max;
@@ -1314,7 +1320,8 @@ bind('headingSlider', v => { state.heading = parseFloat(v); }); bind('inlineHead
 bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); }); bind('inlineFloor', v => { state.obsFloor = parseInt(v, 10); });
 bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); }); bind('inlinePitch', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
-bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
+bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('inlineHour', v => { state.hour = parseFloat(v); });
+$('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
 $('spacingSlider').addEventListener('input', e => { state.spacing = parseInt(e.target.value, 10); custom(); regen(); });
 $('footprintSlider').addEventListener('input', e => { state.footprint = parseInt(e.target.value, 10); custom(); regen(); });
 $('reshuffleBtn').addEventListener('click', () => { state.seed++; regen(); });
