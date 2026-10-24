@@ -42,13 +42,13 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Room bar: Living / Bedroom 3 / Bedroom 2 / Master (S); posture Standing 1.55 m·0.5 m, Sofa 1.2 m·3.5 m (living), Bed 0.9 m·2.5 m (bedrooms). Stand-back slider.
 - Room interior (toggle): window wall w/ opening (W1: 0.55 m parapet, 2.2 m head), reveals, charcoal casement frame (mullions ~0.7 m, transom 1.8 m), clear glass, side walls, 2.6 m ceiling, floor. Off → hatched wall + dashed jamb lines.
 - TRPF facade (visual only, from developer renderings 31A/32A/33A fronts + model photo of 31A side facing #134; `trpfFacade`): ~7.5 m unit stacks along block local axis cycling brown-framed grey / greige / white-framed grey (`TRPF_PAL`, `STACK_W`); 0.9 m frame strips at stack joints; white ledge each floor, brown band every 5F in brown stacks; 2-pane windows per 3.6 m bay (sill 0.9, head 2.3), ~35% lit at night; void deck recessed. MSCP: grey screens, white slab edges + green planters per deck, pilasters every 8 m. Crown band (87.5–93.1 m): white framed panel on brown stacks, beige louvres elsewhere. Detail level from storey pixel size at eye level.
-- Trees (~15k, visual only): parks 22 m grid, roadside 16 m, TRPF lawn 14 m. Fixed cumulus field. Facade colour variation + window grid; night warm lines.
+- Trees (~15k, visual only): parks 22 m grid, roadside 16 m, TRPF lawn 14 m. Fixed cumulus field. Facade colour variation + window grid; night warm lines. Night (sun el < −4°): `litWindows` ~30% of 3.6 m bays lit (50% on towers >120 m), shown when storey ≥1.5 px; `drawStreetLights` poles every 35 m on at-grade OSM roads (both sides cls ≤2 at 10 m, one side otherwise at 8 m), glow + halo + ground pool, additive, haze-attenuated, ≤2.5 km, drawn before buildings/trees (occluded by painter order). Visual only.
 - Panes: section along gaze (2/4/6 km), 3D view (Expand ⤢, Esc), plan (site plan / area vector), sidebar.
 
 ## Open items / ideas
 - Real Marina East layout when URA publishes plot ratios / GLS sites.
 - Actual flyover clearances (ECP/KPE interchange).
-- Night lighting (lit windows, streetlights), facade details (air-con ledges).
+- Facade details on non-TRPF buildings (air-con ledges).
 - Calibrate against a real photo from #134 after move-in (end-2029).
 - Founders' Memorial / Bay East Garden expansion (low-rise) not modelled.
 

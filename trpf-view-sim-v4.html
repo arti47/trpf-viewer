@@ -546,7 +546,7 @@ function makeCamera(w, h) {
   const projDirPoly = vecs => { const c = vecs.map(([dx, dy, dz]) => { const xr = dx * cy - dz * sy, zr = dx * sy + dz * cy; return [xr, dy * cp - zr * sp, dy * sp + zr * cp]; });
     const out = []; const N = 0.02; for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length], ain = a[2] >= N, bin = b[2] >= N; if (ain) out.push(a); if (ain !== bin) { const t = (N - a[2]) / (b[2] - a[2]); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), N]); } }
     return out.length < 3 ? null : out.map(proj); };
-  return { w, h, hEye, yaw, pitch, fPx, ex, ez, hfov, toCam, projectPoint, projectPoly, projDirPoly, dirToScreen, inWedge, dist: (x, y, z) => Math.hypot(x - ex, y - hEye, z - ez) };
+  return { w, h, hEye, yaw, pitch, fPx, ex, ez, hfov, toCam, proj, projectPoint, projectPoly, projDirPoly, dirToScreen, inWedge, dist: (x, y, z) => Math.hypot(x - ex, y - hEye, z - ez) };
 }
 function clipNear(poly) {
   const out = [];
@@ -924,6 +924,43 @@ function facadeGrid(ctx, cam, f, P, env, dist) {
   const L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]), n = Math.floor(L / 3.6);
   if (n >= 2 && Math.abs(a.y - b.y) >= 4) for (let k = 1; k < n; k++) { const t = k / n, x = p0[0] + (p1[0] - p0[0]) * t, z = p0[2] + (p1[2] - p0[2]) * t, q0 = cam.projectPoint(x, P.base + y0, z), q1 = cam.projectPoint(x, P.h - 0.5, z); if (q0 && q1) { ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); } }
   ctx.stroke();
+  if (env.night && Math.abs(a.y - b.y) >= 1.5) litWindows(ctx, cam, P, p0, p1, y0, fh, L, T, env);
+}
+// Night: ~30% of window bays lit (50% for towers >120m, offices), warm 2700–3000K; corners lerped in camera space per storey row.
+function litWindows(ctx, cam, P, p0, p1, y0, fh, L, T, env) {
+  const nb = Math.max(1, Math.floor(L / 3.6)), frac = P.h > 120 ? 0.5 : 0.3, seed = P.cx * 0.37 + P.cz * 0.91 + p0[0];
+  ctx.fillStyle = rgbStr(mix(env.sky.hor, [255, 206, 140], T), 0.92); ctx.beginPath();
+  const at = (u, v, t) => cam.proj([u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t, u[2] + (v[2] - u[2]) * t]);
+  for (let y = P.base + y0, row = 0; y < P.h - fh * 0.6; y += fh, row++) {
+    const c0 = cam.toCam(p0[0], y + fh * 0.3, p0[2]), c1 = cam.toCam(p1[0], y + fh * 0.3, p1[2]), d0 = cam.toCam(p0[0], y + fh * 0.8, p0[2]), d1 = cam.toCam(p1[0], y + fh * 0.8, p1[2]);
+    if (c0[2] < NEAR || c1[2] < NEAR || d0[2] < NEAR || d1[2] < NEAR) continue;
+    for (let k = 0; k < nb; k++) { if (hash01(seed + k * 13.1, row * 7.7, 9) >= frac) continue;
+      const t0 = (k + 0.2) / nb, t1 = (k + 0.8) / nb, q = [at(c0, c1, t0), at(c0, c1, t1), at(d0, d1, t1), at(d0, d1, t0)];
+      ctx.moveTo(q[0][0], q[0][1]); ctx.lineTo(q[1][0], q[1][1]); ctx.lineTo(q[2][0], q[2][1]); ctx.lineTo(q[3][0], q[3][1]); ctx.closePath(); }
+  }
+  ctx.fill();
+}
+// Night streetlights (visual only): poles along OSM at-grade roads every 35m — both sides on major roads (cls ≤2, 10m), one side otherwise (8m);
+// lamp glow + halo + ground pool, additive, haze-attenuated, ≤2.5km. Drawn before buildings/trees so they occlude it.
+function drawStreetLights(ctx, cam, env) {
+  const RMAX = 2500, SP = 35; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const R of ROADS) {
+    if (!cam.inWedge(R.minx, R.maxx, R.minz, R.maxz, RMAX)) continue;
+    const p = R.pts, hw = R.w / 2 + 0.6, ph = R.c <= 2 ? 10 : 8, sides = R.c <= 2 ? [-1, 1] : [1]; let s0 = hash01(p[0], p[1], 5) * SP;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i], az = p[i + 1], L = Math.hypot(p[i + 2] - ax, p[i + 3] - az) || 1, ux = (p[i + 2] - ax) / L, uz = (p[i + 3] - az) / L; let s = s0;
+      for (; s < L; s += SP) for (const sd of sides) {
+        const x = ax + ux * s - uz * hw * sd, z = az + uz * s + ux * hw * sd, d = Math.hypot(x - cam.ex, z - cam.ez); if (d > RMAX || d < 4) continue;
+        const q = cam.projectPoint(x, ph, z); if (!q || q.x < -20 || q.x > cam.w + 20 || q.y < -20 || q.y > cam.h + 20) continue;
+        const T = transmittance(d, env), rr = Math.max(0.7, (0.35 / q.z) * cam.fPx), g = cam.projectPoint(x, 0.1, z);
+        if (g) { const rx = (7 / q.z) * cam.fPx, ry = rx * clamp(cam.hEye / Math.max(1, d), 0.08, 1); if (rx > 1) { ctx.fillStyle = `rgba(255,180,100,${0.10 * T})`; ctx.beginPath(); ctx.ellipse(g.x, g.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); } }
+        ctx.fillStyle = `rgba(255,190,120,${0.16 * T})`; ctx.beginPath(); ctx.arc(q.x, q.y, rr * 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,226,170,${0.9 * T})`; ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+      s0 = s - L;
+    }
+  }
+  ctx.restore();
 }
 function storeyLines(ctx, cam, f, h, env) {
   const p0 = f.pts[0], p1 = f.pts[1], a = cam.projectPoint(p0[0], VOID_DECK_HEIGHT, p0[2]), b = cam.projectPoint(p0[0], VOID_DECK_HEIGHT + FLOOR_HEIGHT, p0[2]);
@@ -985,6 +1022,7 @@ function drawGround(ctx, cam, env) {
       }
     }
   }
+  if (env.night && state.showRoads) drawStreetLights(ctx, cam, env);
   if (env.sunVec[1] > 0) { const sh = `rgba(0,0,12,${0.42 * env.direct})`;
     if (state.showRoads) DECKS.forEach(P => { if (P.base <= 0 || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2500 || !cam.inWedge(P.minx - 100, P.maxx + 100, P.minz - 100, P.maxz + 100, 2600)) return; const s = env.sunVec; if (s[1] < 0.05) return; const t = ((P.base + P.h) / 2) / s[1]; const pts = []; for (let i = 0; i < P.n; i++) pts.push([P.xs[i] - s[0] * t, 0.07, P.zs[i] - s[2] * t]); const sp = cam.projectPoly(pts); if (sp) fillPoly(ctx, sp, sh); });
     ALL.forEach(P => { if (P.base > 0 || P.h < 8 || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2500 || !cam.inWedge(P.minx - 300, P.maxx + 300, P.minz - 300, P.maxz + 300, 2800)) return; const s = shadowOf(P, env.sunVec); if (!s) return; const sp = cam.projectPoly(s.map(([x, z]) => [x, 0.05, z])); if (sp) fillPoly(ctx, sp, sh); }); }
