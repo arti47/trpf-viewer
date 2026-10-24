@@ -389,7 +389,7 @@ const GROUPS = [
 const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
-  groups: { N: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, S: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, EA: { on: true, min: 22, max: 24 }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
+  groups: { N: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, S: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, EA: { on: true, min: 22, max: 24, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
   showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
@@ -403,12 +403,14 @@ const CONDO = { f2f: 75.6 / 23, roof: 0, fpNom: 950, setback: 10, gap: 20, notch
 CONDO.lobby = CONDO.f2f;
 const condoRoof = f => f * CONDO.f2f;
 let CONDO_POOLS = [];
+// Per-plot override (owner, from tanjongrhucondos.com): E2 (front, S) 3 towers × 26F; E1 30F, tower count from GFA. floors 0 → use min/max sliders.
 function condoPlot(p, g, st, lo, hi, out, nextId) {
+  const ov = (st.plots && st.plots[p.id]) || {}; if (ov.floors > 0) lo = hi = ov.floors;
   const r = p.ring, gfa = parseFloat(p.gpr) * p.area, avg = (lo + hi) / 2;
   let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity; for (let i = 0; i < r.length; i += 2) { minx = Math.min(minx, r[i]); maxx = Math.max(maxx, r[i]); minz = Math.min(minz, r[i + 1]); maxz = Math.max(maxz, r[i + 1]); }
   const fits = (x, z, hw, hd, sb) => [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]].every(([a, b]) => ringIn(r, x + a * (hw + sb), z + b * (hd + sb)));
   const placed = [], clear = (x, z, hw, hd, c) => placed.every(q => Math.abs(q.x - x) >= q.hw + hw + c || Math.abs(q.z - z) >= q.hd + hd + c);
-  for (let nT = Math.max(1, Math.round(gfa / (CONDO.fpNom * avg))); nT >= 1; nT--) {
+  for (let nT = ov.towers > 0 ? ov.towers : Math.max(1, Math.round(gfa / (CONDO.fpNom * avg))); nT >= 1; nT--) {
     const fp = clamp(gfa / (nT * avg), 500, 1200), hw = Math.sqrt(fp / (1 - 4 * CONDO.notch ** 2)) / 2, hd = hw, span = maxx - minx - 2 * (CONDO.setback + hw), cz = (minz + maxz) / 2, amp = Math.max(0, (maxz - minz) / 2 - CONDO.setback - hd) * 0.6;
     placed.length = 0;
     for (let i = 0; i < nT; i++) { const x0 = minx + CONDO.setback + hw + (nT > 1 ? (span * i) / (nT - 1) : span / 2), z0 = cz + (i % 2 ? -amp : amp) * (nT > 1 ? 1 : 0);
@@ -694,9 +696,13 @@ function buildGroupRows() {
       ex.innerHTML = [['gpr', 'GPR', 1, 10, 0.1], ['net', 'Net site %', 30, 100, 1], ['low', 'Frontage F', 2, 40, 1]].map(([k, l, mn, mx, stp]) => `<div><div class="flex justify-between text-[9px] text-slate-400"><span>${l}</span><span class="mono" id="gp_${k}_${g.id}"></span></div><input type="range" data-g="${g.id}" data-k="${k}" min="${mn}" max="${mx}" step="${stp}" class="g-par rose"></div>`).join('');
       row.appendChild(ex); const est = document.createElement('div'); est.className = 'text-[9px] mono text-slate-500 mt-1'; est.id = `gest_${g.id}`; row.appendChild(est);
     }
+    if (g.id === 'EA') { const ex = document.createElement('div'); ex.className = 'grid grid-cols-2 gap-2 mt-1 text-[9px] text-slate-400';
+      ex.innerHTML = groupParcels(g).map(q => `<div>${q.id} (GPR ${q.gpr}) F <input type="number" min="0" max="60" class="ea-par w-9 bg-slate-900 text-slate-200 rounded px-1 border border-slate-700 mono" data-p="${q.id}" data-k="floors"> T <input type="number" min="0" max="6" class="ea-par w-8 bg-slate-900 text-slate-200 rounded px-1 border border-slate-700 mono" data-p="${q.id}" data-k="towers"></div>`).join('') + '<div class="col-span-2 text-slate-500">F/T 0 = auto (Min/Max sliders; towers from GFA)</div>';
+      row.appendChild(ex); }
     c.appendChild(row);
   });
   c.querySelectorAll('.g-par').forEach(el => el.addEventListener('input', e => { const g = state.groups[e.target.dataset.g], k = e.target.dataset.k, v = parseFloat(e.target.value); g[k] = k === 'net' ? v / 100 : v; custom(); regen(); }));
+  c.querySelectorAll('.ea-par').forEach(el => el.addEventListener('change', e => { const pl = state.groups.EA.plots, id = e.target.dataset.p; pl[id] = pl[id] || { floors: 0, towers: 0 }; pl[id][e.target.dataset.k] = Math.max(0, parseInt(e.target.value, 10) || 0); custom(); regen(); }));
   c.querySelectorAll('.g-on').forEach(el => el.addEventListener('change', e => { state.groups[e.target.dataset.g].on = e.target.checked; custom(); regen(); }));
   c.querySelectorAll('.g-rng').forEach(el => el.addEventListener('input', e => { const g = state.groups[e.target.dataset.g], k = e.target.dataset.k; g[k] = parseInt(e.target.value, 10); if (g.max < g.min) { if (k === 'min') g.max = g.min; else g.min = g.max; } custom(); regen(); }));
 }
@@ -723,6 +729,7 @@ function updateDashboard(m) {
   GROUPS.forEach(g => { const s = state.groups[g.id]; document.querySelector(`.g-on[data-g="${g.id}"]`).checked = s.on;
     document.querySelector(`.g-rng[data-g="${g.id}"][data-k="min"]`).value = s.min; document.querySelector(`.g-rng[data-g="${g.id}"][data-k="max"]`).value = s.max;
     $(`gmin_${g.id}`).textContent = `${s.min}F`; $(`gmax_${g.id}`).textContent = `${s.max}F (${(g.id === 'EA' ? condoRoof(s.max) : getRoofHeight(s.max)).toFixed(0)}m)`;
+    if (s.plots) document.querySelectorAll('.ea-par').forEach(el => { const q = s.plots[el.dataset.p]; el.value = q ? q[el.dataset.k] : 0; });
     if (s.gpr) { ['gpr', 'net', 'low'].forEach(k => { const el = document.querySelector(`.g-par[data-g="${g.id}"][data-k="${k}"]`); el.value = k === 'net' ? Math.round(s.net * 100) : s[k]; });
       $(`gp_gpr_${g.id}`).textContent = s.gpr.toFixed(1); $(`gp_net_${g.id}`).textContent = `${Math.round(s.net * 100)}%`; $(`gp_low_${g.id}`).textContent = `${s.low}F`;
       const ts = towers.filter(t => t.group === g), area = groupParcels(g).reduce((a, q) => a + q.area, 0), gfa = ts.reduce((a, t) => a + state.footprint ** 2 * t.floors, 0);
@@ -1297,7 +1304,7 @@ const PRESETS = {
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(state, { vx: UNIT134[0], vz: UNIT134[1], spot: 'living', obsFloor: p.floor, heading: 220, pitchDeg: -1.5, spacing: 95, showExisting: true, showRoads: true });
   state.dateStr = p.date || todayISO(); $('dateInput').value = state.dateStr;
-  GROUPS.forEach(g => Object.assign(state.groups[g.id], GROUP_DEFAULTS[g.id], g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); setPosture('stand'); regen(); });
+  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); setPosture('stand'); regen(); });
 function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(cssW * dpr)); cv.height = Math.max(1, Math.round(cssH * dpr)); cv._w = cssW; cv._h = cssH; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;
