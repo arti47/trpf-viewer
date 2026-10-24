@@ -5,6 +5,7 @@ GitHub Pages: https://arti47.github.io/trpf-viewer/ (`index.html` redirects to t
 Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 toward Marina East / Marina Bay, now vs future build-out.
 
 ## Working rules
+- Owner rules (standing): technical talk only, not verbose, conserve tokens. Output only after completion. Give suggestions where needed. Ask relevant questions one at a time until owner says stop. Always merge to `main` and always update this file.
 - Terse, technical. Edit in place (str_replace-style), no full rewrites. No verification output unless asked.
 - Progress reporting: do not narrate work; report only progress percentages (5%, 10%, … 100%). Final reply = "100%" + minimal result.
 - Every change must keep the app faithful to these rules/spec (physics, data, defaults above).
@@ -53,3 +54,9 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 ## Key timeline facts (as of Oct 2026)
 - Marina East N/S: no GLS release; first sale before 2030 ≈20–30% (judgement); full build-out late 2030s+.
 - Owner move-in: end-2029.
+
+## Handoff / pending (owner switching account)
+- Known bugs (unfixed): floors-to-clear (line ~711) uses const `EYE_OFFSET` not `state.eyeOffset`; presets don't reset date (movein sticks 2029-12-15) or posture; presets overwrite N/S min/max.
+- Spec mismatch: "sliders unclamped" vs HTML ranges (GPR 1–10, net 30–100%, floors 5–60, frontage 2–40).
+- `.claude/hooks/spec-sync.sh` Stop hook referenced but missing from repo.
+- Pages live from `main` root; verified app renders headless (no JS errors).
