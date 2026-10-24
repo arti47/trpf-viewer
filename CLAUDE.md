@@ -41,6 +41,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 ## Viewer / rendering
 - Room bar: Living / Bedroom 3 / Bedroom 2 / Master (S); posture Standing 1.55 m·0.5 m, Sofa 1.2 m·3.5 m (living), Bed 0.9 m·2.5 m (bedrooms). Stand-back slider.
 - Room interior (toggle): window wall w/ opening (W1: 0.55 m parapet, 2.2 m head), reveals, charcoal casement frame (mullions ~0.7 m, transom 1.8 m), clear glass, side walls, 2.6 m ceiling, floor. Off → hatched wall + dashed jamb lines.
+- TRPF facade (visual only, from developer renderings 31A/32A/33A fronts + model photo of 31A side facing #134; `trpfFacade`): ~7.5 m unit stacks along block local axis cycling brown-framed grey / greige / white-framed grey (`TRPF_PAL`, `STACK_W`); 0.9 m frame strips at stack joints; white ledge each floor, brown band every 5F in brown stacks; 2-pane windows per 3.6 m bay (sill 0.9, head 2.3), ~35% lit at night; void deck recessed. MSCP: grey screens, white slab edges + green planters per deck, pilasters every 8 m. Geometry/heights unchanged (no roof crown modelled).
 - Trees (~15k, visual only): parks 22 m grid, roadside 16 m, TRPF lawn 14 m. Fixed cumulus field. Facade colour variation + window grid; night warm lines.
 - Panes: section along gaze (2/4/6 km), 3D view (Expand ⤢, Esc), plan (site plan / area vector), sidebar.
 
@@ -57,4 +58,5 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 
 ## Handoff / status
 - Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
+- TRPF facades styled from owner renderings (2026-10-24).
 - Pages live from `main` root (`index.html` → app). App renders headless with no JS errors.

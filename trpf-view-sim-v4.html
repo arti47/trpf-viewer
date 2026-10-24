@@ -329,7 +329,7 @@ function rebuildTRPF() {
   TRPF = [];
   SITE_BLOCKS.forEach(B => B.boxes.forEach(([x0, z0, x1, z1]) => {
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
-    TRPF.push(makePrism(B.name, 'trpf', B.h, 0, pts, 0));
+    const P = makePrism(B.name, 'trpf', B.h, 0, pts, 0); P.B = B; TRPF.push(P);
   }));
 }
 rebuildTRPF();
@@ -837,8 +837,63 @@ function facadeAlb(P) {
   const r = hash01(P.cx, P.cz, 7);
   return (P.alb = P.h > 90 && r < 0.6 ? [150 + r * 30, 172 + r * 20, 192] : FACADE_PAL[Math.floor(r * FACADE_PAL.length)]);
 }
+// TRPF facade from developer renderings + model (31A/32A/33A fronts, 31A side facing #134): ~7.5m unit stacks cycling
+// brown-framed grey / greige / white-framed grey; white ledge each floor; 2-pane dark windows per 3.6m bay; brown bands every 5F
+// inside brown frames; void deck recessed. MSCP: grey screens, white pilasters + slab edges, green planter strips. Visual only.
+const TRPF_PAL = { white: [236, 234, 228], greige: [210, 198, 176], grey: [172, 174, 176], brown: [64, 46, 40], glass: [62, 70, 80], lit: [255, 214, 150], void: [96, 100, 104], screen: [128, 134, 140], green: [96, 142, 72] };
+const STACK_W = 7.5, STACK_TYPES = ['brown', 'greige', 'white'];
+function trpfFaceInfo(P, f) {
+  const B = P.B, p0 = f.pts[0], p1 = f.pts[1], loc = (x, z) => { const dx = x - B.ox, dz = z - B.oz; return [B.c * dx + B.s * dz, -B.s * dx + B.c * dz]; };
+  const a = loc(p0[0], p0[2]), b = loc(p1[0], p1[2]), k = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? 0 : 1, off = B.name.charCodeAt(4) + B.name.charCodeAt(6);
+  const type = al => STACK_TYPES[(((Math.floor(al / STACK_W) + off) % 3) + 3) % 3];
+  return { a0: a[k], a1: b[k], type, mid: type((a[k] + b[k]) / 2) };
+}
+function trpfFacade(ctx, cam, f, P, env, dist, info) {
+  const p0 = f.pts[0], p1 = f.pts[1], L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]); if (L < 0.4) return;
+  const T = transmittance(dist, env), col = (rgb, n = f.n) => rgbStr(fogMix(shade(rgb, n, env), dist, env));
+  const quad = (t0, t1, y0, y1, c) => { const P4 = [t0, t1, t1, t0].map((t, i) => [p0[0] + (p1[0] - p0[0]) * t, i < 2 ? y0 : y1, p0[2] + (p1[2] - p0[2]) * t]), sp = cam.projectPoly(P4); if (sp) fillPoly(ctx, sp, c); };
+  const a = cam.projectPoint(p0[0], VOID_DECK_HEIGHT, p0[2]), b = cam.projectPoint(p0[0], VOID_DECK_HEIGHT + FLOOR_HEIGHT, p0[2]), px = a && b ? Math.abs(a.y - b.y) : 0;
+  if (P.name.startsWith('MSCP')) { // car park: screens, white slab edges + planters per deck, pilasters every 8m
+    if (px < 2) return; const dh = (P.h - 1) / 12;
+    for (let y = dh; y < P.h; y += dh) { quad(0, 1, y - 0.35, y, col(TRPF_PAL.white)); if (px >= 4) quad(0, 1, y, y + 0.35, col(TRPF_PAL.green)); }
+    for (let k = 0, n = Math.max(1, Math.round(L / 8)); k <= n; k++) { const t = k / n, w = 0.6 / L; quad(Math.max(0, t - w), Math.min(1, t + w), 0, P.h, col(TRPF_PAL.white)); }
+    return;
+  }
+  quad(0, 1, 0, VOID_DECK_HEIGHT, col(TRPF_PAL.void));
+  const al = t => info.a0 + (info.a1 - info.a0) * t, top = P.h - 0.3;
+  // stack boundaries along the face → frame strips (brown if either side brown, else white if either side white)
+  const cuts = [0]; { const lo = Math.min(info.a0, info.a1), hi = Math.max(info.a0, info.a1); for (let k = Math.ceil(lo / STACK_W); k * STACK_W < hi; k++) cuts.push((k * STACK_W - info.a0) / (info.a1 - info.a0)); } cuts.push(1); cuts.sort((x, y) => x - y);
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const t0 = cuts[i], t1 = cuts[i + 1]; if (t1 - t0 < 1e-3) continue; const ty = info.type(al((t0 + t1) / 2));
+    if (ty === 'greige' && px >= 2) quad(t0, t1, VOID_DECK_HEIGHT, top, col(TRPF_PAL.greige));
+    if (px >= 3) for (let fl = 1; fl <= 30; fl++) {
+      const y = VOID_DECK_HEIGHT + (fl - 1) * FLOOR_HEIGHT; if (y + FLOOR_HEIGHT > P.h + 0.1) break;
+      quad(t0, t1, y, y + 0.22, col(ty === 'brown' && fl % 5 === 0 ? TRPF_PAL.brown : TRPF_PAL.white));
+      if (px < 6) continue;
+      const nb = Math.max(1, Math.round(((t1 - t0) * L) / 3.6));
+      for (let k = 0; k < nb; k++) { const b0 = t0 + ((t1 - t0) * k) / nb, b1 = t0 + ((t1 - t0) * (k + 1)) / nb, g = (b1 - b0) * 0.18, m = (b0 + b1) / 2;
+        const on = env.night && hash01(m * 97 + P.cx, y, 3) < 0.35, gc = on ? rgbStr(mix(env.sky.hor, TRPF_PAL.lit, T)) : col(mix(TRPF_PAL.glass, env.sky.hor, 0.18));
+        quad(b0 + g, m - (b1 - b0) * 0.02, y + 0.9, y + 2.3, gc); quad(m + (b1 - b0) * 0.02, b1 - g, y + 0.9, y + 2.3, gc); }
+    }
+  }
+  if (px < 1) return;
+  for (let i = 1; i < cuts.length - 1; i++) {
+    const t = cuts[i], l = info.type(al(t - 1e-4)), rr = info.type(al(t + 1e-4)), c = l === 'brown' || rr === 'brown' ? TRPF_PAL.brown : l === 'white' || rr === 'white' ? TRPF_PAL.white : null; if (!c) continue;
+    const w = 0.45 / L; quad(Math.max(0, t - w), Math.min(1, t + w), VOID_DECK_HEIGHT, P.h, col(c));
+  }
+}
 function drawPrism(ctx, cam, env, P) {
   const dist = cam.dist(P.cx, P.h / 2, P.cz), alb = P.kind === 'road' ? ALB.road : facadeAlb(P);
+  if (P.kind === 'trpf' && P.B && P.h >= 8) { // TRPF blocks/MSCP: rendering-based facade
+    const stroke = 'rgba(30,41,59,0.35)';
+    for (const f of prismFaces(P, cam)) {
+      const sp = cam.projectPoly(f.pts); if (!sp) continue;
+      if (f.kind !== 'wall') { fillPoly(ctx, sp, rgbStr(fogMix(shade([160, 165, 170], f.n, env), dist, env)), stroke, 0.75); continue; }
+      const info = P.name.startsWith('MSCP') ? null : trpfFaceInfo(P, f), base = info ? (info.mid === 'greige' ? TRPF_PAL.greige : TRPF_PAL.grey) : TRPF_PAL.screen;
+      fillPoly(ctx, sp, rgbStr(fogMix(shade(base, f.n, env), dist, env)), stroke, 0.75); trpfFacade(ctx, cam, f, P, env, dist, info);
+    }
+    return;
+  }
   const stroke = P.kind === 'new' ? P.group.color : P.kind === 'trpf' ? 'rgba(30,41,59,0.35)' : (dist < 1500 ? 'rgba(30,41,59,0.25)' : null);
   for (const f of prismFaces(P, cam)) {
     const sp = cam.projectPoly(f.pts); if (!sp) continue;
