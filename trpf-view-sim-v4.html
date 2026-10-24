@@ -248,7 +248,7 @@ const compassName = b => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','S
 function todayISO() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 function fmtHour(hr) { const hh = Math.floor(hr), mm = Math.round((hr - hh) * 60); return `${String(hh + (mm === 60 ? 1 : 0)).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`; }
 // Roof crown/parapet above 30F: estimated ~2 storeys from developer renderings (beige louvred crown, framed white panels).
-const TRPF_CROWN = 2 * FLOOR_HEIGHT, BLK_TOP = getRoofHeight(30), MSCP_TOP = VOID_DECK_HEIGHT + 12 * FLOOR_HEIGHT - 0.1;
+const TRPF_CROWN = 2 * FLOOR_HEIGHT, TANK_H = 3, BLK_TOP = getRoofHeight(30), MSCP_TOP = VOID_DECK_HEIGHT + 12 * FLOOR_HEIGHT - 0.1;
 
 /* ===================== PRISMS ===================== */
 // A prism: plan polygon (CCW, x=east, z=north, metres) extruded from base to h.
@@ -332,6 +332,15 @@ function rebuildTRPF() {
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
     const P = makePrism(B.name, 'trpf', B.h, 0, pts, 0); P.B = B; TRPF.push(P);
   }));
+  // Rooftop water tanks (estimate from model photo): 3 cylinders r 2.2m, 3m tall on the crown, in a row along the block axis at the plan centroid.
+  SITE_BLOCKS.filter(B => B.h > BLK_TOP).forEach(B => {
+    const own = TRPF.filter(P => P.B === B); let lx = 0, lz = 0; B.boxes.forEach(([x0, z0, x1, z1]) => { lx += (x0 + x1) / 2; lz += (z0 + z1) / 2; }); lx /= B.boxes.length; lz /= B.boxes.length;
+    { let bd = Infinity, bx = lx, bz = lz; B.boxes.forEach(([x0, z0, x1, z1]) => { const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, d = Math.hypot(mx - lx, mz - lz); if (d < bd) { bd = d; bx = mx; bz = mz; } }); lx = bx; lz = bz; }   // snap to nearest roof cell
+    const got = [], offs = [0, -1, 1, -2, 2, -3, 3].flatMap(k => [[k, 0], [0, k]]);
+    for (const [i, j] of offs) { if (got.length >= 3) break; const [cx, cz] = blkToWorld(B, lx + i * 5.2, lz + j * 5.2); if (!own.some(P => pointIn(P, cx, cz)) || got.some(([x, z]) => Math.hypot(x - cx, z - cz) < 5)) continue; got.push([cx, cz]);
+      const ring = []; for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; ring.push(cx + 2.2 * Math.cos(a), cz + 2.2 * Math.sin(a)); }
+      const T = makePrism(`${B.name} water tank`, 'trpf', B.h + TANK_H, B.h, ring, 0); T.tank = true; T.alb = [232, 232, 228]; TRPF.push(T); }
+  });
 }
 rebuildTRPF();
 const UNIT_SPOTS = GEO.spots.map(s => ({ ...s })).filter(s => s.id !== 'mbrE');   // no east window in the master bedroom (confirmed by owner)
@@ -901,7 +910,7 @@ function drawPrism(ctx, cam, env, P) {
   for (const f of prismFaces(P, cam)) {
     const sp = cam.projectPoly(f.pts); if (!sp) continue;
     fillPoly(ctx, sp, rgbStr(fogMix(shade(f.kind === 'top' ? [160, 165, 170] : alb, f.n, env), dist, env)), stroke, stroke ? 0.75 : 0);
-    if (f.kind === 'wall' && P.kind !== 'road' && P.h >= 8) facadeGrid(ctx, cam, f, P, env, dist);
+    if (f.kind === 'wall' && P.kind !== 'road' && !P.tank && P.h >= 8) facadeGrid(ctx, cam, f, P, env, dist);
   }
 }
 // Window grid: storey lines + vertical window bays (3.6m), drawn only when large enough on screen.

@@ -29,7 +29,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 ## Geometry / physics
 - Everything is a prism (plan polygon CCW, base..h). Spatial grid 40 m + DDA (`candidates`), `planIntervals`, `prismHit` (curvature-apparent heights).
 - Earth curvature + refraction k=0.13 (R_eff = R/(1−k)); sea-horizon dip; Koschmieder haze T = e^(−3.912 d/V); NOAA solar position + Bennett refraction; Lambert shading; sun shadows.
-- Storey: 2.8 m f2f, void deck 3.5 m; roof(30F) = 87.5 m; TRPF residential blocks carry an estimated roof crown `TRPF_CROWN` = 2 storeys (5.6 m) → prism top 93.1 m (estimate from renderings; affects sightlines). Eye = slab + posture eye offset.
+- Storey: 2.8 m f2f, void deck 3.5 m; roof(30F) = 87.5 m; TRPF residential blocks carry an estimated roof crown `TRPF_CROWN` = 2 storeys (5.6 m) → prism top 93.1 m (estimate from renderings; affects sightlines). Rooftop water tanks (estimate from model photo): 3 octagonal cylinders per residential block, r 2.2 m, `TANK_H` 3 m (93.1–96.1 m), near plan centroid snapped to roof cells ≥5 m apart; kind trpf (in sightlines), `P.tank` skips window grid. Eye = slab + posture eye offset.
 - Metrics: gaze ray hit, ground dead-zone, frame-blocked % (raster mask: new / TRPF / existing+roads), landmark 7-sample visibility, binding roofline + floors-to-clear (uses posture eye offset `state.eyeOffset`).
 
 ## Future development defaults (`state.groups`)
