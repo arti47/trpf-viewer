@@ -382,6 +382,7 @@ const state = {
   groups: { N: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, S: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, EA: { on: true, min: 28, max: 32 }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
   showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true
 };
+const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
 function hash01(x, z, s) { const h = Math.sin(x * 12.9898 + z * 78.233 + s * 37.719) * 43758.5453; return h - Math.floor(h); }
 function generateTowers() {
@@ -708,7 +709,7 @@ function updateDashboard(m) {
   else {
     const diff = m.hEye - b.P.h;
     if (b.slope < 0) setTag(tag, `Over ${b.P.kind === 'new' ? b.P.name : 'roofline'} (${signed(diff.toFixed(1))}m)`, 'ok'); else setTag(tag, `Blocked: ${b.P.kind === 'new' ? b.P.name : (b.P.name || 'building').slice(0, 18)}`, b.P.kind === 'new' ? 'bad' : 'mid');
-    const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - EYE_OFFSET) / FLOOR_HEIGHT + 1);
+    const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - state.eyeOffset) / FLOOR_HEIGHT + 1);
     box.innerHTML = `<strong class="text-rose-300">Binding roofline at ${state.heading.toFixed(1)}°:</strong> ${pName(b.P)}, ${b.P.h.toFixed(0)}m at ${fmtDist(b.s)}, elevation <strong>${signed(b.angleDeg.toFixed(2))}°</strong>. ` +
       (b.slope < 0 ? `Ground re-appears beyond <strong>${fmtDist(b.groundS)}</strong>.` : `Your eye (${m.hEye.toFixed(1)}m) is below it${need > 30 ? `; clearing it needs ${need}F (Blk 32A tops at 30F)` : `; need ≥ <strong>${need}F</strong> to clear it`}.`);
   }
@@ -1108,8 +1109,8 @@ const PRESETS = {
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(state, { vx: UNIT134[0], vz: UNIT134[1], spot: 'living', obsFloor: p.floor, heading: 220, pitchDeg: -1.5, spacing: 95, showExisting: true, showRoads: true });
-  if (p.date) { state.dateStr = p.date; $('dateInput').value = p.date; }
-  GROUPS.forEach(g => Object.assign(state.groups[g.id], g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); regen(); });
+  state.dateStr = p.date || todayISO(); $('dateInput').value = state.dateStr;
+  GROUPS.forEach(g => Object.assign(state.groups[g.id], GROUP_DEFAULTS[g.id], g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] })); setPosture('stand'); regen(); });
 function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(cssW * dpr)); cv.height = Math.max(1, Math.round(cssH * dpr)); cv._w = cssW; cv._h = cssH; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;

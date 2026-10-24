@@ -30,13 +30,13 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Everything is a prism (plan polygon CCW, base..h). Spatial grid 40 m + DDA (`candidates`), `planIntervals`, `prismHit` (curvature-apparent heights).
 - Earth curvature + refraction k=0.13 (R_eff = R/(1−k)); sea-horizon dip; Koschmieder haze T = e^(−3.912 d/V); NOAA solar position + Bennett refraction; Lambert shading; sun shadows.
 - Storey: 2.8 m f2f, void deck 3.5 m; roof(30F) = 87.5 m. Eye = slab + posture eye offset.
-- Metrics: gaze ray hit, ground dead-zone, frame-blocked % (raster mask: new / TRPF / existing+roads), landmark 7-sample visibility, binding roofline + floors-to-clear.
+- Metrics: gaze ray hit, ground dead-zone, frame-blocked % (raster mask: new / TRPF / existing+roads), landmark 7-sample visibility, binding roofline + floors-to-clear (uses posture eye offset `state.eyeOffset`).
 
 ## Future development defaults (`state.groups`)
-- N, S: plot-ratio driven — GPR 5.6, net 70%, high-rise 25–30F, frontage low-rise 10F (edge ≤45 m facing water ≤160 m / park ≤70 m). Sliders unclamped (GPR 1–10, net 30–100%, floors 5–60). Basis: Marina South GLS (Marina Gardens Lane GPR 5.6, 30F high-rise / 10F low-rise; Crescent 4.2).
+- N, S: plot-ratio driven — GPR 5.6, net 70%, high-rise 25–30F, frontage low-rise 10F (edge ≤45 m facing water ≤160 m / park ≤70 m). Sliders not clamped to these defaults (ranges: GPR 1–10, net 30–100%, floors 5–60, frontage 2–40F). Basis: Marina South GLS (Marina Gardens Lane GPR 5.6, 30F high-rise / 10F low-rise; Crescent 4.2).
 - EA (E1/E2): on, 28–32F, tower count from GPR.
 - RE, RS, RT: off, grid at spacing slider. Typology chips: HDB 34 m/100 m, Condo 30 m/100 m, Dense 34 m/75 m.
-- Scenarios: movein (end-2029, all new off, date 2029-12-15), base, today, tall, low, top (30F), allres.
+- Scenarios: movein (end-2029, all new off, date 2029-12-15), base, today, tall, low, top (30F), allres. A preset resets viewer to living/27F/220°, posture Standing, date (preset date or today), all group params to `GROUP_DEFAULTS`, then applies its on/off + N/S/RE/RS/RT floor range.
 
 ## Viewer / rendering
 - Room bar: Living / Bedroom 3 / Bedroom 2 / Master (S); posture Standing 1.55 m·0.5 m, Sofa 1.2 m·3.5 m (living), Bed 0.9 m·2.5 m (bedrooms). Stand-back slider.
@@ -55,8 +55,6 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Marina East N/S: no GLS release; first sale before 2030 ≈20–30% (judgement); full build-out late 2030s+.
 - Owner move-in: end-2029.
 
-## Handoff / pending (owner switching account)
-- Known bugs (unfixed): floors-to-clear (line ~711) uses const `EYE_OFFSET` not `state.eyeOffset`; presets don't reset date (movein sticks 2029-12-15) or posture; presets overwrite N/S min/max.
-- Spec mismatch: "sliders unclamped" vs HTML ranges (GPR 1–10, net 30–100%, floors 5–60, frontage 2–40).
-- `.claude/hooks/spec-sync.sh` Stop hook referenced but missing from repo.
-- Pages live from `main` root; verified app renders headless (no JS errors).
+## Handoff / status
+- Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
+- Pages live from `main` root (`index.html` → app). App renders headless with no JS errors.
