@@ -395,14 +395,43 @@ const state = {
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
 function hash01(x, z, s) { const h = Math.sin(x * 12.9898 + z * 78.233 + s * 37.719) * 43758.5453; return h - Math.floor(h); }
+// Plausible private condo on each E-of-TRPF plot (no published design): GFA = GPR × gross site area; towers 4.5m lobby + 3.15m f2f + 3m roof;
+// tower count from floor range (nominal floorplate 520 m², flexed 380–800), E-W long axis (≈1.35:1), staggered N/S in a row along the plot,
+// ±1F skyline step, 10m boundary setback, ≥20m apart. 2-storey clubhouse (8m) + 40×12m pool on the open deck. Geometry is an estimate.
+const CONDO = { lobby: 4.5, f2f: 3.15, roof: 3, fpNom: 520, setback: 10, gap: 20 };
+const condoRoof = f => CONDO.lobby + (f - 1) * CONDO.f2f + CONDO.f2f + CONDO.roof;
+let CONDO_POOLS = [];
+function condoPlot(p, g, st, lo, hi, out, nextId) {
+  const r = p.ring, gfa = parseFloat(p.gpr) * p.area, avg = (lo + hi) / 2;
+  let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity; for (let i = 0; i < r.length; i += 2) { minx = Math.min(minx, r[i]); maxx = Math.max(maxx, r[i]); minz = Math.min(minz, r[i + 1]); maxz = Math.max(maxz, r[i + 1]); }
+  const fits = (x, z, hw, hd, sb) => [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]].every(([a, b]) => ringIn(r, x + a * (hw + sb), z + b * (hd + sb)));
+  const placed = [], clear = (x, z, hw, hd, c) => placed.every(q => Math.abs(q.x - x) >= q.hw + hw + c || Math.abs(q.z - z) >= q.hd + hd + c);
+  for (let nT = Math.max(1, Math.round(gfa / (CONDO.fpNom * avg))); nT >= 1; nT--) {
+    const fp = clamp(gfa / (nT * avg), 380, 800), hw = Math.sqrt(fp * 1.35) / 2, hd = fp / (4 * hw), span = maxx - minx - 2 * (CONDO.setback + hw), cz = (minz + maxz) / 2, amp = Math.max(0, (maxz - minz) / 2 - CONDO.setback - hd) * 0.6;
+    placed.length = 0;
+    for (let i = 0; i < nT; i++) { const x0 = minx + CONDO.setback + hw + (nT > 1 ? (span * i) / (nT - 1) : span / 2), z0 = cz + (i % 2 ? -amp : amp) * (nT > 1 ? 1 : 0);
+      let best = null; for (let dz = 0; dz <= 30 && !best; dz += 2) for (const sz of [1, -1]) for (let dx = 0; dx <= 12 && !best; dx += 2) for (const sx of [1, -1]) { const x = x0 + sx * dx, z = z0 + sz * dz; if (fits(x, z, hw, hd, CONDO.setback) && clear(x, z, hw, hd, CONDO.gap)) { best = { x, z, hw, hd }; break; } }
+      if (best) placed.push(best); }
+    if (placed.length < nT && nT > 1) continue;
+    placed.forEach((q, i) => { const floors = clamp(Math.round(avg + (i - (placed.length - 1) / 2) * (placed.length > 1 ? 2 / (placed.length - 1) : 0)), lo, hi);
+      const P = makePrism(`${g.id}${nextId()}`, 'new', condoRoof(floors), 0, [q.x - q.hw, q.z - q.hd, q.x + q.hw, q.z - q.hd, q.x + q.hw, q.z + q.hd, q.x - q.hw, q.z + q.hd], 0);
+      P.floors = floors; P.group = g; P.style = 'condo'; P.fp = 4 * q.hw * q.hd; out.push(P); });
+    break;
+  }
+  const spot = (hw, hd) => { let best = null, bd = Infinity; const cx = (minx + maxx) / 2, cz = (minz + maxz) / 2;
+    for (let x = minx; x <= maxx; x += 3) for (let z = minz; z <= maxz; z += 3) { const d = Math.hypot(x - cx, z - cz); if (d < bd && fits(x, z, hw, hd, 5) && clear(x, z, hw, hd, 6)) { bd = d; best = { x, z, hw, hd }; } } return best; };
+  const club = spot(14, 7); if (club) { placed.push(club); const P = makePrism(`${g.id}${nextId()} clubhouse`, 'new', 8, 0, [club.x - 14, club.z - 7, club.x + 14, club.z - 7, club.x + 14, club.z + 7, club.x - 14, club.z + 7], 0); P.floors = 2; P.group = g; P.style = 'club'; out.push(P); }
+  const pool = spot(20, 6); if (pool) { placed.push(pool); CONDO_POOLS.push([pool.x - 20, pool.z - 6, pool.x + 20, pool.z - 6, pool.x + 20, pool.z + 6, pool.x - 20, pool.z + 6]); }
+}
 function generateTowers() {
-  const out = [], S = state.spacing, h = state.footprint / 2;
+  const out = [], S = state.spacing, h = state.footprint / 2; CONDO_POOLS = [];
   for (const g of GROUPS) {
     const st = state.groups[g.id]; if (!st.on) continue;
     const lo = Math.min(st.min, st.max), hi = Math.max(st.min, st.max);
     const parcels = groupParcels(g);
     let n = 0;
     for (const p of parcels) {
+      if (g.id === 'EA') { condoPlot(p, g, st, lo, hi, out, () => ++n); continue; }
       const r = p.ring; let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
       for (let i = 0; i < r.length; i += 2) { minx = Math.min(minx, r[i]); maxx = Math.max(maxx, r[i]); minz = Math.min(minz, r[i + 1]); maxz = Math.max(maxz, r[i + 1]); }
       if (st.gpr) {
@@ -690,7 +719,7 @@ function updateDashboard(m) {
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
   GROUPS.forEach(g => { const s = state.groups[g.id]; document.querySelector(`.g-on[data-g="${g.id}"]`).checked = s.on;
     document.querySelector(`.g-rng[data-g="${g.id}"][data-k="min"]`).value = s.min; document.querySelector(`.g-rng[data-g="${g.id}"][data-k="max"]`).value = s.max;
-    $(`gmin_${g.id}`).textContent = `${s.min}F`; $(`gmax_${g.id}`).textContent = `${s.max}F (${getRoofHeight(s.max).toFixed(0)}m)`;
+    $(`gmin_${g.id}`).textContent = `${s.min}F`; $(`gmax_${g.id}`).textContent = `${s.max}F (${(g.id === 'EA' ? condoRoof(s.max) : getRoofHeight(s.max)).toFixed(0)}m)`;
     if (s.gpr) { ['gpr', 'net', 'low'].forEach(k => { const el = document.querySelector(`.g-par[data-g="${g.id}"][data-k="${k}"]`); el.value = k === 'net' ? Math.round(s.net * 100) : s[k]; });
       $(`gp_gpr_${g.id}`).textContent = s.gpr.toFixed(1); $(`gp_net_${g.id}`).textContent = `${Math.round(s.net * 100)}%`; $(`gp_low_${g.id}`).textContent = `${s.low}F`;
       const ts = towers.filter(t => t.group === g), area = groupParcels(g).reduce((a, q) => a + q.area, 0), gfa = ts.reduce((a, t) => a + state.footprint ** 2 * t.floors, 0);
@@ -894,8 +923,26 @@ function trpfFacade(ctx, cam, f, P, env, dist, info) {
     const w = 0.45 / L; quad(Math.max(0, t - w), Math.min(1, t + w), VOID_DECK_HEIGHT, P.h, col(c));
   }
 }
+// Condo facade (visual only): blue-grey glazing, white balcony slab band each floor, white fins at 7.2m, dark lobby; clubhouse glazed with white roof edge.
+function condoFacade(ctx, cam, f, P, env, dist) {
+  const p0 = f.pts[0], p1 = f.pts[1], L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]), col = rgb => rgbStr(fogMix(shade(rgb, f.n, env), dist, env));
+  const quad = (t0, t1, y0, y1, c) => { const sp = cam.projectPoly([[p0[0] + (p1[0] - p0[0]) * t0, y0, p0[2] + (p1[2] - p0[2]) * t0], [p0[0] + (p1[0] - p0[0]) * t1, y0, p0[2] + (p1[2] - p0[2]) * t1], [p0[0] + (p1[0] - p0[0]) * t1, y1, p0[2] + (p1[2] - p0[2]) * t1], [p0[0] + (p1[0] - p0[0]) * t0, y1, p0[2] + (p1[2] - p0[2]) * t0]]); if (sp) fillPoly(ctx, sp, c); };
+  const yr = clamp(cam.hEye, 1, P.h - 4), mx = (p0[0] + p1[0]) / 2, mz = (p0[2] + p1[2]) / 2, a = cam.projectPoint(mx, yr, mz), b = cam.projectPoint(mx, yr + CONDO.f2f, mz), px = a && b ? Math.abs(a.y - b.y) : 0;
+  if (P.style === 'club') { quad(0, 1, 7.2, 8, col([240, 240, 236])); return; }
+  quad(0, 1, 0, CONDO.lobby, col([70, 76, 84])); if (px < 1) return;
+  if (px >= 2) for (let y = CONDO.lobby; y < P.h - CONDO.roof; y += CONDO.f2f) quad(0, 1, y, y + 0.35, col([238, 238, 234]));
+  const n = Math.max(1, Math.round(L / 7.2)); for (let k = 0; k <= n; k++) { const t = k / n, w = 0.3 / L; quad(Math.max(0, t - w), Math.min(1, t + w), CONDO.lobby, P.h, col([236, 236, 232])); }
+  quad(0, 1, P.h - CONDO.roof, P.h, col([224, 222, 214]));
+  if (env.night && px >= 1.5) litWindows(ctx, cam, { ...P, base: 0 }, p0, p1, CONDO.lobby, CONDO.f2f, L, transmittance(dist, env), env);
+}
 function drawPrism(ctx, cam, env, P) {
   const dist = cam.dist(P.cx, P.h / 2, P.cz), alb = P.kind === 'road' ? ALB.road : facadeAlb(P);
+  if (P.style) { // condo towers / clubhouse on E-of-TRPF plots
+    for (const f of prismFaces(P, cam)) { const sp = cam.projectPoly(f.pts); if (!sp) continue;
+      fillPoly(ctx, sp, rgbStr(fogMix(shade(f.kind === 'top' ? [168, 172, 176] : P.style === 'club' ? [150, 175, 190] : [158, 176, 190], f.n, env), dist, env)), P.group.color, 0.75);
+      if (f.kind === 'wall') condoFacade(ctx, cam, f, P, env, dist); }
+    return;
+  }
   if (P.kind === 'trpf' && P.B && P.h >= 8) { // TRPF blocks/MSCP: rendering-based facade
     const stroke = 'rgba(30,41,59,0.35)';
     for (const f of prismFaces(P, cam)) {
@@ -1023,6 +1070,7 @@ function drawGround(ctx, cam, env) {
       }
     }
   }
+  CONDO_POOLS.forEach(q => { const sp = cam.projectPoly([[q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]]]); if (sp) fillPoly(ctx, sp, rgbStr(fogMix(env.night ? [40, 120, 170] : shade([70, 170, 200], [0, 1, 0], env), Math.hypot(q[0] - cam.ex, q[1] - cam.ez), env))); });
   if (env.night && state.showRoads) drawStreetLights(ctx, cam, env);
   if (env.sunVec[1] > 0) { const sh = `rgba(0,0,12,${0.42 * env.direct})`;
     if (state.showRoads) DECKS.forEach(P => { if (P.base <= 0 || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2500 || !cam.inWedge(P.minx - 100, P.maxx + 100, P.minz - 100, P.maxz + 100, 2600)) return; const s = env.sunVec; if (s[1] < 0.05) return; const t = ((P.base + P.h) / 2) / s[1]; const pts = []; for (let i = 0; i < P.n; i++) pts.push([P.xs[i] - s[0] * t, 0.07, P.zs[i] - s[2] * t]); const sp = cam.projectPoly(pts); if (sp) fillPoly(ctx, sp, sh); });

@@ -34,7 +34,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 
 ## Future development defaults (`state.groups`)
 - N, S: plot-ratio driven — GPR 5.6, net 70%, high-rise 25–30F, frontage low-rise 10F (edge ≤45 m facing water ≤160 m / park ≤70 m). Sliders not clamped to these defaults (ranges: GPR 1–10, net 30–100%, floors 5–60, frontage 2–40F). Basis: Marina South GLS (Marina Gardens Lane GPR 5.6, 30F high-rise / 10F low-rise; Crescent 4.2).
-- EA (E1/E2): on, 28–32F, tower count from GPR.
+- EA (E1/E2): on, 28–32F. Plausible private condo per plot (`condoPlot`, estimate; no published design): GFA = GPR × gross area; condo storeys 4.5 m lobby + 3.15 m f2f + 3 m roof (`condoRoof`, 30F ≈ 102 m); tower count from nominal 520 m² floorplate (flex 380–800), E-W long axis 1.35:1, row along plot with N/S stagger, ±1F skyline step, 10 m setback, ≥20 m apart; 2-storey clubhouse (8 m, 28×14) + 40×12 m pool (`CONDO_POOLS`, ground visual). Default result: E1 2 towers 29/31F (~768 m²), E2 3 towers 29/30/31F (~475 m²). Facade `condoFacade`: blue-grey glazing, white slab band/floor, fins 7.2 m, dark lobby, lit windows at night.
 - RE, RS, RT: off, grid at spacing slider. Typology chips: HDB 34 m/100 m, Condo 30 m/100 m, Dense 34 m/75 m.
 - Scenarios: movein (end-2029, all new off, date 2029-12-15), base, today, tall, low, top (30F), allres. A preset resets viewer to living/27F/220°, posture Standing, date (preset date or today), all group params to `GROUP_DEFAULTS`, then applies its on/off + N/S/RE/RS/RT floor range.
 
