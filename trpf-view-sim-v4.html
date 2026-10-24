@@ -1272,6 +1272,10 @@ UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.classNa
 function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; renderAll(); }
 { const sep = document.createElement('span'); sep.className = 'text-slate-600 mx-1'; sep.textContent = '|'; roomBar.appendChild(sep);
   Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); roomBar.appendChild(b); }); }
+// Home: back to #134 living window, 27F, standing, facing 220°, tilt −1.5° (scenario/world untouched).
+{ const b = document.createElement('button'); b.className = 'chip ml-1'; b.style.borderColor = '#34d399'; b.style.color = '#6ee7b7'; b.textContent = '⌂ Back to #134'; b.title = 'Living window, 27F, standing, facing 220°';
+  b.addEventListener('click', () => { const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z, obsFloor: 27, heading: 220, pitchDeg: -1.5 }); setPosture('stand'); });
+  roomBar.appendChild(b); }
 $('standSlider').addEventListener('input', e => { state.standDist = parseFloat(e.target.value); renderAll(); });
 $('facadeToggle').addEventListener('change', e => { state.facadeLimit = e.target.checked; renderAll(); });
 $('resetViewerBtn').addEventListener('click', () => { state.vx = UNIT134[0]; state.vz = UNIT134[1]; state.spot = 'living'; renderAll(); });
