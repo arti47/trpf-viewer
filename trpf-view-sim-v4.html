@@ -229,7 +229,7 @@
           <div id="sunRooms" class="text-[10px] mono text-slate-300 mb-1"></div>
           <div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
         <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Light & heat in room</span>
-            <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="tinted">Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
+            <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="tinted" selected>Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
           <div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
           <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Sun patch drawn on floor/back wall in Room interior view. Reveals/ledges not modelled.</div></div>
         <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
@@ -408,7 +408,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, S: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, EA: { on: true, min: 22, max: 24, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true, glass: 'clear'
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true, glass: 'tinted'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
