@@ -115,6 +115,11 @@
           <span class="text-[11px] font-semibold text-amber-300 whitespace-nowrap">Time:</span>
           <input type="range" id="inlineHour" min="5" max="23" step="0.25" value="13" class="amber" aria-label="Time">
           <span id="inlineHourVal" class="mono text-xs font-bold text-amber-400 w-11 text-right"></span>
+        </div>
+        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+          <span class="text-[11px] font-semibold text-amber-300 whitespace-nowrap">Month:</span>
+          <input type="range" id="inlineMonth" min="1" max="12" step="1" value="10" class="amber" aria-label="Month">
+          <span id="inlineMonthVal" class="mono text-xs font-bold text-amber-400 w-8 text-right"></span>
           <input type="date" id="inlineDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700 mono" aria-label="Date">
         </div>
       </div>
@@ -221,6 +226,7 @@
         <div id="physicsReadout" class="text-[10px] mono leading-relaxed bg-slate-950/70 border border-slate-800 text-slate-400 rounded-lg p-2 mb-2.5"></div>
         <div class="panel mb-2.5"><div class="flex justify-between items-center"><span class="text-[10px] font-semibold text-amber-300">Direct sun on window (year)</span><span id="sunNow" class="text-[10px] mono"></span></div>
           <canvas id="sunChart" style="display:block;width:100%;height:150px;touch-action:none"></canvas>
+          <div id="sunRooms" class="text-[10px] mono text-slate-300 mb-1"></div>
           <div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
         <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
         <div id="landmarkList" class="space-y-1 text-xs"></div>
@@ -700,16 +706,16 @@ function sunOnWindow(x, z, normal, dateStr, hr) {
   return hit ? { state: 'blocked', by: hit.P, sun, inc } : { state: 'direct', sun, inc };
 }
 const SUN_T0 = 6.5, SUN_T1 = 19.5, SUN_DT = 0.25;
-let sunCache = { key: '', grid: null };
+const sunCache = new Map();
 function sunWindow() { const sp = curSpot(); return sp ? { x: sp.x, z: sp.z, normal: sp.normal } : { x: state.vx, z: state.vz, normal: state.heading }; }
-function sunGrid() {
-  const W = sunWindow(), yr = state.dateStr.slice(0, 4), key = [W.x, W.z, W.normal, state.obsFloor, state.eyeOffset, yr, WORLD_VER].join('|');
-  if (sunCache.key === key) return sunCache.grid;
+function sunGrid(W = sunWindow()) {
+  const yr = state.dateStr.slice(0, 4), key = [W.x, W.z, W.normal, state.obsFloor, state.eyeOffset, yr, WORLD_VER].join('|');
+  if (sunCache.has(key)) return sunCache.get(key); if (sunCache.size > 40) sunCache.clear();
   const grid = [];
   for (let mo = 1; mo <= 12; mo++) { const ds = `${yr}-${String(mo).padStart(2, '0')}-15`, row = []; let hrs = 0;
     for (let t = SUN_T0; t < SUN_T1 - 1e-6; t += SUN_DT) { const r = sunOnWindow(W.x, W.z, W.normal, ds, t + SUN_DT / 2); row.push(r); if (r.state === 'direct') hrs += SUN_DT; }
     grid.push({ row, hrs }); }
-  sunCache = { key, grid }; return grid;
+  sunCache.set(key, grid); return grid;
 }
 const sunChart = $('sunChart'), sunCtx = sunChart.getContext('2d');
 function drawSunChart() {
@@ -724,6 +730,9 @@ function drawSunChart() {
   const W = sunWindow(), now = sunOnWindow(W.x, W.z, W.normal, state.dateStr, state.hour), el = $('sunNow');
   el.textContent = now.state === 'direct' ? `☀ direct now (${Math.round(Math.acos(Math.min(1, now.inc)) / DEG)}° incidence)` : now.state === 'blocked' ? `blocked now: ${pName(now.by).slice(0, 24)}` : now.state === 'behind' ? 'sun behind facade now' : 'sun down';
   el.style.color = now.state === 'direct' ? '#fbbf24' : now.state === 'blocked' ? '#fb7185' : '#64748b';
+  // per-room comparison: mean daily direct-sun hours, cool months (Nov–Feb) / hot months (Apr–Sep)
+  const avg = (g, ms) => ms.reduce((a, k) => a + g[k].hrs, 0) / ms.length, COOL = [10, 11, 0, 1], HOT = [3, 4, 5, 6, 7, 8];
+  $('sunRooms').innerHTML = 'h/day Nov–Feb / Apr–Sep: ' + UNIT_SPOTS.map(sp => { const g = sunGrid({ x: sp.x, z: sp.z, normal: sp.normal }), on = sp.id === state.spot; return `<span style="color:${on ? '#fbbf24' : '#cbd5e1'}">${sp.room.replace('Bedroom ', 'BR').replace('Master (S)', 'Master')} ${avg(g, COOL).toFixed(1)}/${avg(g, HOT).toFixed(1)}</span>`; }).join(' • ');
   sunChart._L = L; sunChart._R = R; sunChart._T = T; sunChart._B = B; sunChart._cw = cw; sunChart._ch = ch;
 }
 sunChart.addEventListener('pointerdown', e => { const { x, y } = localXY(sunChart, e), c = sunChart; const j = Math.floor((x - c._L) / c._cw), i = Math.floor((y - c._T) / c._ch); if (i < 0 || i > 11 || j < 0 || x > c._w - c._R) return;
@@ -790,7 +799,7 @@ function updateDashboard(m) {
   document.querySelectorAll('.range-btn').forEach(b => { b.className = `range-btn px-1.5 py-0.5 rounded border ${+b.dataset.range === state.profileRange ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`; });
   $('planSiteBtn').style.borderColor = state.planMode === 'site' ? '#34d399' : ''; $('planAreaBtn').style.borderColor = state.planMode === 'area' ? '#34d399' : '';
   $('visVal').textContent = `${state.visibilityKm} km`; $('visSlider').value = state.visibilityKm;
-  $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour; $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateInput').value = state.dateStr;
+  $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour; $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateInput').value = state.dateStr; $('inlineMonth').value = +state.dateStr.slice(5, 7); $('inlineMonthVal').textContent = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+state.dateStr.slice(5, 7) - 1];
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
   GROUPS.forEach(g => { const s = state.groups[g.id]; document.querySelector(`.g-on[data-g="${g.id}"]`).checked = s.on;
     document.querySelector(`.g-rng[data-g="${g.id}"][data-k="min"]`).value = s.min; document.querySelector(`.g-rng[data-g="${g.id}"][data-k="max"]`).value = s.max;
@@ -1321,6 +1330,7 @@ bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); }); bind('inlineFlo
 bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); }); bind('inlinePitch', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
 bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('inlineHour', v => { state.hour = parseFloat(v); });
+bind('inlineMonth', v => { const [y, , d] = state.dateStr.split('-').map(Number), mo = parseInt(v, 10), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); state.dateStr = `${y}-${String(mo).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`; });   // keep day, clamp to month length
 $('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
 $('spacingSlider').addEventListener('input', e => { state.spacing = parseInt(e.target.value, 10); custom(); regen(); });
 $('footprintSlider').addEventListener('input', e => { state.footprint = parseInt(e.target.value, 10); custom(); regen(); });
