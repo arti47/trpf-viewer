@@ -917,8 +917,9 @@ function drawPrism(ctx, cam, env, P) {
 function facadeGrid(ctx, cam, f, P, env, dist) {
   const fh = P.kind === 'existing' ? 3.2 : FLOOR_HEIGHT, y0 = P.kind === 'existing' ? 3.5 : VOID_DECK_HEIGHT, p0 = f.pts[0], p1 = f.pts[1];
   const a = cam.projectPoint(p0[0], P.base + y0, p0[2]), b = cam.projectPoint(p0[0], P.base + y0 + fh, p0[2]);
-  if (!a || !b || Math.abs(a.y - b.y) < 3) return;
-  const T = transmittance(dist, env), line = env.night ? rgbStr(mix(env.sky.hor, [253, 224, 120], T), 0.35) : rgbStr(mix(env.sky.hor, [70, 82, 98], T), 0.4);
+  if (!a || !b || Math.abs(a.y - b.y) < (env.night ? 1.5 : 3)) return;
+  const T = transmittance(dist, env); if (Math.abs(a.y - b.y) < 3) { litWindows(ctx, cam, P, p0, p1, y0, fh, Math.hypot(p1[0] - p0[0], p1[2] - p0[2]), T, env); return; }
+  const line = env.night ? rgbStr(mix(env.sky.hor, [253, 224, 120], T), 0.35) : rgbStr(mix(env.sky.hor, [70, 82, 98], T), 0.4);
   ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.beginPath();
   for (let y = P.base + y0; y < P.h - 0.5; y += fh) { const q0 = cam.projectPoint(p0[0], y, p0[2]), q1 = cam.projectPoint(p1[0], y, p1[2]); if (q0 && q1) { ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); } }
   const L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]), n = Math.floor(L / 3.6);
@@ -1072,6 +1073,35 @@ function drawInterior(ctx, cam, env, sp) {
   poly([V(-RW, flo), V(-RW, flo, back), V(RW, flo, back), V(RW, flo)], C([158, 126, 94], 0.85));
 }
 let lastMath = null;
+// Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
+// conservatory domes glow, MBS SkyPark edge lights, Spectra show (20:00/21:00 daily, +22:00 Fri/Sat, ~15min) as beams from the SkyPark.
+const SUPERTREES = (() => { let s = 777; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); const c = [-1631, -1683];
+  return Array.from({ length: 12 }, (_, i) => { const a = r() * Math.PI * 2, d = 15 + r() * 55; return { x: c[0] + d * Math.sin(a), z: c[1] + d * Math.cos(a), h: i < 2 ? 50 : 25 + r() * 17, hue: r() * 360 }; }); })();
+const inShow = (hr, starts) => starts.some(t => hr >= t && hr < t + 0.25);
+function nightLandmarks(cam, env, items) {
+  const hr = state.hour, [yy, mm, dd] = state.dateStr.split('-').map(Number), dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay();
+  const rhapsody = inShow(hr, [19.75, 20.75]), spectra = inShow(hr, dow === 5 || dow === 6 ? [20, 21, 22] : [20, 21]);
+  const glow = (q, r, rgb, a) => { const g = vCtx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); vCtx.fillStyle = g; vCtx.beginPath(); vCtx.arc(q.x, q.y, r, 0, Math.PI * 2); vCtx.fill(); };
+  for (const t of SUPERTREES) {
+    const d = Math.hypot(t.x - cam.ex, t.z - cam.ez); if (!cam.inWedge(t.x - 10, t.x + 10, t.z - 10, t.z + 10, 9000)) continue;
+    items.push({ d: cam.dist(t.x, t.h / 2, t.z), draw: () => { const top = cam.projectPoint(t.x, t.h, t.z), bot = cam.projectPoint(t.x, 0, t.z); if (!top || !bot) return; const T = transmittance(d, env), ctx = vCtx;
+      const hue = rhapsody ? (t.hue + hr * 3600 * 20) % 360 : t.hue, rgb = rhapsody ? `hsl(${hue},90%,60%)` : null, col = rhapsody ? rgb : 'rgb(190,120,255)';
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(150,90,220,${0.6 * T})`; ctx.lineWidth = Math.max(1, (2 / top.z) * cam.fPx); ctx.beginPath(); ctx.moveTo(bot.x, bot.y); ctx.lineTo(top.x, top.y); ctx.stroke();
+      const rr = Math.max(1.5, (9 / top.z) * cam.fPx); ctx.globalAlpha = 0.85 * T; ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(top.x, top.y, rr, rr * 0.35, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      glow(top, rr * 3, rhapsody ? '255,160,240' : '190,120,255', 0.25 * T); ctx.restore(); } });
+  }
+  LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => { const d = Math.hypot(l.x - cam.ex, l.z - cam.ez);
+    items.push({ d: d - 30, draw: () => { const q = cam.projectPoint(l.x, l.h * 0.5, l.z); if (!q) return; vCtx.save(); vCtx.globalCompositeOperation = 'lighter'; glow(q, Math.max(3, ((l.span * 0.7) / q.z) * cam.fPx), '170,220,255', 0.3 * transmittance(d, env)); vCtx.restore(); } }); });
+  const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark');
+  if (SP) { const d = Math.hypot(SP.cx - cam.ex, SP.cz - cam.ez), T = transmittance(d, env);
+    items.push({ d: d - 60, draw: () => { const ctx = vCtx; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const edge = []; for (let i = 0; i < SP.n; i++) { const q = cam.projectPoint(SP.xs[i], SP.base, SP.zs[i]); if (q) edge.push(q); }
+      if (edge.length > 2) { ctx.strokeStyle = `rgba(255,235,200,${0.85 * T})`; ctx.lineWidth = 1.5; ctx.beginPath(); edge.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.stroke(); }
+      if (spectra) { const ph = hr * 3600 / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = SP.xs[0] + (SP.xs[1] - SP.xs[0]) * f, z = SP.zs[0] + (SP.zs[1] - SP.zs[0]) * f, sw = Math.sin(ph + k) * 0.5, b = cam.projectPoint(x, SP.h, z),
+          e = cam.projectPoint(x + 1500 * Math.sin(sw + 0.4) * 0.5, SP.h + 1500, z + 1500 * Math.cos(sw + 0.4) * 0.5); if (!b || !e) continue;
+          const g = ctx.createLinearGradient(b.x, b.y, e.x, e.y), c = k % 3 ? '120,255,170' : '230,240,255'; g.addColorStop(0, `rgba(${c},${0.55 * T})`); g.addColorStop(1, `rgba(${c},0)`); ctx.strokeStyle = g; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }
+      ctx.restore(); } }); }
+}
 function drawPerspective(m) {
   const w = perspectiveCanvas._w, h = perspectiveCanvas._h, ctx = vCtx, cam = makeCamera(w, h), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); drawGround(ctx, cam, env);
@@ -1095,8 +1125,10 @@ function drawPerspective(m) {
   items.push({ d: cam.dist(FLYER[0], 90, FLYER[1]), draw: () => {
     const pts = [], ax = Math.sin(60 * DEG), az = Math.cos(60 * DEG), dist = cam.dist(FLYER[0], 90, FLYER[1]);
     for (let i = 0; i <= 48; i++) { const t = (2 * Math.PI * i) / 48, p = cam.projectPoint(FLYER[0] + ax * 75 * Math.cos(t), 90 + 75 * Math.sin(t), FLYER[1] + az * 75 * Math.cos(t)); if (p) pts.push([p.x, p.y]); }
-    if (pts.length > 2) { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.strokeStyle = rgbStr(fogMix([235, 235, 240], dist, env)); ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (pts.length > 2) { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.strokeStyle = env.night ? rgbStr(mix(env.sky.hor, [150, 200, 255], transmittance(dist, env))) : rgbStr(fogMix([235, 235, 240], dist, env)); ctx.lineWidth = env.night ? 2 : 1.5; ctx.stroke();
+      if (env.night) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(200,230,255,${0.8 * transmittance(dist, env)})`; for (let i = 0; i < 48; i += 2) { const q = pts[i]; if (q) { ctx.beginPath(); ctx.arc(q[0], q[1], 1.3, 0, Math.PI * 2); ctx.fill(); } } ctx.restore(); } }   // night: LED rim + 28 lit capsules (every other node)
   } });
+  if (env.night) nightLandmarks(cam, env, items);
   items.sort((a, b) => b.d - a.d).forEach(it => it.draw());
   if (state.showLabels) {
     const pins = LANDMARKS.filter(l => l.id !== 'sea').map(l => ({ name: l.name, x: l.x, y: l.h + 4, z: l.z, color: l.color }));
