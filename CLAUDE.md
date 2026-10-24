@@ -1,6 +1,6 @@
 # TRPF #134 View Simulator — CLAUDE.md
 
-Single-file HTML app (`trpf-view-sim-v4.html`, ~1.6 MB, data inlined). Live artifact: https://claude.ai/artifact/KnU43WCpnCdH9urKJHWkp8 (republish from this file after changes; last synced 2026-10-24 = main bdfc9e1)
+Single-file HTML app (`trpf-view-sim-v4.html`, ~1.6 MB, data inlined). Live artifact: https://claude.ai/artifact/KnU43WCpnCdH9urKJHWkp8 (republish from this file after changes; last synced 2026-10-24 = main 5116cb3)
 GitHub Pages: https://arti47.github.io/trpf-viewer/ (`index.html` redirects to the app; `.nojekyll`; Pages source = main / root).
 Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 toward Marina East / Marina Bay, now vs future build-out.
 
