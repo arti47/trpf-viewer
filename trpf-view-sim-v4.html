@@ -228,6 +228,10 @@
           <canvas id="sunChart" style="display:block;width:100%;height:150px;touch-action:none"></canvas>
           <div id="sunRooms" class="text-[10px] mono text-slate-300 mb-1"></div>
           <div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
+        <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Light & heat in room</span>
+            <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="tinted">Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
+          <div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
+          <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Sun patch drawn on floor/back wall in Room interior view. Reveals/ledges not modelled.</div></div>
         <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
         <div id="landmarkList" class="space-y-1 text-xs"></div>
         <div class="text-[9px] text-slate-500 mt-2 leading-snug">
@@ -358,7 +362,8 @@ function rebuildTRPF() {
 rebuildTRPF();
 const UNIT_SPOTS = GEO.spots.map(s => ({ ...s })).filter(s => s.id !== 'mbrE');   // no east window in the master bedroom (confirmed by owner)
 // Window opening widths from the 4-Room Type 1 plan (W1: 0.55m parapet to ~2.2m head).
-const WIN = { living: { w: 3.35, roomW: 3.35, room: 'Living' }, br3: { w: 2.35, roomW: 3.25, room: 'Bedroom 3' }, br2: { w: 2.35, roomW: 3.05, room: 'Bedroom 2' }, mbrS: { w: 2.85, roomW: 3.2, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' } };
+// depth = room depth from window wall (4-Room Type 1 plan: living/dining 7.75m, master 4.75m; BR2/BR3 ≈3.6m scaled from plan).
+const WIN = { living: { w: 3.35, roomW: 3.35, depth: 7.75, room: 'Living' }, br3: { w: 2.35, roomW: 3.25, depth: 3.6, room: 'Bedroom 3' }, br2: { w: 2.35, roomW: 3.05, depth: 3.6, room: 'Bedroom 2' }, mbrS: { w: 2.85, roomW: 3.2, depth: 4.75, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' } };
 // Posture presets: eye height above floor, distance back from the glass (sofa: living only; bed: bedrooms only).
 const POSTURES = { stand: { label: 'Standing', eye: 1.55, d: 0.5 }, sofa: { label: 'Sofa', eye: 1.2, d: 3.5, only: ['living'] }, bed: { label: 'Bed', eye: 0.9, d: 2.5, only: ['br3', 'br2', 'mbrS'] } };
 UNIT_SPOTS.forEach(sp => Object.assign(sp, WIN[sp.id]));
@@ -403,7 +408,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, S: { on: true, min: 25, max: 30, gpr: 5.6, net: 0.7, low: 10 }, EA: { on: true, min: 22, max: 24, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true, glass: 'clear'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -753,6 +758,73 @@ function drawSunPath(ctx, m, vx, vy) {
     ctx.fillStyle = col; ctx.font = 'bold 9px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(now.state === 'direct' ? 'Direct sun' : 'No direct sun', 6, planCanvas._h - 6); }
   ctx.restore();
 }
+
+/* ===================== LIGHT & HEAT IN ROOM ===================== */
+// Clear-sky model (Singapore skies are often cloudier → upper bound). Irradiance: Kasten air mass, Meinel DNI, Haurwitz GHI, DHI = GHI − DNI·sin(el) (≥15% GHI);
+// illuminance via efficacy 95 lm/W direct, 120 lm/W diffuse. Glass presets: τv / SHGC; casement frame factor 0.75.
+// Sun patch: window aperture (W1 sill 0.55–head 2.2, glass 0.1m outside inner wall face) split into 4×3 cells; each cell lit if its ray to the sun is
+// unobstructed (segHit 4km); lit cells projected parallel along the sun ray onto floor (z' ≤ depth) and back wall (y' ≥ 0), clipped to room width. Reveals/ledges ignored.
+// VSC (BRE 209): CIE overcast sky L ∝ (1+2 sin el)/3, visible-ray sum over the vertical window plane / unobstructed horizontal (max 39.6%), 4° grid.
+// ADF (BRE): T·Aw·θ·M/(A(1−R²)), θ = 90°·VSC/39.6, M 0.9, R 0.5, A = total room surface, Aw = net glazing.
+const GLASS = { clear: { label: 'Clear 6mm', tv: 0.88, shgc: 0.82 }, tinted: { label: 'Tinted grey', tv: 0.43, shgc: 0.58 }, lowe: { label: 'Solar-control low-E', tv: 0.6, shgc: 0.35 } };
+const FRAME_F = 0.75, ROOM_H = 2.6, SILL = 0.55, R_MEAN = 0.5;
+function clearSky(elDeg) {
+  if (elDeg <= 0) return { dni: 0, dhi: 0, ghi: 0 }; const se = Math.sin(elDeg * DEG), am = 1 / (se + 0.50572 * Math.pow(elDeg + 6.07995, -1.6364));
+  const dni = 1353 * Math.pow(0.7, Math.pow(am, 0.678)), ghi = 1098 * se * Math.exp(-0.057 / se), dhi = Math.max(0.15 * ghi, ghi - dni * se); return { dni, dhi, ghi };
+}
+const slabY = () => getEyeHeight(state.obsFloor) - state.eyeOffset;
+function clipPoly(P, k, v, keepGE) { const out = []; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], ia = keepGE ? a[k] >= v : a[k] <= v, ib = keepGE ? b[k] >= v : b[k] <= v;
+  if (ia) out.push(a); if (ia !== ib) { const t = (v - a[k]) / (b[k] - a[k]); out.push(a.map((c, j) => c + (b[j] - c) * t)); } } return out; }
+const area2 = (P, i, j) => { let A = 0; for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; A += a[i] * b[j] - b[i] * a[j]; } return Math.abs(A) / 2; };
+function roomLight(sp, dateStr = state.dateStr, hr = state.hour) {
+  const sun = solarPosition(dateStr, hr); if (sun.elDeg <= 0.5) return { sun, patches: [], litFrac: 0, aFloor: 0, aBack: 0, depth: 0, cosInc: 0 };
+  const s = compassToWorld(sun.azDeg, sun.elDeg), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)];
+  const sn = s[0] * n[0] + s[2] * n[1], su = s[0] * u[0] + s[2] * u[1], sy = s[1]; if (sn <= 0.02) return { sun, patches: [], litFrac: 0, aFloor: 0, aBack: 0, depth: 0, cosInc: 0 };
+  const W = sp.w / 2, RW = Math.max(W + 0.15, sp.roomW / 2), D = sp.depth || 6, y0 = slabY(), NX = 4, NY = 3, patches = []; let lit = 0, aFloor = 0, aBack = 0, depth = 0;
+  for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
+    const ua = -W + (2 * W * i) / NX, ub = -W + (2 * W * (i + 1)) / NX, ya = SILL + ((WIN_HEAD - SILL) * j) / NY, yb = SILL + ((WIN_HEAD - SILL) * (j + 1)) / NY, uc = (ua + ub) / 2, yc = (ya + yb) / 2;
+    const wx = sp.x + u[0] * uc + n[0] * 0.25, wz = sp.z + u[1] * uc + n[1] * 0.25, p0 = [wx, y0 + yc, wz];
+    if (segHit(p0, [wx + s[0] * 4000, p0[1] + s[1] * 4000, wz + s[2] * 4000], wx, wz)) continue; lit++;
+    const cell = [[ua, ya], [ub, ya], [ub, yb], [ua, yb]];
+    let fl = cell.map(([uu, yy]) => [uu - (yy * su) / sy, 0, -0.1 + (yy * sn) / sy]);   // floor projection [u, y, z']
+    fl = clipPoly(clipPoly(clipPoly(clipPoly(fl, 2, D, false), 2, 0, true), 0, -RW, true), 0, RW, false);
+    if (fl.length > 2) { patches.push(fl); aFloor += area2(fl, 0, 2); depth = Math.max(depth, ...fl.map(q => q[2])); }
+    let bw = cell.map(([uu, yy]) => [uu - ((D + 0.1) * su) / sn, yy - ((D + 0.1) * sy) / sn, D]);   // back-wall projection
+    bw = clipPoly(clipPoly(clipPoly(clipPoly(bw, 1, 0, true), 1, ROOM_H, false), 0, -RW, true), 0, RW, false);
+    if (bw.length > 2) { patches.push(bw); aBack += area2(bw, 0, 1); depth = D; }
+  }
+  return { sun, patches, litFrac: lit / (NX * NY), aFloor, aBack, depth, cosInc: sn };
+}
+const vscCache = new Map();
+function vscOf(sp) {
+  const key = [sp.x, sp.z, sp.normal, state.obsFloor, state.eyeOffset, WORLD_VER].join('|'); if (vscCache.has(key)) return vscCache.get(key); if (vscCache.size > 40) vscCache.clear();
+  const nb = sp.normal * DEG, p0 = [sp.x + Math.sin(nb) * 0.25, slabY() + 1.4, sp.z + Math.cos(nb) * 0.25], st = 4 * DEG; let num = 0;
+  for (let el = st / 2; el < Math.PI / 2; el += st) { const L = (1 + 2 * Math.sin(el)) / 3, ce = Math.cos(el);
+    for (let a = -Math.PI / 2 + st / 2; a < Math.PI / 2; a += st) { const az = nb + a, v = [Math.sin(az) * ce, Math.sin(el), Math.cos(az) * ce];
+      if (!segHit(p0, [p0[0] + v[0] * 3000, p0[1] + v[1] * 3000, p0[2] + v[2] * 3000], p0[0], p0[2])) num += L * ce * Math.cos(a) * ce * st * st; } }
+  const vsc = (100 * num) / ((7 * Math.PI) / 9); vscCache.set(key, vsc); return vsc;
+}
+function roomMetrics(sp) {
+  const G = GLASS[state.glass] || GLASS.clear, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = Wr * D, A = 2 * (Wr * D + Wr * ROOM_H + D * ROOM_H);
+  const vsc = vscOf(sp), theta = (90 * vsc) / 39.6, adf = (G.tv * Aw * theta * 0.9) / (A * (1 - R_MEAN * R_MEAN));
+  const at = hr => { const Lr = roomLight(sp, state.dateStr, hr), cs = clearSky(Lr.sun.elDeg), dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
+    return { Lr, cs, q: G.shgc * Aw * (dirIrr + cs.dhi * 0.5 * (vsc / 39.6)), luxSky: (adf / 100) * cs.dhi * 120, luxSun: (G.tv * Aw * dirIrr * 95) / Af }; };
+  const now = at(state.hour), kk = [sp.id, state.obsFloor, state.eyeOffset, state.dateStr, state.glass, WORLD_VER].join('|');   // daily kWh cached per date (not per hour)
+  if (kwhCache.key !== kk) { let k = 0; for (let t = 6.5; t < 19.5; t += 0.25) k += (at(t + 0.125).q * 0.25) / 1000; kwhCache = { key: kk, v: k }; } const kwh = kwhCache.v;
+  return { G, vsc, adf, now, kwh, Aw, Af, D };
+}
+let rmCache = { key: '', v: null }, kwhCache = { key: '', v: 0 };
+function drawRoomPanel() {
+  const sp = curSpot(), el = $('roomLight'); if (!el) return; if (!sp) { el.innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
+  const key = [sp.id, state.obsFloor, state.eyeOffset, state.dateStr, state.hour, state.glass, WORLD_VER].join('|'); if (rmCache.key !== key) rmCache = { key, v: roomMetrics(sp) };
+  const M = rmCache.v, N = M.now, P = N.Lr, tag = (v, good, ok) => `<span style="color:${v >= good ? '#34d399' : v >= ok ? '#fbbf24' : '#fb7185'}">`;
+  el.innerHTML = `${sp.room}: ${Wr2(sp)} • glazing ${M.Aw.toFixed(1)} m² net<br>` +
+    `Sky view VSC ${tag(M.vsc, 27, 15)}${M.vsc.toFixed(1)}%</span> • ADF ${tag(M.adf, 2, 1)}${M.adf.toFixed(1)}%</span> (BRE: ≥27% / ≥2% good)<br>` +
+    `Now: ${P.sun.elDeg > 0 ? `indoor avg ≈ <b>${Math.round(N.luxSky + N.luxSun).toLocaleString()} lux</b> (sky ${Math.round(N.luxSky)}, sun ${Math.round(N.luxSun)})` : 'night'}<br>` +
+    `Sun patch: ${P.patches.length ? `<span style="color:#fbbf24">floor ${P.aFloor.toFixed(1)} m²${P.aBack ? ` + back wall ${P.aBack.toFixed(1)} m²` : ''}, reaches ${P.depth.toFixed(1)} m in</span> (${Math.round(P.litFrac * 100)}% of window sunlit)` : 'none'}<br>` +
+    `Solar heat gain: now <b>${Math.round(N.q)} W</b> • today ${M.kwh.toFixed(1)} kWh (clear sky, ${M.G.label})`;
+}
+const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m`;
 
 /* ===================== DASHBOARD ===================== */
 const curSpot = () => UNIT_SPOTS.find(sp => sp.id === state.spot) || null;
@@ -1182,7 +1254,7 @@ function generateTrees() {
 function drawInterior(ctx, cam, env, sp) {
   const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)];
   const V = (s, t, dd = d) => [n[0] * dd + u[0] * s, t, n[1] * dd + u[1] * s];
-  const W = sp.w / 2, RW = Math.max(W + 0.15, sp.roomW / 2), sill = 0.55 - e, head = WIN_HEAD - e, ceil = 2.6 - e, flo = -e, back = -6, Tw = 0.2;
+  const W = sp.w / 2, RW = Math.max(W + 0.15, sp.roomW / 2), sill = 0.55 - e, head = WIN_HEAD - e, ceil = 2.6 - e, flo = -e, back = d - (sp.depth || 6), Tw = 0.2;
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill); return q; };
   // window wall with opening (even-odd)
@@ -1204,6 +1276,10 @@ function drawInterior(ctx, cam, env, sp) {
   poly([V(RW, flo), V(RW, flo, back), V(RW, ceil, back), V(RW, ceil)], C([214, 208, 196], 0.86));
   poly([V(-RW, ceil), V(RW, ceil), V(RW, ceil, back), V(-RW, ceil, back)], C([238, 236, 230], 0.95));
   poly([V(-RW, flo), V(-RW, flo, back), V(RW, flo, back), V(RW, flo)], C([158, 126, 94], 0.85));
+  poly([V(-RW, flo, back), V(RW, flo, back), V(RW, ceil, back), V(-RW, ceil, back)], C([224, 218, 206], 0.8));   // back wall
+  // sun patch (wall-relative coords: u, y above floor, z' depth into room) → eye-relative V(u, y − e, d − z')
+  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
+    L.patches.forEach(pg => poly(pg.map(([uu, yy, zz]) => V(uu, yy - e, d - zz)), `rgba(255,226,170,${a})`)); ctx.restore(); }
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
@@ -1306,7 +1382,7 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1331,6 +1407,7 @@ bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); }); bind('inlinePitch
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
 bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('inlineHour', v => { state.hour = parseFloat(v); });
 bind('inlineMonth', v => { const [y, , d] = state.dateStr.split('-').map(Number), mo = parseInt(v, 10), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); state.dateStr = `${y}-${String(mo).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`; });   // keep day, clamp to month length
+$('glassSelect').addEventListener('change', e => { state.glass = e.target.value; renderAll(); });
 $('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
 $('spacingSlider').addEventListener('input', e => { state.spacing = parseInt(e.target.value, 10); custom(); regen(); });
 $('footprintSlider').addEventListener('input', e => { state.footprint = parseInt(e.target.value, 10); custom(); regen(); });
