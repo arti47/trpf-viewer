@@ -54,7 +54,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 
 ## Key timeline facts (as of Oct 2026)
 - Marina East N/S: no GLS release; first sale before 2030 ≈20–30% (judgement); full build-out late 2030s+.
-- Owner move-in: end-2029.
+- Owner move-in: end-2029. Unit #134 is on 27F (owner-confirmed; default `state.obsFloor` 27).
 
 ## Handoff / status
 - Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
