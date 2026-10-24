@@ -247,7 +247,8 @@ const bearingTo = (x0, z0, x1, z1) => norm360(Math.atan2(x1 - x0, z1 - z0) / DEG
 const compassName = b => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(norm360(b) / 22.5) % 16];
 function todayISO() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 function fmtHour(hr) { const hh = Math.floor(hr), mm = Math.round((hr - hh) * 60); return `${String(hh + (mm === 60 ? 1 : 0)).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`; }
-const BLK_TOP = getRoofHeight(30), MSCP_TOP = VOID_DECK_HEIGHT + 12 * FLOOR_HEIGHT - 0.1;
+// Roof crown/parapet above 30F: estimated ~2 storeys from developer renderings (beige louvred crown, framed white panels).
+const TRPF_CROWN = 2 * FLOOR_HEIGHT, BLK_TOP = getRoofHeight(30), MSCP_TOP = VOID_DECK_HEIGHT + 12 * FLOOR_HEIGHT - 0.1;
 
 /* ===================== PRISMS ===================== */
 // A prism: plan polygon (CCW, x=east, z=north, metres) extruded from base to h.
@@ -317,7 +318,7 @@ const LU = GEO.lu.map(([c, ext, ...holes]) => {
 const PARCELS = GEO.parcels.concat([{"id":"E1","label":"Planned residential E of TRPF","lu":"RESIDENTIAL","gpr":"3.7","area":12238,"ring":[270.5,-1.5,128.5,-1.5,129.0,73.0,135.0,79.5,141.0,80.0,142.0,74.5,131.0,72.0,133.0,63.0,146.0,66.0,143.0,80.0,244.0,88.5,275.5,92.0,270.0,29.0]},{"id":"E2","label":"Planned residential E of TRPF","lu":"RESIDENTIAL","gpr":"3.5","area":12283,"ring":[270.5,-1.5,271.5,-50.5,275.0,-88.0,128.5,-86.5,128.5,-1.5]}]);
 // RT excludes the 106 ha Marina East reserve that merely touches the 700m radius (it is group RE).
 const groupParcels = g => PARCELS.filter(p => (g.id === 'RT' ? /^R\d/.test(p.id) && p.area < 500000 : g.id === 'EA' ? /^E\d/.test(p.id) : p.id === g.id));
-const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP : b.h === 'MSCP_TOP' ? MSCP_TOP : +b.h }));
+const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP + TRPF_CROWN : b.h === 'MSCP_TOP' ? MSCP_TOP : +b.h }));
 const blkToWorld = (B, lx, lz) => [B.ox + B.c * lx - B.s * lz, B.oz + B.s * lx + B.c * lz];
 const GAP_FITTED = GEO.gapFitted, GAP_DIR = [Math.sin(GEO.normal32 * DEG), Math.cos(GEO.normal32 * DEG)];
 let gap3132 = GAP_FITTED;
@@ -840,7 +841,7 @@ function facadeAlb(P) {
 // TRPF facade from developer renderings + model (31A/32A/33A fronts, 31A side facing #134): ~7.5m unit stacks cycling
 // brown-framed grey / greige / white-framed grey; white ledge each floor; 2-pane dark windows per 3.6m bay; brown bands every 5F
 // inside brown frames; void deck recessed. MSCP: grey screens, white pilasters + slab edges, green planter strips. Visual only.
-const TRPF_PAL = { white: [236, 234, 228], greige: [210, 198, 176], grey: [172, 174, 176], brown: [64, 46, 40], glass: [62, 70, 80], lit: [255, 214, 150], void: [96, 100, 104], screen: [128, 134, 140], green: [96, 142, 72] };
+const TRPF_PAL = { white: [236, 234, 228], greige: [210, 198, 176], grey: [172, 174, 176], brown: [64, 46, 40], crown: [214, 204, 184], glass: [62, 70, 80], lit: [255, 214, 150], void: [96, 100, 104], screen: [128, 134, 140], green: [96, 142, 72] };
 const STACK_W = 7.5, STACK_TYPES = ['brown', 'greige', 'white'];
 function trpfFaceInfo(P, f) {
   const B = P.B, p0 = f.pts[0], p1 = f.pts[1], loc = (x, z) => { const dx = x - B.ox, dz = z - B.oz; return [B.c * dx + B.s * dz, -B.s * dx + B.c * dz]; };
@@ -852,7 +853,7 @@ function trpfFacade(ctx, cam, f, P, env, dist, info) {
   const p0 = f.pts[0], p1 = f.pts[1], L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]); if (L < 0.4) return;
   const T = transmittance(dist, env), col = (rgb, n = f.n) => rgbStr(fogMix(shade(rgb, n, env), dist, env));
   const quad = (t0, t1, y0, y1, c) => { const P4 = [t0, t1, t1, t0].map((t, i) => [p0[0] + (p1[0] - p0[0]) * t, i < 2 ? y0 : y1, p0[2] + (p1[2] - p0[2]) * t]), sp = cam.projectPoly(P4); if (sp) fillPoly(ctx, sp, c); };
-  const a = cam.projectPoint(p0[0], VOID_DECK_HEIGHT, p0[2]), b = cam.projectPoint(p0[0], VOID_DECK_HEIGHT + FLOOR_HEIGHT, p0[2]), px = a && b ? Math.abs(a.y - b.y) : 0;
+  const yr = clamp(cam.hEye, P.base + 1, P.h - FLOOR_HEIGHT - 1), mx = (p0[0] + p1[0]) / 2, mz = (p0[2] + p1[2]) / 2, a = cam.projectPoint(mx, yr, mz), b = cam.projectPoint(mx, yr + FLOOR_HEIGHT, mz), px = a && b ? Math.abs(a.y - b.y) : 0;   // detail level from storey size near eye level
   if (P.name.startsWith('MSCP')) { // car park: screens, white slab edges + planters per deck, pilasters every 8m
     if (px < 2) return; const dh = (P.h - 1) / 12;
     for (let y = dh; y < P.h; y += dh) { quad(0, 1, y - 0.35, y, col(TRPF_PAL.white)); if (px >= 4) quad(0, 1, y, y + 0.35, col(TRPF_PAL.green)); }
@@ -865,7 +866,9 @@ function trpfFacade(ctx, cam, f, P, env, dist, info) {
   const cuts = [0]; { const lo = Math.min(info.a0, info.a1), hi = Math.max(info.a0, info.a1); for (let k = Math.ceil(lo / STACK_W); k * STACK_W < hi; k++) cuts.push((k * STACK_W - info.a0) / (info.a1 - info.a0)); } cuts.push(1); cuts.sort((x, y) => x - y);
   for (let i = 0; i < cuts.length - 1; i++) {
     const t0 = cuts[i], t1 = cuts[i + 1]; if (t1 - t0 < 1e-3) continue; const ty = info.type(al((t0 + t1) / 2));
-    if (ty === 'greige' && px >= 2) quad(t0, t1, VOID_DECK_HEIGHT, top, col(TRPF_PAL.greige));
+    if (ty === 'greige' && px >= 2) quad(t0, t1, VOID_DECK_HEIGHT, BLK_TOP, col(TRPF_PAL.greige));
+    if (P.h > BLK_TOP + 0.5 && px >= 1) { quad(t0, t1, BLK_TOP, top, col(ty === 'brown' ? TRPF_PAL.white : TRPF_PAL.crown)); // crown: framed white panel / beige louvres
+      if (ty !== 'brown' && px >= 3) for (let y = BLK_TOP + 0.8; y < top - 0.3; y += 0.7) quad(t0, t1, y, y + 0.12, col(mix(TRPF_PAL.crown, [90, 90, 90], 0.35))); }
     if (px >= 3) for (let fl = 1; fl <= 30; fl++) {
       const y = VOID_DECK_HEIGHT + (fl - 1) * FLOOR_HEIGHT; if (y + FLOOR_HEIGHT > P.h + 0.1) break;
       quad(t0, t1, y, y + 0.22, col(ty === 'brown' && fl % 5 === 0 ? TRPF_PAL.brown : TRPF_PAL.white));
