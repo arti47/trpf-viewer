@@ -1477,6 +1477,13 @@ function roomEyeWorld() {
   const ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - S.yin + 0.3, s = ex - S.xc;
   return [sp.x + u[0] * s - n[0] * back, sp.z + u[1] * s - n[1] * back];
 }
+// Room interior on: Blk 32A raster boxes whose centre lies in #134's own plan footprint are skipped in the 3D view (the traced interior + ext walls replace them;
+// their 0.5 m staircase edges otherwise stood up to ~0.5 m proud of the true facade and filled the glass once the eye moved inside, owner report 2026-10-25).
+function ownUnitTest() {
+  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
+  const nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)];
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = S.xc + rx * u[0] + rz * u[1], Y = S.yin - 0.3 - (rx * n[0] + rz * n[1]); return X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4; };
+}
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
 // conservatory domes glow, MBS SkyPark edge lights, Spectra show (20:00/21:00 daily, +22:00 Fri/Sat, ~15min) as beams from the SkyPark.
@@ -1512,7 +1519,8 @@ function drawPerspective(m) {
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); drawGround(ctx, cam, env);
   const items = [];
   SHIPS.forEach(([x, z, len]) => { const hull = makePrism('ship', 'existing', 12, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', 30, 12, [x - len * 0.4, z - len * 0.06, x - len * 0.2, z - len * 0.06, x - len * 0.2, z + len * 0.06, x - len * 0.4, z + len * 0.06]); items.push({ d: cam.dist(x, 10, z), draw: () => { drawPrism(ctx, cam, env, hull); drawPrism(ctx, cam, env, sup); } }); });
-  for (const P of ALL) { if (!cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 9000)) continue; items.push({ d: cam.dist(P.cx, P.h / 2, P.cz), draw: () => { if (P.kind === 'new') { ctx.save(); ctx.globalAlpha = state.xray ? 0.28 : state.opacity; drawPrism(ctx, cam, env, P); ctx.restore(); } else drawPrism(ctx, cam, env, P); } }); }
+  const own = ownUnitTest();
+  for (const P of ALL) { if (!cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 9000) || (own && own(P))) continue; items.push({ d: cam.dist(P.cx, P.h / 2, P.cz), draw: () => { if (P.kind === 'new') { ctx.save(); ctx.globalAlpha = state.xray ? 0.28 : state.opacity; drawPrism(ctx, cam, env, P); ctx.restore(); } else drawPrism(ctx, cam, env, P); } }); }
   // Trees (parks, roadside, TRPF grounds) within 3km, in view
   const TR = 3000;
   for (let i = 0; i < TREES.n; i++) {
