@@ -243,7 +243,7 @@
         <div id="landmarkList" class="space-y-1 text-xs"></div>
         <div class="text-[9px] text-slate-500 mt-2 leading-snug">
           Geo frame: URA Master Plan 2025 land use (data.gov.sg), OSM buildings, MP2025 HDB footprints. Origin = TRPF parcel centroid (1.29682N, 103.87826E).
-          Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: fixed fair-weather cumulus field. Room interior: 4-Room Type 1 dims, 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frame, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
+          Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: fixed fair-weather cumulus field. Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
           TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the URA parcel (0.225 m/px). Marina East parcels are “subject to detailed planning” (no published GPR or height): base case GPR 4.0 on ~70% net site (estimate 3.5–4.5), 30–44F stepping down toward Founders' Memorial, 10-storey frontage; GPR 5.6 (Marina South GLS, Marina Gardens Lane) is an upside scenario. Built floor area never exceeds GPR × net site. New towers: 3.15 m/storey + 4.5 m lobby + 3 m roof. Heights are above ground; URA height controls are in m SHD (add ~4 m site level). Layout synthetic, all sliders unclamped.
         </div>
       </div>
@@ -390,6 +390,30 @@ const WIN = { living: { w: 3.35, roomW: 3.35, depth: 7.75, room: 'Living' }, br3
 const POSTURES = { stand: { label: 'Standing', eye: 1.55, d: 0.5 }, sofa: { label: 'Sofa', eye: 1.2, d: 3.5, only: ['living'] }, bed: { label: 'Bed', eye: 0.9, d: 2.5, only: ['br3', 'br2', 'mbrS'] } };
 UNIT_SPOTS.forEach(sp => Object.assign(sp, WIN[sp.id]));
 const WIN_HEAD = 2.2;
+// Unit #134 interior, traced from the HDB 4-Room Type 1 plan (owner upload 2026-10-25; dims = wall centre-lines, rest scaled ≈96.7 px/m).
+// Plan metres: X along facade (0 = E/master side → W/living), Y into the flat (0 = bedroom facade outer face). Walls [x0,y0,x1,y1,z0,z1,kind]; visual only.
+const UNIT_H = 2.6;
+const UNIT_PLAN = (() => {
+  const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, (y0 + y1) / 2]); };
+  win(0.31, 3.2, 0, F); win(3.31, 5.58, 0, F); win(6.79, 9.2, 0, F); win(9.51, 12.86, 1.53, 1.68);   // W1 windows: master, BR2, BR3, living
+  w.push([0, 0, 0.31, 4.48], [5.58, 0, 6.79, 0.16], [9.2, 0, 9.51, 1.69], [12.86, 1.33, 13.12, 7.74],   // E wall (no window, owner), columns, W wall
+    [3.2, 0, 3.31, 3.44], [6.2, 0.16, 6.3, 3.44], [9.29, 1.69, 9.38, 3.44],                               // bedroom partitions
+    [3.31, 3.33, 5.14, 3.44], [5.14, 3.33, 6.16, 3.44, 2.1, H], [6.16, 3.33, 6.4, 3.44], [6.4, 3.33, 7.36, 3.44, 2.1, H], [7.36, 3.33, 9.38, 3.44],   // corridor wall, BR2/BR3 doors
+    [4.22, 3.44, 4.3, 4.52, 2.1, H],                                                                      // master door (into hallway)
+    [0, 4.48, 1.94, 4.78], [1.63, 4.78, 1.94, 6.42], [1.94, 4.52, 2.75, 4.62], [2.75, 4.52, 3.45, 4.62, 2.1, H], [3.45, 4.52, 5.35, 4.62],
+    [5.35, 4.52, 6.0, 4.62, 2.1, H], [6.0, 4.52, 6.19, 4.62], [4.22, 4.62, 4.3, 6.3], [1.94, 6.3, 6.19, 6.42], [6.19, 4.48, 6.6, 6.42],   // bath/WC1 (en-suite), bath/WC2
+    [5.6, 6.3, 7.18, 6.42], [5.6, 6.42, 5.75, 8.7], [7.11, 6.42, 7.18, 7.0], [7.11, 7.0, 7.18, 7.9, 2.1, H], [7.11, 7.9, 7.18, 8.7],   // service yard
+    [9.2, 6.1, 9.51, 8.99], [5.6, 8.7, 9.51, 8.99],                                                       // kitchen (open to dining)
+    [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'door'], [11.1, 7.46, 11.3, 7.74],   // main door
+    [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
+  const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
+  const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.52], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
+    [[1.94, 4.62, 4.22, 6.3], 'wet'], [[4.3, 4.62, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
+  // per window: centre X, inner wall face Y, plan room depth to the opposite wall
+  const spots = { mbrS: { xc: 1.755, yin: F, depth: 4.33 }, br2: { xc: 4.445, yin: F, depth: 3.18 }, br3: { xc: 7.995, yin: F, depth: 3.18 }, living: { xc: 11.185, yin: 1.68, depth: 5.78 } };
+  return { walls: w, wins, outline, floors, spots };
+})();
+const UNIT_FLOOR = { tile: [200, 194, 184], wood: [170, 134, 98], wet: [152, 158, 162], kitchen: [184, 180, 172] };
 const jambDeg = sp => Math.atan((sp.w / 2) / Math.max(0.05, state.standDist)) / DEG;
 UNIT_SPOTS.forEach(sp => { // push each spot out of the rasterised 32A footprint (+0.15m)
   const nx = Math.sin(sp.normal * DEG), nz = Math.cos(sp.normal * DEG), p32 = TRPF.filter(P => P.name === 'Blk 32A');
@@ -1351,36 +1375,43 @@ function generateTrees() {
   for (let x = mnx; x <= mxx; x += 14) for (let z = mnz; z <= mxz; z += 14) { const jx = x + (hash01(x, z, 11) - 0.5) * 8, jz = z + (hash01(z, x, 13) - 0.5) * 8; if (hash01(jx, jz, 17) < 0.45 || !ringIn(tr, jx, jz)) continue; if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
   TREES.n = X.length; TREES.x = Float64Array.from(X); TREES.z = Float64Array.from(Z); TREES.h = Float64Array.from(H); TREES.g = Float64Array.from(G);
 }
-// Room interior around the selected window, from the eye at (stand-back d, eye height e). Clear glass; charcoal casement frame.
+// Room interior: whole #134 unit from UNIT_PLAN, seen from the eye at (stand-back d, eye height e) behind the selected window. Clear glass; charcoal casement frames.
+// Floor + ceiling first, then wall faces (back-face culled, split ≤0.4 m) painter-sorted by plan distance; door/window openings show the rooms / scene beyond.
 function drawInterior(ctx, cam, env, sp) {
-  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)];
-  const V = (s, t, dd = d) => [n[0] * dd + u[0] * s, t, n[1] * dd + u[1] * s];
-  const W = sp.w / 2, RW = Math.max(W + 0.15, sp.roomW / 2), sill = 0.55 - e, head = WIN_HEAD - e, ceil = 2.6 - e, flo = -e, back = d - (sp.depth || 6), Tw = 0.2;
+  const S = UNIT_PLAN.spots[sp.id]; if (!S) return;
+  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, ex = S.xc, ey = S.yin + d;
+  const V = (X, Y, h) => { const s = X - ex, dd = ey - Y; return [n[0] * dd + u[0] * s, h - e, n[1] * dd + u[1] * s]; };
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
-  const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill); return q; };
-  // window wall with opening (even-odd)
-  const outer = cam.projDirPoly([V(-RW, flo), V(RW, flo), V(RW, ceil), V(-RW, ceil)]), hole = cam.projDirPoly([V(-W, sill), V(W, sill), V(W, head), V(-W, head)]);
-  if (outer) { ctx.beginPath(); [outer, hole].forEach(q => { if (!q) return; ctx.moveTo(q[0][0], q[0][1]); for (let i = 1; i < q.length; i++) ctx.lineTo(q[i][0], q[i][1]); ctx.closePath(); }); ctx.fillStyle = C([228, 222, 210]); ctx.fill('evenodd'); }
-  // reveals (wall thickness), sill top, head soffit
-  poly([V(-W, sill), V(-W, head), V(-W, head, d + Tw), V(-W, sill, d + Tw)], C([206, 200, 188]));
-  poly([V(W, sill), V(W, sill, d + Tw), V(W, head, d + Tw), V(W, head)], C([206, 200, 188]));
-  poly([V(-W, sill), V(-W, sill, d + Tw), V(W, sill, d + Tw), V(W, sill)], C([240, 236, 228], 1.05));
-  poly([V(-W, head), V(W, head), V(W, head, d + Tw), V(-W, head, d + Tw)], C([188, 182, 170]));
-  // casement frame + mullions + transom at the glass line
-  const g = d + 0.1, F = 0.05, M = 0.03, fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1)));
-  const bar = (s0, s1, t0, t1) => poly([V(s0, t0, g), V(s1, t0, g), V(s1, t1, g), V(s0, t1, g)], fc);
-  bar(-W, -W + F, sill, head); bar(W - F, W, sill, head); bar(-W, W, sill, sill + F); bar(-W, W, head - F, head);
-  const nP = Math.max(2, Math.round(sp.w / 0.7)); for (let k = 1; k < nP; k++) { const s = -W + (2 * W * k) / nP; bar(s - M, s + M, sill, head); }
-  const tr = 1.8 - e; if (tr > sill && tr < head) bar(-W, W, tr - M, tr + M);
-  // side walls, ceiling, floor (closer than the window wall, drawn after)
-  poly([V(-RW, flo), V(-RW, ceil), V(-RW, ceil, back), V(-RW, flo, back)], C([214, 208, 196], 0.86));
-  poly([V(RW, flo), V(RW, flo, back), V(RW, ceil, back), V(RW, ceil)], C([214, 208, 196], 0.86));
-  poly([V(-RW, ceil), V(RW, ceil), V(RW, ceil, back), V(-RW, ceil, back)], C([238, 236, 230], 0.95));
-  poly([V(-RW, flo), V(-RW, flo, back), V(RW, flo, back), V(RW, flo)], C([158, 126, 94], 0.85));
-  poly([V(-RW, flo, back), V(RW, flo, back), V(RW, ceil, back), V(-RW, ceil, back)], C([224, 218, 206], 0.8));   // back wall
-  // sun patch (wall-relative coords: u, y above floor, z' depth into room) → eye-relative V(u, y − e, d − z')
+  const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
+  const ring = (r, h) => r.map(([X, Y]) => V(X, Y, h)), box = ([x0, y0, x1, y1], h) => ring([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], h);
+  const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
+  const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
+  if (fl) { ctx.save(); fillPoly(ctx, fl); ctx.clip(); const gs = `rgba(90,84,76,${0.25 * lit})`;   // 600 mm tile joints
+    for (let X = 0.31; X < 13; X += 0.6) line(V(X, 0, 0), V(X, 9, 0), gs, 0.7); for (let Y = 0.15; Y < 9; Y += 0.6) line(V(0, Y, 0), V(13.2, Y, 0), gs, 0.7); ctx.restore(); }
+  UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
+  poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
+  const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey);
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of UNIT_PLAN.walls) {
+    const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : [232, 226, 214];
+    for (const [ax, ay, bx, by, nx, ny] of [[x0, y0, x1, y0, 0, -1], [x1, y0, x1, y1, 1, 0], [x1, y1, x0, y1, 0, 1], [x0, y1, x0, y0, -1, 0]]) {
+      if ((ex - ax) * nx + (ey - ay) * ny <= 1e-3) continue;
+      const L = Math.hypot(bx - ax, by - ay), k = Math.ceil(L / 0.4), fill = C(col, (ny < 0 ? 1 : ny > 0 ? 0.74 : 0.86) * clamp(1.04 - 0.035 * (ay + by) / 2, 0.7, 1));
+      for (let i = 0; i < k; i++) { const p0 = [ax + (bx - ax) * i / k, ay + (by - ay) * i / k], p1 = [ax + (bx - ax) * (i + 1) / k, ay + (by - ay) * (i + 1) / k];
+        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ends: [i === 0, i === k - 1] }); }
+    }
+    if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05) });   // sill top
+    if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8) });    // head / lintel soffit
+  }
+  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), bar = (s0, s1, t0, t1, yg) => items.push({ d: near(s0, yg, s1, yg) - 0.05, pts: [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)], fill: fc });
+  for (const [x0, x1, yg] of UNIT_PLAN.wins) { const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
+    bar(x0, x0 + Fw, sill, head, yg); bar(x1 - Fw, x1, sill, head, yg); bar(x0, x1, sill, sill + Fw, yg); bar(x0, x1, head - Fw, head, yg);
+    const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
+  const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
+  items.sort((a, b) => b.d - a.d).forEach(it => { poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
+  // sun patch (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
+  const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
   const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
-    L.patches.forEach(pg => poly(pg.map(([uu, yy, zz]) => V(uu, yy - e, d - zz)), `rgba(255,226,170,${a})`)); ctx.restore(); }
+    L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(ex + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
