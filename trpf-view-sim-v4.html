@@ -400,7 +400,7 @@ const WIN_HEAD = 2.2;
 // Plan metres: X along facade (0 = E/master side → W/living), Y into the flat (0 = bedroom facade outer face). Walls [x0,y0,x1,y1,z0,z1,kind]; visual only.
 const UNIT_H = 2.6;
 const UNIT_PLAN = (() => {
-  const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, (y0 + y1) / 2]); };
+  const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, y0]); };   // glass at the outer face: reveals/sill/soffit stay wholly indoors (a mid-wall glass line let the window pane erase their outer half)
   win(0.695, 2.7, 0, F); win(3.62, 5.58, 0, F); win(6.78, 8.75, 0, F); win(9.99, 12.51, 1.53, 1.68);   // W1 glazing (plan double lines): master, BR2, BR3, living
   w.push([0.31, 0, 0.695, F], [2.7, 0, 3.62, F], [8.75, 0, 9.2, F], [9.51, 1.53, 9.99, 1.68], [12.51, 1.53, 12.86, 1.68]);   // solid wall stubs at the window ends (owner markup 2026-10-25)
   w.push([0, 0, 0.31, 4.48], [5.58, 0, 6.79, 0.16], [9.2, 0, 9.3, 1.69], [9.3, 1.53, 9.51, 1.69], [12.86, 1.53, 13.12, 7.74],   // E wall (no window, owner), columns, W wall
