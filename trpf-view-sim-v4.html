@@ -134,11 +134,17 @@
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
+            <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
             <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
         </div>
         <canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
         <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
+        <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
+        <div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
+          <span></span><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><span></span>
+          <button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
+        </div>
         <div id="dragHint" class="absolute bottom-2.5 left-3 pointer-events-none bg-slate-900/85 px-2.5 py-1 rounded border border-slate-800 text-[10px] text-slate-300 z-10">Drag L/R = turn • Drag U/D = tilt</div>
       </div>
     </div>
@@ -456,7 +462,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, showLabels: true, glass: 'light'
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, walk: null, showLabels: true, glass: 'light'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -1381,7 +1387,7 @@ function generateTrees() {
 // Floor + ceiling first, then wall faces (back-face culled, split ≤0.4 m) painter-sorted by plan distance; door/window openings show the rooms / scene beyond.
 function drawInterior(ctx, cam, env, sp) {
   const S = UNIT_PLAN.spots[sp.id]; if (!S) return;
-  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, ex = S.xc, ey = S.yin + d;
+  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + d;
   const V = (X, Y, h) => { const s = X - ex, dd = ey - Y; return [n[0] * dd + u[0] * s, h - e, n[1] * dd + u[1] * s]; };
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
@@ -1392,6 +1398,10 @@ function drawInterior(ctx, cam, env, sp) {
     for (let X = 0.31; X < 13; X += 0.6) line(V(X, 0, 0), V(X, 9, 0), gs, 0.7); for (let Y = 0.15; Y < 9; Y += 0.6) line(V(0, Y, 0), V(13.2, Y, 0), gs, 0.7); ctx.restore(); }
   UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
   poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
+  // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
+  const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
+  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
+    L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
   const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey);
   for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of UNIT_PLAN.walls) {
     const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'ext' ? TRPF_PAL.greige.map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : [232, 226, 214];
@@ -1419,10 +1429,37 @@ function drawInterior(ctx, cam, env, sp) {
     const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
   items.sort((a, b) => b.d - a.d).forEach(it => { poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
-  // sun patch (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
-  const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
-  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
-    L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(ex + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
+}
+// Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
+// Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
+const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['living', [6.6, 3.44, 9.38, 6.1]]];
+const walkRing = UNIT_PLAN.outline.flat();
+const walkFree = (X, Y, r = 0.2) => ringIn(walkRing, X, Y) && !UNIT_PLAN.walls.some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r);
+function walkSet(X, Y) {
+  if (!state.walk) return; state.walk.X = X; state.walk.Y = Y;
+  const rm = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
+  if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
+}
+function walkStep(k) {
+  const sp = curSpot(); if (!state.walk || !sp) return; const nb = sp.normal * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
+  const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk;
+  if (walkFree(X + dX, Y + dY)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY)) walkSet(X, Y + dY);   // slide along walls
+  renderAll();
+}
+function setWalk(on) {
+  const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } state.walk = { X: S.xc, Y: S.yin + Math.max(0.3, state.standDist) }; state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
+  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; renderAll();
+}
+const WALK_MAP = { s: 13.5, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
+function drawWalkMap() {
+  const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1; if (cv.width !== 190 * dpr) { cv.width = 190 * dpr; cv.height = 140 * dpr; }
+  const g = cv.getContext('2d'), sc = WALK_MAP.s, P = (X, Y) => [(X - WALK_MAP.ox) * sc, (Y - WALK_MAP.oy) * sc]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, 190, 140);
+  g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of UNIT_PLAN.walls) { if (kind === 'ext') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : kind === 'door' ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  const sp = curSpot(), nb = (sp ? sp.normal : 170.3) * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
+  const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
+  g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '9px Inter, sans-serif'; g.fillStyle = '#94a3b8'; g.fillText('S ▲ windows', 4, 10);
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
@@ -1525,7 +1562,7 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1565,16 +1602,16 @@ document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click',
 const spotSel = $('spotSelect');
 UNIT_SPOTS.forEach(sp => { const o = document.createElement('option'); o.value = sp.id; o.textContent = `${sp.label} • faces ${sp.normal}°`; spotSel.appendChild(o); });
 { const o = document.createElement('option'); o.value = ''; o.textContent = 'Custom (dragged)'; spotSel.appendChild(o); }
-spotSel.addEventListener('change', e => { const sp = UNIT_SPOTS.find(q => q.id === e.target.value); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } renderAll(); });
+spotSel.addEventListener('change', e => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === e.target.value); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } renderAll(); });
 const roomBar = $('roomBar');
 UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.className = 'chip room-btn'; b.dataset.id = sp.id; b.textContent = `${sp.room} • ${sp.normal.toFixed(0)}°`;
-  b.addEventListener('click', () => { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
+  b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
 function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; renderAll(); }
 { const sep = document.createElement('span'); sep.className = 'text-slate-600 mx-1'; sep.textContent = '|'; roomBar.appendChild(sep);
   Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); roomBar.appendChild(b); }); }
 // Home: back to #134 living window, 27F, standing, facing 220°, tilt −1.5° (scenario/world untouched).
 { const b = document.createElement('button'); b.className = 'chip ml-1'; b.style.borderColor = '#34d399'; b.style.color = '#6ee7b7'; b.textContent = '⌂ Back to #134'; b.title = 'Living window, 27F, standing, facing 220°';
-  b.addEventListener('click', () => { const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z, obsFloor: 27, heading: 220, pitchDeg: -1.5 }); setPosture('stand'); });
+  b.addEventListener('click', () => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z, obsFloor: 27, heading: 220, pitchDeg: -1.5 }); setPosture('stand'); });
   roomBar.appendChild(b); }
 $('standSlider').addEventListener('input', e => { state.standDist = parseFloat(e.target.value); renderAll(); });
 $('facadeToggle').addEventListener('change', e => { state.facadeLimit = e.target.checked; renderAll(); });
@@ -1585,7 +1622,7 @@ $('levelBtn').addEventListener('click', () => { state.pitchDeg = 0; renderAll();
 $('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m.binding) { state.pitchDeg = clamp(Math.round(m.binding.angleDeg * 2) / 2, -85, 30); renderAll(); } });
 document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', () => { const t = b.dataset.time; state.hour = t === 'day' ? 13 : t === 'night' ? 21 : Math.round((findSunsetHour() - 0.2) * 4) / 4; renderAll(); }));
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
-$('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; renderAll(); });
+$('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
 $('hudToggle').addEventListener('change', () => drawRoomHud());
 $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
 function setExpanded(on) {
@@ -1594,6 +1631,14 @@ function setExpanded(on) {
   requestAnimationFrame(resizeCanvases);
 }
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
+$('walkBtn').addEventListener('click', () => setWalk(!state.walk));
+document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop = () => { clearInterval(t); t = null; };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); });
+$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const { x, y } = localXY($('walkMap'), e), X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
+window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+  const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
+  if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderAll(); } });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
 // Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
