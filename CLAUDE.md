@@ -1,6 +1,6 @@
 # TRPF #134 View Simulator — CLAUDE.md
 
-Single-file HTML app (`trpf-view-sim-v4.html`, ~1.6 MB, data inlined). Live artifact: https://claude.ai/artifact/KnU43WCpnCdH9urKJHWkp8 (republish from this file after changes; last synced 2026-10-24 = main 5116cb3)
+Single-file HTML app (`trpf-view-sim-v4.html`, ~1.6 MB, data inlined). Run from GitHub Pages only (owner); no claude.ai artifact to republish.
 GitHub Pages: https://arti47.github.io/trpf-viewer/ (`index.html` redirects to the app; `.nojekyll`; Pages source = main / root).
 Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 toward Marina East / Marina Bay, now vs future build-out.
 
@@ -10,7 +10,6 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Progress reporting: do not narrate work; report only progress percentages (5%, 10%, … 100%). Final reply = "100%" + minimal result.
 - Every change must keep the app faithful to these rules/spec (physics, data, defaults above).
 - Git: after committing on the working branch, always merge into `main` and push `main` (owner standing instruction).
-- Artifact: after every merge to `main` that changes the HTML, republish `trpf-view-sim-v4.html` to the live artifact URL (owner standing instruction).
 - Batch changes per request. Keep this file current after every change (enforced by Stop hook `.claude/hooks/spec-sync.sh`: git-based; blocks finishing if the HTML has uncommitted edits without CLAUDE.md edits, or its last commit is newer than CLAUDE.md's).
 
 ## Coordinate frame
