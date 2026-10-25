@@ -638,9 +638,9 @@ const transmittance = (dist, env) => Math.exp(-env.beta * dist);
 const fogMix = (rgb, dist, env) => mix(env.sky.hor, rgb, transmittance(dist, env));
 
 /* ===================== CAMERA ===================== */
-function makeCamera(w, h) {
+function makeCamera(w, h, eye) {
   const hEye = getEyeHeight(state.obsFloor), yaw = state.heading * DEG, pitch = state.pitchDeg * DEG;
-  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), fPx = (w / SENSOR_W) * state.focalLength, ex = state.vx, ez = state.vz;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), fPx = (w / SENSOR_W) * state.focalLength, ex = eye ? eye[0] : state.vx, ez = eye ? eye[1] : state.vz;
   const toCam = (x, y, z) => { const dx = x - ex, dz = z - ez, relY = y - hEye - curvatureDrop(Math.hypot(dx, dz)), xr = dx * cy - dz * sy, zr = dx * sy + dz * cy; return [xr, relY * cp - zr * sp, relY * sp + zr * cp]; };
   const proj = c => [w / 2 + (c[0] / c[2]) * fPx, h / 2 - (c[1] / c[2]) * fPx];
   const projectPoint = (x, y, z) => { const c = toCam(x, y, z); if (c[2] < NEAR) return null; const p = proj(c); return { x: p[0], y: p[1], z: c[2] }; };
@@ -1470,6 +1470,13 @@ function drawWalkMap() {
   const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
   g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '9px Inter, sans-serif'; g.fillStyle = '#94a3b8'; g.fillText('S ▲ windows', 4, 10);
 }
+// 3D view eye when Room interior is on: the interior eye (stand-back d / walk position), not the window spot, so the outside scene through the glass matches the room.
+// Spot ≈ window centre 0.15 m outside the outer face (outer face = yin − 0.15). Window metrics/masks keep using the spot.
+function roomEyeWorld() {
+  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
+  const ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - S.yin + 0.3, s = ex - S.xc;
+  return [sp.x + u[0] * s - n[0] * back, sp.z + u[1] * s - n[1] * back];
+}
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
 // conservatory domes glow, MBS SkyPark edge lights, Spectra show (20:00/21:00 daily, +22:00 Fri/Sat, ~15min) as beams from the SkyPark.
@@ -1501,7 +1508,7 @@ function nightLandmarks(cam, env, items) {
       ctx.restore(); } }); }
 }
 function drawPerspective(m) {
-  const w = perspectiveCanvas._w, h = perspectiveCanvas._h, ctx = vCtx, cam = makeCamera(w, h), env = m.env;
+  const w = perspectiveCanvas._w, h = perspectiveCanvas._h, ctx = vCtx, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); drawGround(ctx, cam, env);
   const items = [];
   SHIPS.forEach(([x, z, len]) => { const hull = makePrism('ship', 'existing', 12, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', 30, 12, [x - len * 0.4, z - len * 0.06, x - len * 0.2, z - len * 0.06, x - len * 0.2, z + len * 0.06, x - len * 0.4, z + len * 0.06]); items.push({ d: cam.dist(x, 10, z), draw: () => { drawPrism(ctx, cam, env, hull); drawPrism(ctx, cam, env, sup); } }); });
