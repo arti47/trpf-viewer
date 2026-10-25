@@ -276,7 +276,7 @@ const compassName = b => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','S
 function todayISO() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 function fmtHour(hr) { const hh = Math.floor(hr), mm = Math.round((hr - hh) * 60); return `${String(hh + (mm === 60 ? 1 : 0)).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`; }
 // Roof crown/parapet above 30F: estimated ~2 storeys from developer renderings (beige louvred crown, framed white panels).
-const TRPF_CROWN = 2 * FLOOR_HEIGHT, TANK_H = 3, BLK_TOP = getRoofHeight(30), MSCP_TOP = VOID_DECK_HEIGHT + 12 * FLOOR_HEIGHT - 0.1, MSCP_DECKS = 12;
+const TRPF_CROWN = 2 * FLOOR_HEIGHT, TANK_H = 3, BLK_TOP = getRoofHeight(30), MSCP_DECKS = 7, MSCP_TOP = MSCP_DECKS * 3.0 + 1.0;   // developer: "6/7-storey MSCP"; ~3 m/deck + 1 m parapet (estimate). Upper bound: units above 12F (37.1 m) are higher than the roof garden + built structures
 
 /* ===================== PRISMS ===================== */
 // A prism: plan polygon (CCW, x=east, z=north, metres) extruded from base to h.
@@ -1443,7 +1443,7 @@ function drawPerspective(m) {
   if (state.showLabels) {
     const pins = LANDMARKS.filter(l => l.id !== 'sea').map(l => ({ name: l.name, x: l.x, y: l.h + 4, z: l.z, color: l.color }));
     GROUPS.forEach(g => { const ts = towers.filter(t => t.group === g); if (!ts.length) return; const cx = ts.reduce((a, t) => a + t.cx, 0) / ts.length, cz = ts.reduce((a, t) => a + t.cz, 0) / ts.length; pins.push({ name: g.label.split(' (')[0], x: cx, y: Math.max(...ts.map(t => t.h)) + 6, z: cz, color: g.color }); });
-    ['Blk 31A', 'Blk 31B', 'Blk 33A', 'MSCP roof garden'].forEach(nm => { const ps = TRPF.filter(p => p.name === nm); if (!ps.length) return; pins.push({ name: nm === 'MSCP roof garden' ? 'MSCP (≤12F)' : nm, x: ps.reduce((a, p) => a + p.cx, 0) / ps.length, y: ps[0].h + 3, z: ps.reduce((a, p) => a + p.cz, 0) / ps.length, color: '#38bdf8' }); });
+    ['Blk 31A', 'Blk 31B', 'Blk 33A', 'MSCP roof garden'].forEach(nm => { const ps = TRPF.filter(p => p.name === nm); if (!ps.length) return; pins.push({ name: nm === 'MSCP roof garden' ? 'MSCP (6/7-storey)' : nm, x: ps.reduce((a, p) => a + p.cx, 0) / ps.length, y: ps[0].h + 3, z: ps.reduce((a, p) => a + p.cz, 0) / ps.length, color: '#38bdf8' }); });
     pins.forEach(pin => { const pt = cam.projectPoint(pin.x, pin.y, pin.z); if (!pt || pt.x < 20 || pt.x > w - 20 || pt.y < 30 || pt.y > h - 20) return;
       ctx.save(); ctx.strokeStyle = pin.color; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x, pt.y - 14); ctx.stroke(); ctx.font = '600 10px Inter, sans-serif'; const tw = ctx.measureText(pin.name).width;
       ctx.fillStyle = 'rgba(15,23,42,0.88)'; ctx.fillRect(pt.x - tw / 2 - 5, pt.y - 28, tw + 10, 15); ctx.strokeRect(pt.x - tw / 2 - 5, pt.y - 28, tw + 10, 15); ctx.fillStyle = '#f8fafc'; ctx.textAlign = 'center'; ctx.fillText(pin.name, pt.x, pt.y - 17); ctx.restore(); });
