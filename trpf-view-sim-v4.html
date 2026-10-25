@@ -133,10 +133,12 @@
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-Ray new</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
+            <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
             <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
         </div>
         <canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
+        <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:62%"></div>
         <div class="absolute bottom-2.5 left-3 pointer-events-none bg-slate-900/85 px-2.5 py-1 rounded border border-slate-800 text-[10px] text-slate-300 z-10">Drag L/R = turn • Drag U/D = tilt</div>
       </div>
     </div>
@@ -865,6 +867,29 @@ function drawLightChart() {
 cmpDateEl.addEventListener('change', () => { if (cmpDateEl.value) { cmpDate = cmpDateEl.value; drawLightChart(); } });
 lightChart.addEventListener('pointerdown', e => { const { x } = localXY(lightChart, e), c = lightChart; if (x < c._X0 || x > c._X1) return;
   state.hour = Math.round((SUN_T0 + ((x - c._X0) / (c._X1 - c._X0)) * (SUN_T1 - SUN_T0)) * 4) / 4; renderAll(); });
+// Room readings HUD (3D view): live metrics for selected room/date/time vs typical reference values.
+// Refs: lux EN 12464-1 / SLL Lighting Guide 10 (living ambient 100–300, reading 300–500; bedroom 100), UDI 100–3000 lx useful, >3000 glare (Nabil & Mardaljevic 2005);
+// ADF BS 8206-2 (living 1.5%, bedroom 1%, ≥2% well daylit); VSC BRE 209 ≥27%; EN 17037 daylight 300 lx ≥50% of daylight hours (~6 h), sunlight ≥1.5 h on 21 Mar;
+// heat vs 1 room aircon 9,000 BTU/h ≈ 2.6 kW cooling.
+const ROOM_REF = { living: { lux: [100, 300], adf: 1.5 }, br3: { lux: [50, 150], adf: 1 }, br2: { lux: [50, 150], adf: 1 }, mbrS: { lux: [50, 150], adf: 1 } };
+function drawRoomHud() {
+  const el = $('roomHud'), sp = curSpot(); if (!el) return; if (!sp || !$('hudToggle').checked) { el.style.display = 'none'; return; } el.style.display = '';
+  const M = rmCache.v || roomMetrics(sp), N = M.now, P = N.Lr, R = ROOM_REF[sp.id] || ROOM_REF.living, D = dayCurve(sp, state.dateStr), E = dayCurve(sp, `${state.dateStr.slice(0, 4)}-03-21`);
+  const lux = Math.round(N.luxSky + N.luxSun), day = P.sun.elDeg > 0, c = ok => `color:${ok === 2 ? '#34d399' : ok === 1 ? '#fbbf24' : '#fb7185'}`;
+  const luxOk = !day ? 0 : lux > 3000 ? 0 : lux >= R.lux[0] ? 2 : 1, lab = lux > 3000 ? ' glare' : lux >= 300 ? ' task' : lux >= R.lux[0] ? ' ok' : ' dim';
+  const rows = [
+    ['Light now', day ? `${lux.toLocaleString()} lx${lab}` : 'night', luxOk, `${R.lux[0]}–${R.lux[1]} • read 300–500 • >3k glare`],
+    ['ADF', `${M.adf.toFixed(1)}%`, M.adf >= 2 ? 2 : M.adf >= R.adf ? 1 : 0, `≥${R.adf}% • ≥2% well lit`],
+    ['VSC', `${M.vsc.toFixed(1)}%`, M.vsc >= 27 ? 2 : M.vsc >= 15 ? 1 : 0, '≥27%'],
+    ['Day ≥300 lx', `${D.h300.toFixed(1)} h • ovc ${D.o300.toFixed(1)}`, D.h300 >= 6 ? 2 : D.h300 >= 3 ? 1 : 0, '≥6 h'],
+    ['Sun today', `${D.sunH.toFixed(1)} h`, D.sunH > 0 ? 2 : 1, '—'],
+    ['Sun 21 Mar', `${E.sunH.toFixed(1)} h`, E.sunH >= 1.5 ? 2 : 0, '≥1.5 h'],
+    ['Sun patch', P.patches.length ? `${(P.aFloor + P.aBack).toFixed(1)} m² • ${P.depth.toFixed(1)} m` : 'none', 2, '—'],
+    ['Heat now', `${Math.round(N.q)} W = ${Math.round((100 * N.q) / 2600)}% aircon`, N.q < 500 ? 2 : N.q < 1300 ? 1 : 0, 'aircon 2.6 kW'],
+    ['Heat today', `${D.kwh.toFixed(1)} kWh`, D.kwh < 5 ? 2 : D.kwh < 10 ? 1 : 0, '—'] ];
+  el.innerHTML = `<div class="text-amber-300 font-semibold mb-0.5">${sp.room} • ${state.dateStr.slice(5)} ${fmtT(state.hour)} • ${M.G.label} • clear sky • value / typical</div><table style="white-space:nowrap">` +
+    rows.map(([k, v, ok, ref]) => `<tr><td class="text-slate-400 pr-2">${k}</td><td class="pr-2" style="${c(ok)}">${v}</td><td class="text-slate-500">${ref}</td></tr>`).join('') + '</table>';
+}
 const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m`;
 
 /* ===================== DASHBOARD ===================== */
@@ -1423,7 +1448,7 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); drawLightChart(); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1484,6 +1509,7 @@ $('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m
 document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', () => { const t = b.dataset.time; state.hour = t === 'day' ? 13 : t === 'night' ? 21 : Math.round((findSunsetHour() - 0.2) * 4) / 4; renderAll(); }));
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; renderAll(); });
+$('hudToggle').addEventListener('change', () => drawRoomHud());
 $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
 function setExpanded(on) {
   const shell = document.querySelector('.app-shell'); shell.classList.toggle('view-max', on);
