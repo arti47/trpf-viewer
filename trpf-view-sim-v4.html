@@ -69,9 +69,10 @@
       <select id="scenarioPreset" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 border border-slate-700">
         <option value="custom">-- Scenario --</option>
         <option value="movein">Move-in 2029: no new towers</option>
-        <option value="base" selected>Future: Marina East 25–30F + E condos</option>
-        <option value="tall">Future: Marina East 45–50F</option>
-        <option value="low">Future: Marina East 20–25F</option>
+        <option value="low">Future Low: Marina East 15–20F</option>
+        <option value="mid">Future Mid: Marina East 22–25F</option>
+        <option value="base" selected>Future High: Marina East 25–30F + E condos</option>
+        <option value="tall">Future Very high: Marina East 45–50F</option>
         <option value="allres">Full build-out: + all reserves</option>
       </select>
     </div>
@@ -952,7 +953,8 @@ function updateDashboard(m) {
   $('spacingVal').textContent = `${state.spacing}m`; $('spacingSlider').value = state.spacing; $('footprintVal').textContent = `${state.footprint}m`; $('footprintSlider').value = state.footprint;
   $('opacityVal').textContent = `${Math.round(state.opacity * 100)}%`; $('opacitySlider').value = Math.round(state.opacity * 100);
   $('gapVal').textContent = `${gap3132.toFixed(1)}m`; $('gapSlider').value = gap3132; $('gapNote').textContent = `Default ${GAP_FITTED.toFixed(1)}m = site plan fitted to the URA parcel.`;
-  $('towerCount').textContent = `${towers.length} new • ${state.showExisting ? EXISTING.length : 0} existing`;
+  const eyeF = Math.floor((getEyeHeight(state.obsFloor) - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);   // tallest new tower (roof) still below your eye line
+  $('towerCount').textContent = `${towers.length} new • ${state.showExisting ? EXISTING.length : 0} existing • eye-line ≤${eyeF}F`; $('towerCount').title = `New towers up to ${eyeF} storeys stay below your eye line (${getEyeHeight(state.obsFloor).toFixed(1)} m); taller ones cut the horizon`;
   const chips = $('aimChips'); chips.innerHTML = '';
   [['barrage', 'Barrage'], ['beg', 'GB East'], ['mbs', 'MBS'], ['cbd', 'CBD'], ['flyer', 'Flyer'], ['sea', 'Sea']].forEach(([id, label]) => {
     const r = m.landmarks.find(l => l.lm.id === id), b = document.createElement('button'); b.className = 'chip'; b.textContent = `${label} ${r.bearing.toFixed(0)}°`;
@@ -1524,7 +1526,8 @@ const PRESETS = {
   movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
   base: { me: [25, 30], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
   tall: { me: [45, 50], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  low: { me: [20, 25], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  mid: { me: [22, 25], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  low: { me: [15, 20], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
   allres: { me: [25, 30], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true } }
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
