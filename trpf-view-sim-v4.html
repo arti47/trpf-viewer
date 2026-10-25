@@ -1387,21 +1387,14 @@ function generateTrees() {
 // Floor + ceiling first, then wall faces (back-face culled, split ≤0.4 m) painter-sorted by plan distance; door/window openings show the rooms / scene beyond.
 function drawInterior(ctx, cam, env, sp) {
   const S = UNIT_PLAN.spots[sp.id]; if (!S) return;
+  const snap = drawInterior.snap || (drawInterior.snap = document.createElement('canvas')); if (snap.width !== ctx.canvas.width || snap.height !== ctx.canvas.height) { snap.width = ctx.canvas.width; snap.height = ctx.canvas.height; }
+  { const g = snap.getContext('2d'); g.clearRect(0, 0, snap.width, snap.height); g.drawImage(ctx.canvas, 0, 0); }   // outside scene, restored inside window panes
   const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + d;
   const V = (X, Y, h) => { const s = X - ex, dd = ey - Y; return [n[0] * dd + u[0] * s, h - e, n[1] * dd + u[1] * s]; };
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
   const ring = (r, h) => r.map(([X, Y]) => V(X, Y, h)), box = ([x0, y0, x1, y1], h) => ring([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], h);
   const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
-  const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
-  if (fl) { ctx.save(); fillPoly(ctx, fl); ctx.clip(); const gs = `rgba(90,84,76,${0.25 * lit})`;   // 600 mm tile joints
-    for (let X = 0.31; X < 13; X += 0.6) line(V(X, 0, 0), V(X, 9, 0), gs, 0.7); for (let Y = 0.15; Y < 9; Y += 0.6) line(V(0, Y, 0), V(13.2, Y, 0), gs, 0.7); ctx.restore(); }
-  UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
-  poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
-  // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
-  const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
-  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
-    L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
   const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey);
   for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of UNIT_PLAN.walls) {
     const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'ext' ? TRPF_PAL.greige.map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : [232, 226, 214];
@@ -1418,17 +1411,32 @@ function drawInterior(ctx, cam, env, sp) {
         return !(UNIT_PLAN.walls.some(Q => !own(Q) && inQ(Q, px - nx * 1e-3, py - ny * 1e-3)) && !buried(px + nx * 1e-3, py + ny * 1e-3)); };
       const k = tt.length - 1, P = i => [ax + (bx - ax) * tt[i], ay + (by - ay) * tt[i]], keep = Array.from({ length: k }, (_, i) => { const a = P(i), b = P(i + 1); return !buried((a[0] + b[0]) / 2 + nx * 1e-3, (a[1] + b[1]) / 2 + ny * 1e-3); });
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
-        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
+        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: kind === 'ext', ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
     }
     if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05) });   // sill top
     if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8) });    // head / lintel soffit
   }
-  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), bar = (s0, s1, t0, t1, yg) => items.push({ d: near(s0, yg, s1, yg) - 0.05, pts: [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)], fill: fc });
-  for (const [x0, x1, yg] of UNIT_PLAN.wins) { const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
+  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push([V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
+  for (const [wi, [x0, x1, yg]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
     bar(x0, x0 + Fw, sill, head, yg); bar(x1 - Fw, x1, sill, head, yg); bar(x0, x1, sill, sill + Fw, yg); bar(x0, x1, head - Fw, head, yg);
     const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
-  items.sort((a, b) => b.d - a.d).forEach(it => { poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
+  const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
+  if (fl) { ctx.save(); fillPoly(ctx, fl); ctx.clip(); const gs = `rgba(90,84,76,${0.25 * lit})`;   // 600 mm tile joints
+    for (let X = 0.31; X < 13; X += 0.6) line(V(X, 0, 0), V(X, 9, 0), gs, 0.7); for (let Y = 0.15; Y < 9; Y += 0.6) line(V(0, Y, 0), V(13.2, Y, 0), gs, 0.7); ctx.restore(); }
+  UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
+  poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
+  // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
+  const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
+  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
+    L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
+  // exterior (fins, recess walls) only through the glass: each window is one painter item at the glass line that restores the outside scene (snapshot) inside
+  // its projected pane and draws the exterior faces there, so nearer room walls hide it and nothing indoors leaks into the view out.
+  const ext = items.filter(it => it.ext).sort((a, b) => b.d - a.d);
+  UNIT_PLAN.wins.forEach(([x0, x1, yg], wi) => items.push({ d: near(x0, yg, x1, yg) - 0.02, wi, pane: [V(x0, yg, 0.55), V(x1, yg, 0.55), V(x1, yg, WIN_HEAD), V(x0, yg, WIN_HEAD)] }));
+  items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => poly(e2.pts, e2.fill)); ctx.restore(); frames[it.wi].forEach(f => poly(f, fc)); return; }
+    poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
 // Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
