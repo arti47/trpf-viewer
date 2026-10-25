@@ -68,13 +68,11 @@
       <span id="sunPill" class="text-[10px] mono bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded"></span>
       <select id="scenarioPreset" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 border border-slate-700">
         <option value="custom">-- Scenario --</option>
-        <option value="movein">Move-in 2029: no new towers</option>
-        <option value="low">Future Low: Marina East GPR 4.0, 15–20F</option>
-        <option value="mid">Future Mid: Marina East GPR 4.0, 22–25F</option>
-        <option value="base" selected>Future Base: Marina East GPR 4.0, 30–44F stepped + E condos</option>
-        <option value="high">Upside: Marina East GPR 5.6, 25–30F</option>
-        <option value="tall">Upside: Marina East GPR 5.6, 45–50F</option>
-        <option value="allres">Full build-out: + all reserves</option>
+        <option value="movein">2029 move-in: no new towers</option>
+        <option value="low">Low: Marina East GPR 3.5, 20–30F</option>
+        <option value="base" selected>Base: Marina East GPR 4.0, 30–44F</option>
+        <option value="tall">Upside: Marina East GPR 5.6, 35–50F</option>
+        <option value="allres">Full build-out: Base + all reserves</option>
       </select>
     </div>
   </header>
@@ -1532,20 +1530,18 @@ function setExpanded(on) {
 }
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
-// Scenarios change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
+// Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
   movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
+  low: { me: [20, 30], gpr: 3.5, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
   base: { me: [30, 44], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  high: { me: [25, 30], gpr: 5.6, step: false, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  tall: { me: [45, 50], gpr: 5.6, step: false, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  mid: { me: [22, 25], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
-  low: { me: [15, 20], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
+  tall: { me: [35, 50], gpr: 5.6, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false } },
   allres: { me: [30, 44], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true } }
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(state, { spacing: 95, showExisting: true, showRoads: true });
   state.dateStr = p.date || todayISO(); $('dateInput').value = state.dateStr;
-  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr, step: p.step } : {})); regen(); });
+  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {})); regen(); });
 function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(cssW * dpr)); cv.height = Math.max(1, Math.round(cssH * dpr)); cv._w = cssW; cv._h = cssH; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;
