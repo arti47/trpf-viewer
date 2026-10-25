@@ -232,6 +232,11 @@
             <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="tinted" selected>Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
           <div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
           <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Sun patch drawn on floor/back wall in Room interior view. Reveals/ledges not modelled.</div></div>
+        <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Daylight over the day</span>
+            <span class="text-[9px] text-slate-400">vs <input type="date" id="cmpDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0 border border-slate-700 mono"></span></div>
+          <canvas id="lightChart" style="display:block;width:100%;height:140px;touch-action:none"></canvas>
+          <div id="lightSum" class="text-[10px] mono text-slate-300 leading-relaxed mt-1"></div>
+          <div class="text-[9px] text-slate-500 leading-snug mt-1">Indoor average lux (room average, log scale), 06:30–19:30, selected room/floor/glass. Amber = selected date, sky blue = compare date (solid = clear sky, dashed = overcast sky: ADF × CIE overcast 300+21000·sin el). ≥300 lx = enough to work without lights; ≥3000 lx = glare/heat risk. Tap to set time.</div></div>
         <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
         <div id="landmarkList" class="space-y-1 text-xs"></div>
         <div class="text-[9px] text-slate-500 mt-2 leading-snug">
@@ -807,11 +812,12 @@ function vscOf(sp) {
 function roomMetrics(sp) {
   const G = GLASS[state.glass] || GLASS.clear, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = Wr * D, A = 2 * (Wr * D + Wr * ROOM_H + D * ROOM_H);
   const vsc = vscOf(sp), theta = (90 * vsc) / 39.6, adf = (G.tv * Aw * theta * 0.9) / (A * (1 - R_MEAN * R_MEAN));
-  const at = hr => { const Lr = roomLight(sp, state.dateStr, hr), cs = clearSky(Lr.sun.elDeg), dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
-    return { Lr, cs, q: G.shgc * Aw * (dirIrr + cs.dhi * 0.5 * (vsc / 39.6)), luxSky: (adf / 100) * cs.dhi * 120, luxSun: (G.tv * Aw * dirIrr * 95) / Af }; };
+  const at = (hr, ds = state.dateStr) => { const Lr = roomLight(sp, ds, hr), cs = clearSky(Lr.sun.elDeg), dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
+    return { Lr, cs, q: G.shgc * Aw * (dirIrr + cs.dhi * 0.5 * (vsc / 39.6)), luxSky: (adf / 100) * cs.dhi * 120, luxSun: (G.tv * Aw * dirIrr * 95) / Af,
+      luxOvc: Lr.sun.elDeg > 0 ? (adf / 100) * (300 + 21000 * Math.sin(Lr.sun.elDeg * DEG)) : 0 }; };
   const now = at(state.hour), kk = [sp.id, state.obsFloor, state.eyeOffset, state.dateStr, state.glass, WORLD_VER].join('|');   // daily kWh cached per date (not per hour)
   if (kwhCache.key !== kk) { let k = 0; for (let t = 6.5; t < 19.5; t += 0.25) k += (at(t + 0.125).q * 0.25) / 1000; kwhCache = { key: kk, v: k }; } const kwh = kwhCache.v;
-  return { G, vsc, adf, now, kwh, Aw, Af, D };
+  return { G, vsc, adf, now, kwh, Aw, Af, D, at };
 }
 let rmCache = { key: '', v: null }, kwhCache = { key: '', v: 0 };
 function drawRoomPanel() {
@@ -824,6 +830,41 @@ function drawRoomPanel() {
     `Sun patch: ${P.patches.length ? `<span style="color:#fbbf24">floor ${P.aFloor.toFixed(1)} m²${P.aBack ? ` + back wall ${P.aBack.toFixed(1)} m²` : ''}, reaches ${P.depth.toFixed(1)} m in</span> (${Math.round(P.litFrac * 100)}% of window sunlit)` : 'none'}<br>` +
     `Solar heat gain: now <b>${Math.round(N.q)} W</b> • today ${M.kwh.toFixed(1)} kWh (clear sky, ${M.G.label})`;
 }
+// Daylight over the day: indoor avg lux (clear sky sky+sun, overcast ADF×CIE overcast) every 15 min 06:30–19:30 for selected date vs compare date.
+const dayCache = new Map();
+function dayCurve(sp, ds) {
+  const key = [sp.id, state.obsFloor, state.eyeOffset, ds, state.glass, WORLD_VER].join('|'); if (dayCache.has(key)) return dayCache.get(key); if (dayCache.size > 40) dayCache.clear();
+  const M = roomMetrics(sp), pts = []; let h300 = 0, h3k = 0, o300 = 0, pk = { v: 0, t: 0 }, kwh = 0, sunH = 0;
+  for (let t = SUN_T0; t <= SUN_T1 + 1e-6; t += SUN_DT) { const r = M.at(t, ds), v = r.luxSky + r.luxSun; pts.push({ t, v, o: r.luxOvc });
+    if (t < SUN_T1) { const m = M.at(t + SUN_DT / 2, ds), mv = m.luxSky + m.luxSun; if (mv >= 300) h300 += SUN_DT; if (mv >= 3000) h3k += SUN_DT; if (m.luxOvc >= 300) o300 += SUN_DT; if (m.luxSun > 0) sunH += SUN_DT; kwh += (m.q * SUN_DT) / 1000; }
+    if (v > pk.v) pk = { v, t }; }
+  const d = { pts, h300, h3k, o300, pk, kwh, sunH }; dayCache.set(key, d); return d;
+}
+const lightChart = $('lightChart'), lightCtx = lightChart.getContext('2d'), cmpDateEl = $('cmpDate');
+const cmpDefault = ds => { const y = ds.slice(0, 4), m = +ds.slice(5, 7); return m >= 4 && m <= 9 ? `${y}-12-15` : `${y}-06-15`; };
+let cmpDate = '';
+const fmtT = t => `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.round((t % 1) * 60)).padStart(2, '0')}`;
+function drawLightChart() {
+  const w = lightChart._w, h = lightChart._h, sp = curSpot(), ctx = lightCtx; if (!w) return; ctx.clearRect(0, 0, w, h);
+  if (!sp) { $('lightSum').innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
+  if (!cmpDate) cmpDate = cmpDefault(state.dateStr); if (cmpDateEl.value !== cmpDate) cmpDateEl.value = cmpDate;
+  const A = dayCurve(sp, state.dateStr), B = dayCurve(sp, cmpDate), L = 34, R = 6, T = 6, Bm = 14, lo = 1, hi = 5;   // log10 lux 10..100k
+  const X = t => L + ((t - SUN_T0) / (SUN_T1 - SUN_T0)) * (w - L - R), Y = v => { const g = Math.min(hi, Math.max(lo, Math.log10(Math.max(v, 1)))); return T + ((hi - g) / (hi - lo)) * (h - T - Bm); };
+  ctx.font = '9px "JetBrains Mono", monospace'; ctx.lineWidth = 1;
+  [10, 100, 1000, 10000, 100000].forEach(v => { ctx.strokeStyle = '#1e293b'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); ctx.fillStyle = '#64748b'; ctx.textAlign = 'right'; ctx.fillText(v >= 1000 ? `${v / 1000}k` : String(v), L - 3, Y(v) + 3); });
+  [[300, 'rgba(52,211,153,0.6)'], [3000, 'rgba(251,113,133,0.6)']].forEach(([v, c]) => { ctx.strokeStyle = c; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); }); ctx.setLineDash([]);
+  ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; for (let t = 7; t <= 19; t += 2) ctx.fillText(String(t).padStart(2, '0'), X(t), h - 3);
+  const line = (P, k, col, dash) => { ctx.strokeStyle = col; ctx.lineWidth = dash ? 1 : 1.8; ctx.setLineDash(dash ? [4, 3] : []); ctx.beginPath(); let on = false;
+    P.forEach(p => { const v = p[k]; if (v < 1) { on = false; return; } on ? ctx.lineTo(X(p.t), Y(v)) : ctx.moveTo(X(p.t), Y(v)); on = true; }); ctx.stroke(); ctx.setLineDash([]); };
+  line(B.pts, 'o', 'rgba(56,189,248,0.7)', true); line(A.pts, 'o', 'rgba(251,191,36,0.7)', true); line(B.pts, 'v', '#38bdf8', false); line(A.pts, 'v', '#fbbf24', false);
+  if (state.hour >= SUN_T0 && state.hour <= SUN_T1) { ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(state.hour), T); ctx.lineTo(X(state.hour), h - Bm); ctx.stroke(); }
+  const row = (D, ds, col) => `<span style="color:${col}">${ds.slice(5)}</span> ≥300lx <b>${D.h300.toFixed(1)}h</b> (ovc ${D.o300.toFixed(1)}) • ≥3k ${D.h3k.toFixed(1)}h • pk ${Math.round(D.pk.v).toLocaleString()}@${fmtT(D.pk.t)} • sun ${D.sunH.toFixed(1)}h • ${D.kwh.toFixed(1)}kWh`;
+  $('lightSum').innerHTML = row(A, state.dateStr, '#fbbf24') + '<br>' + row(B, cmpDate, '#38bdf8');
+  lightChart._X0 = L; lightChart._X1 = w - R;
+}
+cmpDateEl.addEventListener('change', () => { if (cmpDateEl.value) { cmpDate = cmpDateEl.value; drawLightChart(); } });
+lightChart.addEventListener('pointerdown', e => { const { x } = localXY(lightChart, e), c = lightChart; if (x < c._X0 || x > c._X1) return;
+  state.hour = Math.round((SUN_T0 + ((x - c._X0) / (c._X1 - c._X0)) * (SUN_T1 - SUN_T0)) * 4) / 4; renderAll(); });
 const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m`;
 
 /* ===================== DASHBOARD ===================== */
@@ -1382,7 +1423,7 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawSunChart(); drawRoomPanel(); drawLightChart(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1469,7 +1510,7 @@ function resizeCanvases() {
   sizeCanvas(profileCanvas, pp.clientWidth > 20 ? pp.clientWidth : 820, pp.clientHeight > 20 ? pp.clientHeight : 260);
   sizeCanvas(perspectiveCanvas, vp.clientWidth > 20 ? vp.clientWidth : 820, vp.clientHeight > 20 ? vp.clientHeight : 380);
   const pw = planCanvas.clientWidth > 20 ? planCanvas.clientWidth : 390, ph = state.planMode === 'site' ? (pw * 1009) / 1284 : (pw * (AREA.z1 - AREA.z0)) / (AREA.x1 - AREA.x0);
-  planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); sizeCanvas(sunChart, sunChart.clientWidth > 20 ? sunChart.clientWidth : 390, 150); renderNow();
+  planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); sizeCanvas(sunChart, sunChart.clientWidth > 20 ? sunChart.clientWidth : 390, 150); sizeCanvas(lightChart, lightChart.clientWidth > 20 ? lightChart.clientWidth : 390, 140); renderNow();
 }
 let initialized = false;
 function initApp() {
