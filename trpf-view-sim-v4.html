@@ -134,6 +134,7 @@
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
+            <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
             <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
             <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
@@ -428,7 +429,11 @@ const UNIT_PLAN = (() => {
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
   // per window: centre X, inner wall face Y, plan room depth to the opposite wall
   const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 }, yard: { yc: 7.6, xin: 5.75, depth: 1.36 } };   // yard: opening along Y (centre yc), inner face X = xin, eye looks −X
-  return { walls: w, wins, outline, floors, spots };
+  // casement sashes per window [s0, s1, hinge] (owner markup 2026-10-26: master = outward pair hinged at the outer ends + single hinged W of the column; others same pattern, estimate)
+  const sashes = [[[0.695, 1.3, 0.695], [1.3, 1.9, 1.9], [2.06, 2.7, 2.7]], [[3.62, 4.27, 3.62], [4.27, 4.93, 4.93], [4.93, 5.58, 5.58]], [[6.78, 7.44, 6.78], [7.44, 8.09, 8.09], [8.09, 8.75, 8.75]],
+    [[9.99, 10.62, 9.99], [10.62, 11.25, 11.25], [11.25, 11.88, 11.25], [11.88, 12.51, 12.51]], [[6.6, 7.27, 6.6], [7.27, 7.93, 7.93], [7.93, 8.6, 8.6]]];
+  w.push([1.9, 0, 2.06, F]);   // structural column in the master window line (plan black square)
+  return { walls: w, wins, outline, floors, spots, sashes };
 })();
 const UNIT_FN = 170.3;   // bedroom/living facade normal: plan ↔ world frame for every spot (yard opening faces UNIT_FN − 90)
 const spotP = S => S.yc != null ? [S.xin - 0.3, S.yc] : [S.xc, S.yin - 0.3];        // plan point of the world spot (0.15 m outside the outer face)
@@ -478,7 +483,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, walk: null, showLabels: true, glass: 'light'
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -1434,12 +1439,13 @@ function drawInterior(ctx, cam, env, sp) {
     if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
   const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
-  for (const [wi, [x0, x1, yg, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax;
-    if (ax === 'y') { const Fw = 0.05, M = 0.04; bar(x0, x0 + Fw, sl, hd, yg); bar(x1 - Fw, x1, sl, hd, yg); bar(x0, x1, sl, sl + Fw, yg); bar(x0, x1, hd - Fw, hd, yg);   // yard casement: 3 side-hung sashes
-      for (let k = 1; k < 3; k++) { const q = x0 + ((x1 - x0) * k) / 3; bar(q - M, q + M, sl, hd, yg); } continue; }
-    const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
-    bar(x0, x0 + Fw, sill, head, yg); bar(x1 - Fw, x1, sill, head, yg); bar(x0, x1, sill, sill + Fw, yg); bar(x0, x1, head - Fw, head, yg);
-    const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
+  // casement frames: outer frame + a bar at each sash joint; Windows open → each sash swung out 90° about its hinge (glass tint + sash frame, outside the glass line)
+  frames.open = UNIT_PLAN.wins.map(() => []);
+  for (const [wi, [a0, a1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax; const Fw = 0.05, M = 0.03;
+    bar(a0, a0 + Fw, sl, hd, g); bar(a1 - Fw, a1, sl, hd, g); bar(a0, a1, sl, sl + Fw, g); bar(a0, a1, hd - Fw, hd, g);
+    for (const [s0, s1, hg] of UNIT_PLAN.sashes[wi]) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M, sl, hd, g);
+      if (!state.winOpen) continue; const W = s1 - s0, P = (o, t) => (ax === 'y' ? V(g - o, hg, t) : V(hg, g - o, t)), q = (o0, o1, t0, t1) => frames[wi].push([P(o0, t0), P(o1, t0), P(o1, t1), P(o0, t1)]);
+      frames.open[wi].push([P(0, sl), P(W, sl), P(W, hd), P(0, hd)]); q(W - Fw, W, sl, hd); q(0, W, sl, sl + Fw); q(0, W, hd - Fw, hd); } }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
   const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
   if (fl) { ctx.save(); fillPoly(ctx, fl); ctx.clip(); const gs = `rgba(90,84,76,${0.25 * lit})`;   // 600 mm tile joints
@@ -1455,7 +1461,7 @@ function drawInterior(ctx, cam, env, sp) {
   const ext = items.filter(it => it.ext).sort((a, b) => b.d - a.d);
   UNIT_PLAN.wins.forEach(([a0, a1, g, ax, sl, hd], wi) => items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, wi, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, wi, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }));
   items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => poly(e2.pts, e2.fill)); ctx.restore(); frames[it.wi].forEach(f => poly(f, fc)); return; }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => poly(e2.pts, e2.fill)); frames.open[it.wi].forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); frames[it.wi].forEach(f => poly(f, fc)); return; }
     poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
@@ -1675,6 +1681,7 @@ function setExpanded(on) {
 }
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
 $('walkBtn').addEventListener('click', () => setWalk(!state.walk));
+$('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; renderAll(); });
 document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop = () => { clearInterval(t); t = null; };
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); });
