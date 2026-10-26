@@ -140,13 +140,17 @@
             <span class="w-2 h-2 rounded-full bg-sky-400"></span><span>3D window view</span>
             <span id="lensBadge" class="text-[10px] mono bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded border border-slate-700"></span>
           </div>
-          <div class="pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[11px] flex items-center gap-2">
+          <div class="pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[11px] flex flex-wrap items-center gap-2">
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-Ray new</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
             <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
             <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
+            <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
+            <button id="expoBtn" class="chip" aria-pressed="true" title="Eye/phone exposure from inside the room: bright outside washes out, room darker" style="border-color:#34d399">◐ Exposure</button>
+            <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
+            <button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷</button>
             <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
         </div>
@@ -192,9 +196,11 @@
             <input type="range" id="pitchSlider" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch">
             <div class="flex gap-1 mt-1"><button id="aimRoofBtn" class="chip flex-1 text-amber-300">Aim roofline</button><button id="levelBtn" class="chip flex-1">Level</button></div></div>
           <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Lens</span><span id="focalVal" class="mono text-sky-400 font-semibold"></span></div>
-            <input type="range" id="focalSlider" min="14" max="85" step="1" value="26" aria-label="Focal length">
+            <input type="range" id="focalSlider" min="13" max="85" step="1" value="26" aria-label="Focal length">
             <div class="flex gap-1 mt-1"><button data-focal="16" class="focal-preset chip flex-1">16</button><button data-focal="26" class="focal-preset chip flex-1">26</button><button data-focal="50" class="focal-preset chip flex-1">50</button></div></div>
-          <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
+          <div class="panel"><div class="flex justify-between items-center text-[11px] mb-1"><span class="text-slate-300">Weather</span><select id="weatherSel" class="bg-slate-800 border border-slate-700 rounded px-1 text-[11px] text-slate-200"></select></div>
+            <div class="text-[9px] text-slate-500 mb-2">Visual only (sky, clouds, sun, rain); light/heat readings stay clear-sky. Sets haze visibility.</div>
+            <div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
             <input type="range" id="visSlider" min="2" max="40" step="1" value="12" aria-label="Visibility">
             <div class="text-[9px] text-slate-500 mt-1">T = e<sup>−3.912·d/V</sup></div></div>
         </div>
@@ -261,7 +267,7 @@
         <div id="landmarkList" class="space-y-1 text-xs"></div>
         <div class="text-[9px] text-slate-500 mt-2 leading-snug">
           Geo frame: URA Master Plan 2025 land use (data.gov.sg), OSM buildings, MP2025 HDB footprints. Origin = TRPF parcel centroid (1.29682N, 103.87826E).
-          Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: fixed fair-weather cumulus field. Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
+          Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: cumulus field drifting ≈4°/h, count/greyness per Weather preset (visual only). Realism (visual only): facade/roof cast shadows, foot-of-wall contact shading, Fresnel sky reflection + mirrored buildings + sun glitter on water, glass-tower sky reflection + sun glint, traffic on roads/decks, ships under way, room exposure (outside washes out, window bloom). Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
           TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the URA parcel (0.225 m/px). Marina East parcels are “subject to detailed planning” (no published GPR or height): base case GPR 4.0 on ~70% net site (estimate 3.5–4.5), 30–44F stepping down toward Founders' Memorial, 10-storey frontage; GPR 5.6 (Marina South GLS, Marina Gardens Lane) is an upside scenario. Built floor area never exceeds GPR × net site. New towers: 3.15 m/storey + 4.5 m lobby + 3 m roof. Heights are above ground; URA height controls are in m SHD (add ~4 m site level). Layout synthetic, all sliders unclamped.
         </div>
       </div>
@@ -526,6 +532,20 @@ const CLOUDS = (() => { let s = 4242; const r = () => ((s = (s * 16807) % 214748
     return { az: r() * 360, el, size, puffs: Array.from({ length: 5 + Math.floor(r() * 5) }, () => ({ dx: (r() - 0.5) * 2.2, dy: r() * 0.9, rr: 0.35 + r() * 0.45 })) }; }); })();
 const STARS = (() => { let s = 12345; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647); return Array.from({ length: 160 }, () => ({ az: rnd() * 360, el: 3 + (Math.asin(rnd()) / DEG) * 0.9, mag: rnd() })); })();
 
+// Weather presets (visual only; daylight/sun metrics stay clear-sky, see Daylight-over-the-day overcast curve): direct-sun factor, ambient factor,
+// sky greying toward tint, darkness, cloud count/scale/grey; selecting one also sets Haze visibility (km).
+const WEATHER = {
+  clear: { label: 'Clear', vis: 20, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 14, cs: 1, cg: 0 },
+  fair: { label: 'Fair, cumulus', vis: 12, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 70, cs: 1, cg: 0 },
+  hazy: { label: 'Hazy', vis: 5, sun: 0.7, amb: 0.95, grey: 0.45, tint: [205, 196, 172], dark: 0.95, clouds: 35, cs: 1, cg: 0.2 },
+  overcast: { label: 'Overcast', vis: 10, sun: 0, amb: 0.8, grey: 0.8, tint: [196, 200, 206], dark: 0.85, clouds: 70, cs: 2.6, cg: 0.55 },
+  rain: { label: 'Rain shower', vis: 3, sun: 0, amb: 0.55, grey: 0.9, tint: [150, 156, 166], dark: 0.62, clouds: 70, cs: 3, cg: 0.75, rain: true }
+};
+function weatherSky(k, W) {
+  const Y = c => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2], g = W.tint.map(c => c * clamp(Y(k.hor) / 215, 0, 1.1) * W.dark);
+  return { top: mix(k.top, g.map(c => c * 0.9), W.grey), mid: mix(k.mid, g, W.grey), hor: mix(k.hor, g.map(c => Math.min(255, c * 1.04)), W.grey), sea: mix(k.sea, g.map(c => c * 0.55), W.grey) };
+}
+
 /* ===================== STATE ===================== */
 const GROUPS = [
   { id: 'N', label: 'Marina East N (SDP)', color: '#fb7185' },
@@ -539,7 +559,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light'
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: true, live: false
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -701,9 +721,9 @@ function solarPosition(dateStr, hourLocal) {
 function findSunsetHour() { const f = hr => solarPosition(state.dateStr, hr).elDeg + 0.27; let lo = 16, hi = 21; if (f(lo) < 0 || f(hi) > 0) return 19; for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; } return lo; }
 const compassToWorld = (az, el) => { const ce = Math.cos(el * DEG); return [Math.sin(az * DEG) * ce, Math.sin(el * DEG), Math.cos(az * DEG) * ce]; };
 function lightingEnv() {
-  const sun = solarPosition(state.dateStr, state.hour), el = sun.elDeg;
-  return { sun, sunVec: compassToWorld(sun.azDeg, el), direct: clamp((el + 0.5) / 8, 0, 1), ambient: 0.06 + 0.42 * clamp((el + 12) / 30, 0, 1),
-    warm: el > -2 ? clamp(1 - el / 12, 0, 1) : 0, sky: skyPalette(el), night: el < -4,
+  const sun = solarPosition(state.dateStr, state.hour), el = sun.elDeg, W = WEATHER[state.weather] || WEATHER.fair;
+  return { sun, W, sunVec: compassToWorld(sun.azDeg, el), direct: clamp((el + 0.5) / 8, 0, 1) * W.sun, ambient: (0.06 + 0.42 * clamp((el + 12) / 30, 0, 1)) * W.amb,
+    warm: el > -2 ? clamp(1 - el / 12, 0, 1) : 0, sky: W.grey ? weatherSky(skyPalette(el), W) : skyPalette(el), night: el < -4,
     phase: el > 6 ? 'Day' : el > -0.83 ? 'Golden hour' : el > -6 ? 'Civil twilight' : el > -12 ? 'Nautical twilight' : 'Night', beta: 3.912 / (state.visibilityKm * 1000) };
 }
 function shade(alb, n, env) {
@@ -1069,6 +1089,7 @@ function updateDashboard(m) {
   document.querySelectorAll('.focal-preset').forEach(b => b.style.borderColor = +b.dataset.focal === state.focalLength ? '#38bdf8' : '');
   document.querySelectorAll('.range-btn').forEach(b => { b.className = `range-btn px-1.5 py-0.5 rounded border ${+b.dataset.range === state.profileRange ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`; });
   $('planSiteBtn').style.borderColor = state.planMode === 'site' ? '#34d399' : ''; $('planAreaBtn').style.borderColor = state.planMode === 'area' ? '#34d399' : '';
+  $('weatherSel').value = state.weather; $('lensBtn').textContent = LENS_LABEL[state.focalLength] || `${state.focalLength}mm`;
   $('visVal').textContent = `${state.visibilityKm} km`; $('visSlider').value = state.visibilityKm;
   $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour; $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateInput').value = state.dateStr; $('inlineMonth').value = +state.dateStr.slice(5, 7); $('inlineMonthVal').textContent = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+state.dateStr.slice(5, 7) - 1];
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
@@ -1232,7 +1253,8 @@ function facadeAlb(P) {
   if (P.alb) return P.alb;
   if (P.kind !== 'existing' || P.h < 6) return (P.alb = ALB[P.kind]);
   const r = hash01(P.cx, P.cz, 7);
-  return (P.alb = P.h > 90 && r < 0.6 ? [150 + r * 30, 172 + r * 20, 192] : FACADE_PAL[Math.floor(r * FACADE_PAL.length)]);
+  if (P.h > 90 && r < 0.6) P.glass = true;   // blue-grey curtain wall → glassFx
+  return (P.alb = P.glass ? [150 + r * 30, 172 + r * 20, 192] : FACADE_PAL[Math.floor(r * FACADE_PAL.length)]);
 }
 // TRPF facade from developer renderings + model (31A/32A/33A fronts, 31A side facing #134): ~7.5m unit stacks cycling
 // brown-framed grey / greige / white-framed grey; white ledge each floor; 2-pane dark windows per 3.6m bay; brown bands every 5F
@@ -1308,16 +1330,16 @@ function drawPrism(ctx, cam, env, P) {
   if (P.style) { // condo towers / clubhouse on E-of-TRPF plots
     for (const f of prismFaces(P, cam)) { const sp = cam.projectPoly(f.pts); if (!sp) continue;
       fillPoly(ctx, sp, rgbStr(fogMix(shade(f.kind === 'top' ? [168, 172, 176] : P.style === 'club' ? [150, 175, 190] : [222, 214, 198], f.n, env), dist, env)), P.group.color, 0.75);
-      if (f.kind === 'wall') condoFacade(ctx, cam, f, P, env, dist); }
+      if (f.kind === 'wall') { condoFacade(ctx, cam, f, P, env, dist); aoBase(ctx, cam, f, P, env, dist); } faceShadow(ctx, cam, f, P, env, sp, dist); }
     return;
   }
   if (P.kind === 'trpf' && P.B && P.h >= 8) { // TRPF blocks/MSCP: rendering-based facade
     const stroke = 'rgba(30,41,59,0.35)';
     for (const f of prismFaces(P, cam)) {
       const sp = cam.projectPoly(f.pts); if (!sp) continue;
-      if (f.kind !== 'wall') { const g = f.kind === 'top' && P.name.startsWith('MSCP'); fillPoly(ctx, sp, rgbStr(fogMix(shade(g ? [214, 204, 186] : [160, 165, 170], f.n, env), dist, env)), stroke, 0.75); if (g) mscpGarden(ctx, cam, P, f, env, dist); continue; }
+      if (f.kind !== 'wall') { const g = f.kind === 'top' && P.name.startsWith('MSCP'); fillPoly(ctx, sp, rgbStr(fogMix(shade(g ? [214, 204, 186] : [160, 165, 170], f.n, env), dist, env)), stroke, 0.75); if (g) mscpGarden(ctx, cam, P, f, env, dist); faceShadow(ctx, cam, f, P, env, sp, dist); continue; }
       const info = P.name.startsWith('MSCP') ? null : trpfFaceInfo(P, f), base = info ? (info.mid === 'greige' ? TRPF_PAL.greige : TRPF_PAL.grey) : TRPF_PAL.screen;
-      fillPoly(ctx, sp, rgbStr(fogMix(shade(base, f.n, env), dist, env)), stroke, 0.75); trpfFacade(ctx, cam, f, P, env, dist, info);
+      fillPoly(ctx, sp, rgbStr(fogMix(shade(base, f.n, env), dist, env)), stroke, 0.75); trpfFacade(ctx, cam, f, P, env, dist, info); aoBase(ctx, cam, f, P, env, dist); faceShadow(ctx, cam, f, P, env, sp, dist);
     }
     return;
   }
@@ -1325,7 +1347,10 @@ function drawPrism(ctx, cam, env, P) {
   for (const f of prismFaces(P, cam)) {
     const sp = cam.projectPoly(f.pts); if (!sp) continue;
     fillPoly(ctx, sp, rgbStr(fogMix(shade(f.kind === 'top' ? [160, 165, 170] : alb, f.n, env), dist, env)), stroke, stroke ? 0.75 : 0);
+    if (P.glass) glassFx(ctx, cam, f, P, env, sp, dist);
     if (f.kind === 'wall' && P.kind !== 'road' && !P.tank && P.h >= 8) facadeGrid(ctx, cam, f, P, env, dist);
+    if (P.kind !== 'road') aoBase(ctx, cam, f, P, env, dist);
+    if (P.kind !== 'road' || f.kind === 'top') faceShadow(ctx, cam, f, P, env, sp, dist);
   }
 }
 // Window grid: storey lines + vertical window bays (3.6m), drawn only when large enough on screen.
@@ -1385,18 +1410,167 @@ function storeyLines(ctx, cam, f, h, env) {
   for (let y = VOID_DECK_HEIGHT; y < h; y += FLOOR_HEIGHT) { const q0 = cam.projectPoint(p0[0], y, p0[2]), q1 = cam.projectPoint(p1[0], y, p1[2]); if (q0 && q1) { ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); } }
   ctx.stroke();
 }
+/* ===================== REALISM FX (visual only; metrics stay clear-sky) ===================== */
+// Prisms in grid cells overlapping a plan box (deduped).
+function gridBox(x0, z0, x1, z1) {
+  const st = ++stampCtr, out = [], i0 = clamp(Math.floor((x0 - GX0) / CELL), 0, NI - 1), i1 = clamp(Math.floor((x1 - GX0) / CELL), 0, NI - 1), j0 = clamp(Math.floor((z0 - GZ0) / CELL), 0, NJ - 1), j1 = clamp(Math.floor((z1 - GZ0) / CELL), 0, NJ - 1);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const c = GRID[i * NJ + j]; if (c) for (const P of c) if (P.stamp !== st) { P.stamp = st; out.push(P); } }
+  return out;
+}
+// Cast shadows on facades/roofs: each occluder's vertices projected along the sun ray onto the face plane, convex hull, clipped to the face
+// (plane coords, then ctx.clip to the face's screen polygon). Darkening alpha = direct/(ambient+direct) of shade(), so shadowed = ambient-only colour.
+const SHADOW_REACH = 900;
+function faceShadow(ctx, cam, f, P, env, sp, dist) {
+  const s = env.sunVec, n = f.n; if (env.direct <= 0.02 || s[1] < 0.03 || dist > 2200) return;
+  const nd = n[0] * s[0] + n[1] * s[1] + n[2] * s[2]; if (nd <= 0.03) return;
+  let sx0 = Infinity, sy0 = Infinity, sx1 = -Infinity, sy1 = -Infinity; for (const [x, y] of sp) { sx0 = Math.min(sx0, x); sx1 = Math.max(sx1, x); sy0 = Math.min(sy0, y); sy1 = Math.max(sy1, y); }
+  if ((sx1 - sx0) * (sy1 - sy0) < 60 || sx1 < 0 || sy1 < 0 || sx0 > cam.w || sy0 > cam.h) return;
+  const f0 = f.pts[0], wall = f.kind === 'wall', a = wall ? (() => { const p1 = f.pts[1], L = Math.hypot(p1[0] - f0[0], p1[2] - f0[2]) || 1; return [(p1[0] - f0[0]) / L, 0, (p1[2] - f0[2]) / L]; })() : [1, 0, 0], b = wall ? [0, 1, 0] : [0, 0, 1];
+  const uv = q => { const d = [q[0] - f0[0], q[1] - f0[1], q[2] - f0[2]]; return [d[0] * a[0] + d[1] * a[1] + d[2] * a[2], d[0] * b[0] + d[1] * b[1] + d[2] * b[2]]; };
+  let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity, fx0 = Infinity, fz0 = Infinity, fx1 = -Infinity, fz1 = -Infinity, fy = Infinity;
+  for (const q of f.pts) { const [u, v] = uv(q); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); fx0 = Math.min(fx0, q[0]); fx1 = Math.max(fx1, q[0]); fz0 = Math.min(fz0, q[2]); fz1 = Math.max(fz1, q[2]); fy = Math.min(fy, q[1]); }
+  const hs = Math.hypot(s[0], s[2]) || 1e-6, reach = Math.min(SHADOW_REACH, ((320 - fy) / s[1]) * hs), dx = (s[0] / hs) * reach, dz = (s[2] / hs) * reach;
+  const cand = gridBox(Math.min(fx0, fx0 + dx), Math.min(fz0, fz0 + dz), Math.max(fx1, fx1 + dx), Math.max(fz1, fz1 + dz)), polys = [];
+  for (const Q of cand) {
+    if (Q === P || Q.h <= fy + 0.3 || (Q.group && Q.group === P.group && Q.name === P.name && Q.kind !== 'trpf')) continue;
+    const V = [], D = [];
+    for (let k = 0; k < Q.n; k++) for (const y of [Q.base, Q.h]) { const p = [Q.xs[k], y, Q.zs[k]]; V.push(p); D.push(n[0] * (p[0] - f0[0]) + n[1] * (p[1] - f0[1]) + n[2] * (p[2] - f0[2])); }
+    if (!D.some(d => d > 0.01)) continue;
+    const pts = [], push = (p, d) => { const t = d / nd; pts.push(uv([p[0] - s[0] * t, p[1] - s[1] * t, p[2] - s[2] * t])); };
+    const cross = (i, j) => { if ((D[i] > 0) !== (D[j] > 0)) { const t = D[i] / (D[i] - D[j]), p = V[i].map((c, k) => c + (V[j][k] - c) * t); pts.push(uv(p)); } };
+    for (let k = 0; k < Q.n; k++) { const i = 2 * k, j = 2 * ((k + 1) % Q.n); if (D[i] > 0) push(V[i], D[i]); if (D[i + 1] > 0) push(V[i + 1], D[i + 1]); cross(i, i + 1); cross(i, j); cross(i + 1, j + 1); }
+    if (pts.length < 3) continue;
+    let h = hull2D(pts); if (h.length < 3) continue;
+    let mu0 = Infinity, mu1 = -Infinity, mv0 = Infinity, mv1 = -Infinity; for (const [u, v] of h) { mu0 = Math.min(mu0, u); mu1 = Math.max(mu1, u); mv0 = Math.min(mv0, v); mv1 = Math.max(mv1, v); }
+    if (mu1 < u0 || mu0 > u1 || mv1 < v0 || mv0 > v1) continue;
+    h = clipPoly(clipPoly(clipPoly(clipPoly(h, 0, u0 - 0.5, true), 0, u1 + 0.5, false), 1, v0 - 0.5, true), 1, v1 + 0.5, false); if (h.length < 3) continue;
+    const q = cam.projectPoly(h.map(([u, v]) => [f0[0] + a[0] * u + b[0] * v, f0[1] + a[1] * u + b[1] * v, f0[2] + a[2] * u + b[2] * v])); if (q) polys.push(q);
+  }
+  if (!polys.length) return;
+  const d = env.direct * nd * 0.85, al = (d / (env.ambient + d)) * transmittance(dist, env) * 0.92;
+  ctx.save(); ctx.beginPath(); sp.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
+  ctx.beginPath(); for (const q of polys) { q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); }
+  ctx.fillStyle = `rgba(8,10,22,${al.toFixed(3)})`; ctx.fill('nonzero'); ctx.restore();
+}
+// Contact shading: darker band at the foot of walls (ground AO, ~6 m), near buildings only.
+function aoBase(ctx, cam, f, P, env, dist) {
+  if (f.kind !== 'wall' || P.base > 0.5 || dist > 1400 || P.h < 4) return;
+  const [p0, p1] = f.pts, hh = Math.min(6, P.h * 0.4), a = cam.projectPoint((p0[0] + p1[0]) / 2, 0, (p0[2] + p1[2]) / 2), b = cam.projectPoint((p0[0] + p1[0]) / 2, hh, (p0[2] + p1[2]) / 2);
+  if (!a || !b || Math.abs(a.y - b.y) < 3) return; const q = cam.projectPoly([[p0[0], 0, p0[2]], [p1[0], 0, p1[2]], [p1[0], hh, p1[2]], [p0[0], hh, p0[2]]]); if (!q) return;
+  const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y), k = 0.3 * transmittance(dist, env) * (0.6 + 0.4 * env.ambient); g.addColorStop(0, `rgba(10,12,20,${k})`); g.addColorStop(1, 'rgba(10,12,20,0)'); fillPoly(ctx, q, g);
+}
+// Curtain-wall glass (tall blue-grey towers): Fresnel sky reflection + sun glint where the mirrored sun ray reaches the eye (glare toward #134).
+function glassFx(ctx, cam, f, P, env, sp, dist) {
+  if (f.kind !== 'wall') return; const n = f.n, [p0, p1, p2] = f.pts, c = [(p0[0] + p1[0]) / 2, (p0[1] + p2[1]) / 2, (p0[2] + p1[2]) / 2], e = [cam.ex, cam.hEye, cam.ez];
+  const v = [c[0] - e[0], c[1] - e[1], c[2] - e[2]], vl = Math.hypot(...v); v.forEach((x, i) => (v[i] = x / vl)); const vn = v[0] * n[0] + v[1] * n[1] + v[2] * n[2], cs = Math.max(0, -vn);
+  const F = 0.04 + 0.96 * Math.pow(1 - cs, 5), ry = v[1] - 2 * vn * n[1], T = transmittance(dist, env), sk = ry > 0 ? mix(env.sky.hor, env.sky.top, Math.sqrt(clamp(ry, 0, 1))) : mix(env.sky.hor, [70, 76, 82], 0.6);
+  fillPoly(ctx, sp, rgbStr(fogMix(sk, dist, env), (0.22 + 0.55 * F) * T));
+  const s = env.sunVec, sn = s[0] * n[0] + s[1] * n[1] + s[2] * n[2]; if (env.direct <= 0.05 || sn <= 0.02) return;
+  const R = [-s[0] + 2 * sn * n[0], -s[1] + 2 * sn * n[1], -s[2] + 2 * sn * n[2]], t = (n[0] * (e[0] - p0[0]) + n[1] * (e[1] - p0[1]) + n[2] * (e[2] - p0[2])) / sn; if (t <= 0) return;
+  const g = [e[0] - R[0] * t, e[1] - R[1] * t, e[2] - R[2] * t], L = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) || 1, u = ((g[0] - p0[0]) * (p1[0] - p0[0]) + (g[2] - p0[2]) * (p1[2] - p0[2])) / L, m = t * Math.tan(4 * DEG);
+  if (u < -m || u > L + m || g[1] < P.base - m || g[1] > P.h + m) return;
+  const q = cam.projectPoint(...g); if (!q) return; const r = Math.max(3, (Math.max(3, t * Math.tan(2.5 * DEG)) / q.z) * cam.fPx), a = clamp(env.direct * T, 0, 1);
+  ctx.save(); ctx.beginPath(); sp.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+  const gr = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r); gr.addColorStop(0, `rgba(255,250,232,${a})`); gr.addColorStop(0.3, `rgba(255,236,200,${0.55 * a})`); gr.addColorStop(1, 'rgba(255,236,200,0)'); ctx.fillStyle = gr; ctx.fillRect(q.x - r, q.y - r, 2 * r, 2 * r); ctx.restore();
+}
+// Water mask (10 m raster of MP2025 water; outside the land-use region = sea unless far land).
+let WMASK = null;
+function isWater(x, z) {
+  if (!WMASK) { const c = document.createElement('canvas'); c.width = 780; c.height = 600; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath();
+    for (const L of LU) if (L.c === 0) for (const r of L.rings) { for (let i = 0; i < r.length; i += 2) { const X = (r[i] + 5200) / 10, Y = (1800 - r[i + 1]) / 10; i ? g.lineTo(X, Y) : g.moveTo(X, Y); } g.closePath(); }
+    g.fill('evenodd'); WMASK = g.getImageData(0, 0, 780, 600).data; }
+  if (x < -5200 || x >= 2600 || z <= -4200 || z > 1800) return z < -1200 && x > -5200 && x < 12000;
+  return WMASK[(Math.floor((1800 - z) / 10) * 780 + Math.floor((x + 5200) / 10)) * 4] > 127;
+}
+// Water: Fresnel sky reflection (water n 1.33, Schlick), mirrored buildings (only those with water between them and the eye), sun glitter (Cox–Munk-like
+// facet tilts σ ≈ 7°), ripple streaks. Drawn after water, before land, so land/roads/buildings cover it.
+function drawWaterFx(ctx, cam, env) {
+  const { w, h, fPx } = cam, hy = h / 2 + Math.tan(cam.pitch) * fPx, yAt = dg => h / 2 - Math.tan(-dg * DEG - cam.pitch) * fPx;
+  if (hy < h) { const y0 = Math.max(hy, 0), g = ctx.createLinearGradient(0, y0, 0, h);
+    for (const dg of [0.15, 0.5, 1, 2, 4, 8, 15, 30, 60]) { const y = yAt(dg); if (y < y0 || y > h) continue; const R = 0.02 + 0.98 * Math.pow(1 - Math.sin(dg * DEG), 5), sk = mix(env.sky.hor, env.sky.mid, clamp(dg / 25, 0, 1)); g.addColorStop((y - y0) / Math.max(1, h - y0), rgbStr(sk, clamp(R * 0.85, 0, 0.8))); }
+    ctx.fillStyle = g; ctx.fillRect(0, y0, w, h - y0); }
+  // reflections of buildings
+  const night = env.night, refl = [];
+  for (const P of ALL) { if (P.h - P.base < 6 || P.h < 12) continue; const dd = Math.hypot(P.cx - cam.ex, P.cz - cam.ez); if (dd < 150 || dd > 6000 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 6000)) continue;
+    const ux = (cam.ex - P.cx) / dd, uz = (cam.ez - P.cz) / dd, r = Math.max(P.maxx - P.minx, P.maxz - P.minz) / 2; if (!isWater(P.cx + ux * (r + 25), P.cz + uz * (r + 25)) && !isWater(P.cx + ux * (r + 120), P.cz + uz * (r + 120))) continue; refl.push([dd, P]); }
+  refl.sort((a, b) => b[0] - a[0]);
+  for (const [dd, P] of refl) { const alb = P.kind === 'road' ? ALB.road : facadeAlb(P);
+    for (const f of prismFaces(P, cam)) { if (f.kind !== 'wall') continue; const sp = cam.projectPoly(f.pts.map(([x, y, z]) => [x, -y, z])); if (!sp) continue;
+      const base = night ? (P.kind === 'road' ? [20, 22, 30] : mix([24, 26, 34], [255, 196, 120], P.h > 60 ? 0.22 : 0.1)) : mix(shade(alb, f.n, env), env.sky.sea, 0.35);
+      fillPoly(ctx, sp, rgbStr(fogMix(base, dd, env), night ? 0.75 : 0.5)); } }
+  // sun glitter
+  const s = env.sunVec, el = env.sun.elDeg;
+  if (env.direct > 0.05 && el > 0.5 && el < 70) { const az = env.sun.azDeg, T = transmittance(2500, env); let sd = Math.floor(simT() * 6) * 7919 + 13; const rn = () => ((sd = (sd * 16807) % 2147483647) / 2147483647), gs = () => Math.sqrt(-2 * Math.log(rn() + 1e-9)) * Math.cos(2 * Math.PI * rn());
+    const c = cam.dirToScreen(s[0], -s[1], s[2]);
+    if (c) { const r0 = Math.tan(6 * DEG) * fPx, g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r0); g.addColorStop(0, `rgba(255,240,205,${0.45 * env.direct * T})`); g.addColorStop(1, 'rgba(255,240,205,0)'); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(c[0], c[1]); ctx.scale(0.45, 1.6); ctx.translate(-c[0], -c[1]); ctx.fillStyle = g; ctx.fillRect(c[0] - r0, c[1] - r0, 2 * r0, 2 * r0); ctx.restore(); }
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const warm = env.warm, col = `255,${Math.round(246 - 40 * warm)},${Math.round(225 - 90 * warm)}`;
+    for (let i = 0; i < 700; i++) { const bv = 0.12 * gs(), bh = 0.12 * gs(), dep = el + 2 * bv / DEG; if (dep < 0.1) continue; const dz = (az + (2 * bh / DEG) * Math.sin(((dep + el) / 2) * DEG) * 1.6) * DEG, v = [Math.sin(dz) * Math.cos(dep * DEG), -Math.sin(dep * DEG), Math.cos(dz) * Math.cos(dep * DEG)], p = cam.dirToScreen(...v);
+      if (!p || p[0] < 0 || p[0] > w || p[1] < 0 || p[1] > h) continue; const a = (0.35 + 0.65 * rn()) * env.direct * T, sz = 0.8 + 1.6 * rn() * clamp(dep / 4, 0.4, 1.5); ctx.fillStyle = `rgba(${col},${a.toFixed(3)})`; ctx.fillRect(p[0] - sz / 2, p[1] - sz / 4, sz, sz / 2); }
+    ctx.restore(); }
+  // ripples: thin horizontal streaks, denser toward the horizon (breaks reflections up)
+  { let sd = Math.floor(simT() * 2) * 31 + 7; const rn = () => ((sd = (sd * 16807) % 2147483647) / 2147483647), y0 = Math.max(0, hy + 1);
+    ctx.save(); for (let i = 0; i < 420; i++) { const y = y0 + Math.pow(rn(), 1.8) * (h - y0), x = rn() * w, L = 6 + 30 * rn() * (1 - (y - y0) / Math.max(1, h - y0)); ctx.fillStyle = rn() < 0.5 ? rgbStr(env.sky.hor, 0.18) : rgbStr(mix(env.sky.sea, [0, 0, 0], 0.4), 0.22); ctx.fillRect(x, y, L, 1); } ctx.restore(); }
+}
+// Moving traffic (visual only): at-grade OSM roads cls ≤2 + viaduct/bridge decks; spacing/speed per class, lanes ±w/4; headlights toward the eye / tail lights away at night.
+const CAR_COL = [[236, 236, 236], [236, 236, 236], [190, 192, 196], [190, 192, 196], [34, 36, 40], [34, 36, 40], [120, 124, 130], [160, 40, 36], [40, 70, 140], [230, 200, 60]];
+function carAt(ctx, cam, env, x, y, z, hx, hz, k, dd) {
+  const c = cam.projectPoint(x, y, z); if (!c || c.x < -5 || c.x > cam.w + 5 || c.y < -5 || c.y > cam.h + 5) return; const px = (4.5 / c.z) * cam.fPx, T = transmittance(dd, env); if (px < 0.5) return;
+  if (env.night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0, r = clamp(px * 0.35, 0.8, 3); ctx.fillStyle = tow ? `rgba(255,248,225,${0.9 * T})` : `rgba(255,40,30,${0.8 * T})`; ctx.fillRect(c.x - r, c.y - r / 2, 2 * r, r); return; }
+  if (px < 2.2) { ctx.fillStyle = rgbStr(fogMix(shade(CAR_COL[k % CAR_COL.length], [0, 1, 0], env), dd, env)); ctx.fillRect(c.x - px / 2, c.y - px / 4, Math.max(1, px), Math.max(1, px / 2)); return; }
+  const lx = -hz * 0.9, lz = hx * 0.9, q = cam.projectPoly([[x - hx * 2.25 - lx, y + 0.8, z - hz * 2.25 - lz], [x + hx * 2.25 - lx, y + 0.8, z + hz * 2.25 - lz], [x + hx * 2.25 + lx, y + 0.8, z + hz * 2.25 + lz], [x - hx * 2.25 + lx, y + 0.8, z - hz * 2.25 + lz]]);
+  if (q) fillPoly(ctx, q, rgbStr(fogMix(shade(CAR_COL[k % CAR_COL.length], [0, 1, 0], env), dd, env)));
+}
+const CAR_CLS = [[30, 22], [55, 15], [140, 11]];   // [spacing m per lane, speed m/s] for road class 0/1/2
+function drawCars(ctx, cam, env) {
+  const t = simT();
+  for (const R of ROADS) { if (R.c > 2 || !cam.inWedge(R.minx, R.maxx, R.minz, R.maxz, 2200)) continue;
+    if (!R.cum) { R.cum = [0]; for (let i = 0; i + 3 < R.pts.length; i += 2) R.cum.push(R.cum[R.cum.length - 1] + Math.hypot(R.pts[i + 2] - R.pts[i], R.pts[i + 3] - R.pts[i + 1])); R.len = R.cum[R.cum.length - 1]; }
+    if (R.len < 5) continue; const [sp, v] = CAR_CLS[R.c], ph = hash01(R.minx, R.minz, 3) * sp;
+    for (const dir of [1, -1]) for (let s0 = ((ph + dir * v * t) % sp + sp) % sp, k = 0; s0 < R.len; s0 += sp, k++) {
+      const s = dir > 0 ? s0 : R.len - s0; let i = 1; while (i < R.cum.length - 1 && R.cum[i] < s) i++; const a = (s - R.cum[i - 1]) / Math.max(1e-6, R.cum[i] - R.cum[i - 1]), ax = R.pts[2 * i - 2], az = R.pts[2 * i - 1], bx = R.pts[2 * i], bz = R.pts[2 * i + 1], L = Math.hypot(bx - ax, bz - az) || 1, hx = ((bx - ax) / L) * dir, hz = ((bz - az) / L) * dir;
+      const x = ax + (bx - ax) * a - hz * R.w * 0.25, z = az + (bz - az) * a + hx * R.w * 0.25, dd = Math.hypot(x - cam.ex, z - cam.ez); if (dd > 2200) continue;
+      carAt(ctx, cam, env, x, 0.1, z, hx, hz, Math.floor(hash01(R.minx + k, dir, 5) * 97), dd); } }
+}
+function deckCars(ctx, cam, env, P) {
+  const e01 = Math.hypot(P.xs[1] - P.xs[0], P.zs[1] - P.zs[0]), e12 = Math.hypot(P.xs[2] - P.xs[1], P.zs[2] - P.zs[1]), [i0, i1, Lg, W] = e01 >= e12 ? [0, 1, e01, e12] : [1, 2, e12, e01];
+  if (Lg < 4 || W < 5) return; const hx = (P.xs[i1] - P.xs[i0]) / Lg, hz = (P.zs[i1] - P.zs[i0]) / Lg, t = simT(), dd = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), sp = 28, v = 20;
+  for (const dir of [1, -1]) for (let s = ((hash01(P.cx, P.cz, 9) * sp + dir * v * t) % sp + sp) % sp - Lg / 2, k = 0; s < Lg / 2; s += sp, k++) {
+    const x = P.cx + hx * s - dir * hz * W * 0.25, z = P.cz + hz * s + dir * hx * W * 0.25; carAt(ctx, cam, env, x, P.h, z, hx * dir, hz * dir, Math.floor(hash01(P.cx + k, dir, 4) * 97), dd); }
+}
+// Ships under way in Singapore Strait (E/W, ~6 m/s), wrapped over x −4500..5000; anchored SHIPS stay put.
+const MOVERS = [[-3000, -4500, 220, 6], [1500, -5000, 160, -5], [3500, -6200, 260, 7], [-500, -6800, 120, -8], [200, -3900, 35, 9]];
+const moverX = ([x0, , , v]) => ((x0 + v * simT() + 4500) % 9500 + 9500) % 9500 - 4500;
+// Rain: grey veil + streaks (reseeded 8×/s in Live).
+function drawRain(ctx, cam, env) {
+  const W = env.W; if (!W.rain) return; const { w, h } = cam; ctx.fillStyle = 'rgba(150,158,168,0.14)'; ctx.fillRect(0, 0, w, h);
+  let sd = Math.floor(simT() * 8) * 977 + 3; const rn = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  ctx.strokeStyle = `rgba(215,222,232,${env.night ? 0.12 : 0.24})`; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; i < Math.round(w * h / 900); i++) { const x = rn() * w, y = rn() * h, L = 8 + 18 * rn(); ctx.moveTo(x, y); ctx.lineTo(x - L * 0.18, y + L); } ctx.stroke();
+}
+// Exposure (eye/phone adaptation from inside the room): stops between outdoor and indoor illuminance → exterior washed out, room slightly darker.
+function exposureOf(env) {
+  if (!state.exposure || !state.showBalcony || env.sun.elDeg <= 0) return { wash: 0, kIn: 1, glow: 0 };
+  const rs = roomSpot(), W = env.W, cs = clearSky(env.sun.elDeg); let adf = 1.5, inSun = 0;
+  if (rs) { const key = [rs.id, state.obsFloor, state.eyeOffset, state.dateStr, state.hour, state.glass, WORLD_VER].join('|'); if (rmCache.key !== key) rmCache = { key, v: roomMetrics(rs) }; adf = rmCache.v.adf; inSun = rmCache.v.now.luxSun; }
+  const out = W.sun > 0 ? 120 * cs.dhi + 95 * cs.dni * Math.sin(env.sun.elDeg * DEG) * W.sun : (300 + 21000 * Math.sin(env.sun.elDeg * DEG)) * W.dark, inn = Math.max(5, (adf / 100) * (W.sun > 0 ? 120 * cs.dhi : out) + inSun * W.sun);
+  const st = Math.log2(out / inn); return { wash: clamp((st - 3) * 0.11, 0, 0.45), kIn: clamp(1.1 - (st - 3) * 0.07, 0.72, 1.05), glow: clamp((st - 3) * 0.2, 0, 0.8), st };
+}
+// Live mode: redraw the 3D view ~10×/s with a running clock (traffic, ships, clouds, glitter, rain); time of day itself is not advanced.
+const LIVE = { t: 0, last: 0 };
+const simT = () => state.hour * 3600 + LIVE.t;
+function liveTick(ts) { if (!state.live) return; if (!LIVE.last) LIVE.last = ts; if (ts - LIVE.last >= 100) { LIVE.t += Math.min(0.5, (ts - LIVE.last) / 1000); LIVE.last = ts; if (lastMath && !document.hidden) drawPerspective(lastMath); } requestAnimationFrame(liveTick); }
 function drawClouds(ctx, cam, env) {
   const el = env.sun.elDeg, day = clamp((el + 4) / 10, 0, 1);
   const lit = el > -6 ? mix(mix([255, 255, 255], [255, 196, 150], env.warm), [70, 74, 92], 1 - day) : [40, 44, 58];
-  const base = mix(lit, [120, 130, 150], 0.45);
-  for (const c of CLOUDS) {
-    const v = compassToWorld(c.az, c.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (!p) continue;
-    const R = Math.tan(c.size * DEG) * cam.fPx; if (p[0] < -4 * R || p[0] > cam.w + 4 * R || p[1] < -3 * R || p[1] > cam.h + 2 * R) continue;
+  const W = env.W, base = mix(mix(lit, [120, 130, 150], 0.45), [70, 74, 84], W.cg * 0.6), lit2 = mix(lit, base, W.cg * 0.6), drift = simT() * 0.0012;   // drift ≈4°/h toward W
+  for (const c of CLOUDS.slice(0, W.clouds)) {
+    const v = compassToWorld(c.az - drift, c.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (!p) continue;
+    const R = Math.tan(c.size * W.cs * DEG) * cam.fPx; if (p[0] < -4 * R || p[0] > cam.w + 4 * R || p[1] < -3 * R || p[1] > cam.h + 2 * R) continue;
     const flat = 0.55 + 0.45 * Math.sin(c.el * DEG * 3);
     for (const q of c.puffs) {
       const x = p[0] + q.dx * R, y = p[1] - q.dy * R * flat, rr = q.rr * R;
       const g = ctx.createRadialGradient(x, y - rr * 0.3, rr * 0.1, x, y, rr);
-      g.addColorStop(0, rgbStr(lit, 0.85)); g.addColorStop(0.7, rgbStr(mix(lit, base, 0.5), 0.6)); g.addColorStop(1, rgbStr(base, 0));
+      g.addColorStop(0, rgbStr(lit2, 0.85)); g.addColorStop(0.7, rgbStr(mix(lit2, base, 0.5), 0.6)); g.addColorStop(1, rgbStr(base, 0));
       ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, rr, rr * (0.6 + 0.3 * flat), 0, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1406,22 +1580,24 @@ function drawSkyAndSea(ctx, cam, env, m) {
   const sky = ctx.createLinearGradient(0, Math.min(0, hy - h), 0, Math.max(hy, 1)); sky.addColorStop(0, rgbStr(env.sky.top)); sky.addColorStop(0.65, rgbStr(env.sky.mid)); sky.addColorStop(1, rgbStr(env.sky.hor)); ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
   if (env.sun.elDeg < -6) { const a = clamp((-6 - env.sun.elDeg) / 8, 0, 1); STARS.forEach(s => { const v = compassToWorld(s.az, s.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (p && p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h) { ctx.fillStyle = `rgba(255,255,255,${a * (0.3 + 0.7 * s.mag)})`; ctx.fillRect(p[0], p[1], s.mag > 0.85 ? 2 : 1, s.mag > 0.85 ? 2 : 1); } }); }
   drawClouds(ctx, cam, env);
-  if (env.sun.elDeg > -1.5) { const p = cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); if (p) { const r = Math.max(2, Math.tan(0.2665 * DEG) * cam.fPx), gl = ctx.createRadialGradient(p[0], p[1], r, p[0], p[1], r * 18); gl.addColorStop(0, `rgba(255,236,190,${0.55 * env.direct + 0.2})`); gl.addColorStop(1, 'rgba(255,236,190,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p[0], p[1], r * 18, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = env.sun.elDeg < 4 ? '#ffd28a' : '#fffbe8'; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); } }
+  if (env.sun.elDeg > -1.5 && env.W.sun > 0) { const p = cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); if (p) { const r = Math.max(2, Math.tan(0.2665 * DEG) * cam.fPx), gl = ctx.createRadialGradient(p[0], p[1], r, p[0], p[1], r * 18); gl.addColorStop(0, `rgba(255,236,190,${0.55 * env.direct + 0.2})`); gl.addColorStop(1, 'rgba(255,236,190,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p[0], p[1], r * 18, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = env.sun.elDeg < 4 ? '#ffd28a' : '#fffbe8'; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); } }
   const pts = []; for (let i = 0; i <= 48; i++) { const a = cam.yaw - m.hFovRad / 2 - 0.25 + ((m.hFovRad + 0.5) * i) / 48, p = cam.projectPoint(cam.ex + dh * Math.sin(a), 0, cam.ez + dh * Math.cos(a)); if (p) pts.push([p.x, p.y]); }
   if (pts.length > 1) { const sea = ctx.createLinearGradient(0, Math.max(0, hy), 0, h); sea.addColorStop(0, rgbStr(mix(env.sky.sea, env.sky.hor, 0.55))); sea.addColorStop(0.35, rgbStr(env.sky.sea)); sea.addColorStop(1, rgbStr(mix(env.sky.sea, [0, 0, 0], 0.3))); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(pts[pts.length - 1][0], h + 50); ctx.lineTo(pts[0][0], h + 50); ctx.closePath(); ctx.fillStyle = sea; ctx.fill(); }
 }
 const GROUND_ALB = [null, [118, 120, 126], [72, 138, 74], [168, 160, 146], [160, 158, 155], [182, 170, 140], [150, 150, 150]];
 function drawGround(ctx, cam, env) {
   const water = mix(env.sky.sea, [20, 110, 150], 0.3), farLand = [[-12000, -5200, -3300, 9000], [-12000, 12000, 1800, 12000], [2600, 12000, -1200, 1800]];
-  farLand.forEach(([x0, x1, z0, z1]) => { if (!cam.inWedge(x0, x1, z0, z1, 20000)) return; const sp = cam.projectPoly([[x0, 0, z1], [x1, 0, z1], [x1, 0, z0], [x0, 0, z0]]); if (sp) fillPoly(ctx, sp, rgbStr(fogMix(shade([150, 150, 148], [0, 1, 0], env), 6000, env))); });
+  // water first, then reflections/glitter (drawWaterFx), then land on top (covers fx that spill outside water)
+  for (const pass of [0, 1]) { if (pass) { drawWaterFx(ctx, cam, env); farLand.forEach(([x0, x1, z0, z1]) => { if (!cam.inWedge(x0, x1, z0, z1, 20000)) return; const sp = cam.projectPoly([[x0, 0, z1], [x1, 0, z1], [x1, 0, z0], [x0, 0, z0]]); if (sp) fillPoly(ctx, sp, rgbStr(fogMix(shade([150, 150, 148], [0, 1, 0], env), 6000, env))); }); }
   for (const L of LU) {
+    if ((L.c === 0) !== !pass) continue;
     if (!cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue;
     const col = L.c === 0 ? water : shade(GROUND_ALB[L.c], [0, 1, 0], env);
     const d = Math.max(1, Math.hypot(clamp(cam.ex, L.minx, L.maxx) - cam.ex, clamp(cam.ez, L.minz, L.maxz) - cam.ez) * 0.5 + Math.hypot(L.cx - cam.ex, L.cz - cam.ez) * 0.5);
     ctx.beginPath(); let any = false;
     for (const r of L.rings) { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], 0, r[i + 1]]); const sp = cam.projectPoly(pts); if (!sp) continue; any = true; ctx.moveTo(sp[0][0], sp[0][1]); for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i][0], sp[i][1]); ctx.closePath(); }
     if (any) { ctx.fillStyle = rgbStr(fogMix(col, d, env)); ctx.fill('evenodd'); }
-  }
+  } }
   if (state.showRoads) {
     const asphalt = rgbStr(fogMix(shade([70, 72, 78], [0, 1, 0], env), 800, env)), line = 'rgba(240,240,235,0.55)';
     for (const R of ROADS) {
@@ -1438,6 +1614,7 @@ function drawGround(ctx, cam, env) {
       }
     }
   }
+  if (state.showRoads) drawCars(ctx, cam, env);
   TRPF_GROUND.forEach(([x, z, rx, rz, c]) => { const pts = []; for (let i = 0; i < 16; i++) { const a = (i * Math.PI) / 8; pts.push([x + rx * Math.cos(a), 0.25, z + rz * Math.sin(a)]); } const sp = cam.projectPoly(pts); if (sp) fillPoly(ctx, sp, rgbStr(fogMix(shade(c, [0, 1, 0], env), Math.hypot(x - cam.ex, z - cam.ez), env))); });
   CONDO_POOLS.forEach(q => { const sp = cam.projectPoly([[q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]]]); if (sp) fillPoly(ctx, sp, rgbStr(fogMix(env.night ? [40, 120, 170] : shade([70, 170, 200], [0, 1, 0], env), Math.hypot(q[0] - cam.ex, q[1] - cam.ez), env))); });
   if (env.night && state.showRoads) drawStreetLights(ctx, cam, env);
@@ -1470,7 +1647,8 @@ function drawInterior(ctx, cam, env, sp) {
   { const g = snap.getContext('2d'); g.clearRect(0, 0, snap.width, snap.height); g.drawImage(ctx.canvas, 0, 0); }   // outside scene, restored inside window panes
   const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, [ex, ey] = state.walk ? [state.walk.X, state.walk.Y] : spotEyeP(S, d);
   const V = (X, Y, h) => { const s = X - ex, dd = ey - Y; return [n[0] * dd + u[0] * s, h - e, n[1] * dd + u[1] * s]; };
-  const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
+  const X = exposureOf(env); if (X.wash > 0) { const g = snap.getContext('2d'); g.globalCompositeOperation = 'screen'; g.fillStyle = `rgba(255,250,240,${X.wash.toFixed(3)})`; g.fillRect(0, 0, snap.width, snap.height); g.globalCompositeOperation = 'source-over'; }
+  const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9) * X.kIn, C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
   const ring = (r, h) => r.map(([X, Y]) => V(X, Y, h)), box = ([x0, y0, x1, y1], h) => ring([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], h);
   const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
@@ -1496,7 +1674,7 @@ function drawInterior(ctx, cam, env, sp) {
       const k = tt.length - 1, P = i => [ax + (bx - ax) * tt[i], ay + (by - ay) * tt[i]], keep = Array.from({ length: k }, (_, i) => { const a = P(i), b = P(i + 1); return !buried((a[0] + b[0]) / 2 + nx * 1e-3, (a[1] + b[1]) / 2 + ny * 1e-3); });
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
         for (let j = 0; j < zc.length - 1; j++) { const c0 = zc[j], c1 = zc[j + 1];
-          items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), band: bandOf(c0, c1), seg: z1 - z0 > 4 && isExtKind(kind) ? [p0, p1, c0, c1] : null, pts: [V(p0[0], p0[1], c0), V(p1[0], p1[1], c0), V(p1[0], p1[1], c1), V(p0[0], p0[1], c1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); } }
+          items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), band: bandOf(c0, c1), seg: z1 - z0 > 4 && isExtKind(kind) ? [p0, p1, c0, c1] : null, pts: [V(p0[0], p0[1], c0), V(p1[0], p1[1], c0), V(p1[0], p1[1], c1), V(p0[0], p0[1], c1)], fill, ext: isExtKind(kind), zz: [c0, c1], pp: [p0, p1], ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); } }
     }
     // exterior slab tops/soffits: split into ≤0.5 m cells, each sorted by its centre (one big slab sorted by centre or nearest point painted over its own parapet/walls)
     const xt = isExtKind(kind), nx = xt ? Math.ceil((x1 - x0) / 0.5) : 1, ny = xt ? Math.ceil((y1 - y0) / 0.5) : 1;
@@ -1532,7 +1710,7 @@ function drawInterior(ctx, cam, env, sp) {
   { const [hx0, hy0, hx1, hy1] = UNIT_PLAN.corr.hole; poly(box(UNIT_PLAN.corr.hole, 0), C([96, 94, 90])); for (let y = hy1; y > hy0; y -= 0.28) line(V(hx0, y, 0), V(hx1, y, 0), C([150, 146, 140]), 1); }   // stairwell (down flight)
   // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
   const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
-  const L = sp.viewOnly ? null : roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
+  const L = sp.viewOnly ? null : roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1) * env.W.sun;
     L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
   // exterior (fins, recess walls) only through the glass: each window is one painter item at the glass line that restores the outside scene (snapshot) inside
   // its projected pane and draws the exterior faces there, so nearer room walls hide it and nothing indoors leaks into the view out.
@@ -1543,8 +1721,13 @@ function drawInterior(ctx, cam, env, sp) {
   ext.forEach(e2 => { e2.q = cam.projDirPoly(e2.pts); if (e2.q) e2.bb = bbox(e2.q); });
   panes.forEach(pn => { const { a0, a1, g, ax, sl, hd } = pn; items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, pn, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, pn, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }); });
   items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); const pb = bbox(q); ext.forEach(e2 => { if (!e2.q || e2.bb[2] < pb[0] || e2.bb[0] > pb[2] || e2.bb[3] < pb[1] || e2.bb[1] > pb[3]) return; fillPoly(ctx, e2.q, e2.fill, e2.fill, 0.6); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); it.pn.open.forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); it.pn.fr.forEach(f => poly(f, fc)); return; }
-    poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); const pb = bbox(q); ext.forEach(e2 => { if (!e2.q || e2.bb[2] < pb[0] || e2.bb[0] > pb[2] || e2.bb[3] < pb[1] || e2.bb[1] > pb[3]) return; fillPoly(ctx, e2.q, e2.fill, e2.fill, 0.6); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); it.pn.open.forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); it.pn.fr.forEach(f => poly(f, fc));
+      if (X.glow > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.shadowColor = `rgba(255,248,230,${X.glow.toFixed(3)})`; ctx.shadowBlur = Math.max(10, cam.w * 0.025); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.strokeStyle = fc; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore(); }   // window bloom (exposure): glow bleeding over frame/reveal
+      return; }
+    poly(it.pts, it.fill);
+    if (it.zz && !it.ext) { const [p0, p1] = it.pp, [c0, c1] = it.zz, band = (z0, z1, a) => poly([V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], `rgba(20,16,12,${a})`);   // contact shading at floor/ceiling junctions
+      if (c0 <= 0.01 && c1 > 0.3) { band(0, 0.12, 0.1); band(0.12, 0.3, 0.05); } if (c1 >= H - 0.01 && c0 < H - 0.3) { band(H - 0.1, H, 0.08); band(H - 0.25, H - 0.1, 0.04); } }
+    if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
 // Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
@@ -1628,7 +1811,12 @@ function drawPerspective(m) {
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); drawGround(ctx, cam, env);
   const items = [];
   SHIPS.forEach(([x, z, len]) => { const hull = makePrism('ship', 'existing', 12, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', 30, 12, [x - len * 0.4, z - len * 0.06, x - len * 0.2, z - len * 0.06, x - len * 0.2, z + len * 0.06, x - len * 0.4, z + len * 0.06]); items.push({ d: cam.dist(x, 10, z), draw: () => { drawPrism(ctx, cam, env, hull); drawPrism(ctx, cam, env, sup); } }); });
+  MOVERS.forEach(M => { const [, z, len] = M, x = moverX(M), dir = Math.sign(M[3]), hull = makePrism('ship', 'existing', len > 60 ? 10 : 3, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', len > 60 ? 26 : 6, len > 60 ? 10 : 3, [x - dir * len * 0.4, z - len * 0.06, x - dir * len * 0.22, z - len * 0.06, x - dir * len * 0.22, z + len * 0.06, x - dir * len * 0.4, z + len * 0.06].map((v, i) => v));
+    if (!cam.inWedge(x - len, x + len, z - len, z + len, 12000)) return; const d = cam.dist(x, 8, z);
+    items.push({ d: d + len, draw: () => { const q = cam.projectPoly([[x - dir * len * 0.5, 0.2, z - len * 0.05], [x - dir * len * 3, 0.2, z - len * 0.35], [x - dir * len * 3, 0.2, z + len * 0.35], [x - dir * len * 0.5, 0.2, z + len * 0.05]]); if (q) fillPoly(ctx, q, rgbStr(fogMix([235, 240, 242], d, env), 0.35)); } });   // wake
+    items.push({ d, draw: () => { drawPrism(ctx, cam, env, hull); drawPrism(ctx, cam, env, sup); } }); });
   const own = ownUnitTest();
+  if (state.showRoads) for (const P of DECKS) { if (P.name === 'Pier' || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2200 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 2300)) continue; items.push({ d: cam.dist(P.cx, P.h / 2, P.cz) - 0.5, draw: () => deckCars(ctx, cam, env, P) }); }
   for (const P of ALL) { if (!cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 9000) || (own && own(P))) continue; items.push({ d: cam.dist(P.cx, P.h / 2, P.cz), draw: () => { if (P.kind === 'new') { ctx.save(); ctx.globalAlpha = state.xray ? 0.28 : state.opacity; drawPrism(ctx, cam, env, P); ctx.restore(); } else drawPrism(ctx, cam, env, P); } }); }
   // Trees (parks, roadside, TRPF grounds) within 3km, in view
   const TR = 3000;
@@ -1652,6 +1840,7 @@ function drawPerspective(m) {
   } });
   if (env.night) nightLandmarks(cam, env, items);
   items.sort((a, b) => b.d - a.d).forEach(it => it.draw());
+  drawRain(ctx, cam, env);
   if (state.showLabels) {
     const pins = LANDMARKS.filter(l => l.id !== 'sea').map(l => ({ name: l.name, x: l.x, y: l.h + 4, z: l.z, color: l.color }));
     GROUPS.forEach(g => { const ts = towers.filter(t => t.group === g); if (!ts.length) return; const cx = ts.reduce((a, t) => a + t.cx, 0) / ts.length, cz = ts.reduce((a, t) => a + t.cz, 0) / ts.length; pins.push({ name: g.label.split(' (')[0], x: cx, y: Math.max(...ts.map(t => t.h)) + 6, z: cz, color: g.color }); });
@@ -1765,6 +1954,20 @@ function setExpanded(on) {
 }
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
 $('walkBtn').addEventListener('click', () => setWalk(!state.walk));
+const LENS = [13, 26, 52, 77], LENS_LABEL = { 13: '0.5×', 26: '1×', 52: '2×', 77: '3×' };
+$('weatherSel').innerHTML = Object.entries(WEATHER).map(([k, W]) => `<option value="${k}">${W.label}</option>`).join('');
+$('weatherSel').addEventListener('change', e => { state.weather = e.target.value; state.visibilityKm = WEATHER[state.weather].vis; renderAll(); });
+$('lensBtn').addEventListener('click', () => { const i = LENS.indexOf(state.focalLength); state.focalLength = LENS[(i + 1) % LENS.length]; renderAll(); });
+const pressChip = (id, on) => { $(id).setAttribute('aria-pressed', String(on)); $(id).style.borderColor = on ? '#34d399' : ''; };
+$('expoBtn').addEventListener('click', () => { state.exposure = !state.exposure; pressChip('expoBtn', state.exposure); renderAll(); });
+$('liveBtn').addEventListener('click', () => { state.live = !state.live; pressChip('liveBtn', state.live); $('liveBtn').textContent = state.live ? '⏸ Live' : '▶ Live'; LIVE.last = 0; if (state.live) requestAnimationFrame(liveTick); else renderAll(); });
+$('shotBtn').addEventListener('click', () => {
+  const c = perspectiveCanvas, o = document.createElement('canvas'); o.width = c.width; o.height = c.height; const g = o.getContext('2d'), k = c.width / (c._w || c.width); g.drawImage(c, 0, 0);
+  const sp = curSpot(), hh = Math.floor(state.hour), mm = Math.round((state.hour - hh) * 60), txt = `TRPF 32A #134 · ${state.obsFloor}F · ${sp ? sp.room || sp.id : 'free'} · ${state.dateStr} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${WEATHER[state.weather].label} · ${LENS_LABEL[state.focalLength] || state.focalLength + 'mm'} · ${$('scenarioPreset').selectedOptions[0]?.textContent || ''}`;
+  g.font = `${Math.round(11 * k)}px Inter, sans-serif`; const tw = g.measureText(txt).width; g.fillStyle = 'rgba(15,23,42,0.75)'; g.fillRect(6 * k, o.height - 24 * k, tw + 12 * k, 18 * k); g.fillStyle = '#f8fafc'; g.fillText(txt, 12 * k, o.height - 11 * k);
+  o.toBlob(b => { const name = `trpf-134-${state.dateStr}-${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}.png`, file = new File([b], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } }, 'image/png');
+});
 $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; renderAll(); });
 document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop = () => { clearInterval(t); t = null; };
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
