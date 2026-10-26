@@ -451,12 +451,13 @@ const UNIT_PLAN = (() => {
     ...[11.4, 14.0].flatMap(y => [[19.56, y, 19.6, y + 1.1, 0, 2.2, 'steel'], [22.7, y, 22.74, y + 1.1, 0, 2.2, 'steel']]),
     // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
     [25.7, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
-    [15.45, 1.6, 15.76, 8.0, -2.8, H, 'cor'], [15.76, 7.85, 17.3, 8.0, 0, H, 'cor'], [17.3, 7.85, 18.3, 8.0, 2.1, H, 'cor'], [17.3, 7.89, 18.3, 7.96, 0, 2.1, 'door'], [18.3, 7.85, 18.9, 8.0, 0, H, 'cor'], [18.6, 8.0, 18.9, 8.75, 0, H, 'cor'],
-    [18.6, 8.75, 52, 9.05, 0, H, 'cor'], [54.7, 8.75, 58.6, 9.05, 0, H, 'cor'], [51.7, 6.5, 52, 8.75, -2.8, H, 'cor'], [54.7, 6.5, 55, 8.75, -2.8, H, 'cor'], [52, 6.2, 54.7, 6.5, -2.8, H, 'cor'],
+    [15.45, 1.6, 15.76, 8.0, 0, H, 'cor'], [15.76, 7.85, 17.3, 8.0, 0, H, 'cor'], [17.3, 7.85, 18.3, 8.0, 2.1, H, 'cor'], [17.3, 7.89, 18.3, 7.96, 0, 2.1, 'door'], [18.3, 7.85, 18.9, 8.0, 0, H, 'cor'], [18.6, 8.0, 18.9, 8.75, 0, H, 'cor'],
+    [18.6, 8.75, 52, 9.05, 0, H, 'cor'], [54.7, 8.75, 58.6, 9.05, 0, H, 'cor'], [51.7, 6.5, 52, 8.75, 0, H, 'cor'], [54.7, 6.5, 55, 8.75, 0, H, 'cor'], [52, 6.2, 54.7, 6.5, 0, H, 'cor'],
     ...[26.6, 51.3, 56.6].map(x => [x, 10.6, x + 1.0, 10.64, 0, 2.1, 'door']), ...[33.0, 37.4, 57.0].map(x => [x, 9.05, x + 1.0, 9.09, 0, 2.1, 'door']),
-    [13.12, 1.3, 15.45, 1.6, -2.8, H, 'cor'], [14.25, 1.6, 14.35, 5.6, -2.8, H, 'cor'], [12.86, 1.6, 13.12, 1.68, -2.8, H, 'cor']);
-  for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break;   // stair flights (0.175 m risers, 0.28 m treads): E half down, W half up
-    w.push([13.12, y0, 14.25, y1, -2.8, -0.175 * i, 'stair'], [14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
+    [13.12, 1.3, 15.45, 1.6, 0, H, 'cor'], [14.25, 1.6, 14.35, 5.6, 0, H, 'cor'], [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
+  // stair flights (0.175 m risers, 0.28 m treads): W half up as steps; E half down drawn as a dark stairwell patch with tread lines (corr.hole) — nothing below
+  // floor level (z < 0) may be modelled: interior floors are painted first, so below-floor faces painted over the living floor (owner photos 2026-10-26)
+  for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break; w.push([14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
   // #132 exterior across the recess N of #134 (owner plan markup 2026-10-26, ≈75 px/m, ±0.2 m): bath block + master bedroom E end (ground to roof, clamped in drawInterior),
   // yard E wall; per storey ±6: yard grating ledge (plan hatched box, X 8.85–9.42: slab + 1.0 m metal screen, estimate), A/C ledge (X 5.36–8.05, Y 12.11–13.2: slab, 1.0 m parapet, 1 condenser), windows.
   w.push([5.36, 13.2, 9.7, 15.33, -200, 200, 'ext'], [3.7, 15.07, 9.7, 19.06, -200, 200, 'ext'], [9.42, 10.95, 9.7, 13.2, -200, 200, 'ext']);
@@ -466,7 +467,7 @@ const UNIT_PLAN = (() => {
       [6.2, 12.8, 7.2, 13.18, z, z + 0.95, 'ac'], [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
-  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
+  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
@@ -1469,7 +1470,9 @@ function drawInterior(ctx, cam, env, sp) {
   const zG = -(VOID_DECK_HEIGHT + (state.obsFloor - 1) * FLOOR_HEIGHT), zR = BLK_TOP + TRPF_CROWN + zG;   // ground / roof relative to this slab: exterior faces clamped
   for (let [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of WL) {
     if (isExtKind(kind)) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
-    const dz = Math.max(0, z0 - e, e - z1);   // painter depth in 3D: stacked per-storey exterior pieces (ledges above/below) sort by height too
+    // exterior: cut into storey bands (boundaries k·FH − 0.2) so stacked ledges/walls can be painted band by band (see ext sort below)
+    const zc = [z0]; if (isExtKind(kind)) for (let k = Math.floor((z0 + 0.2) / FLOOR_HEIGHT) + 1; k * FLOOR_HEIGHT - 0.2 < z1; k++) zc.push(k * FLOOR_HEIGHT - 0.2); zc.push(z1);
+    const bandOf = (a, b) => Math.floor(((a + b) / 2 + 0.2) / FLOOR_HEIGHT);
     const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
     for (const [ax, ay, bx, by, nx, ny] of [[x0, y0, x1, y0, 0, -1], [x1, y0, x1, y1, 1, 0], [x1, y1, x0, y1, 0, 1], [x0, y1, x0, y0, -1, 0]]) {
       if ((ex - ax) * nx + (ey - ay) * ny <= 1e-3) continue;
@@ -1484,11 +1487,12 @@ function drawInterior(ctx, cam, env, sp) {
         return !(WL.some(Q => !own(Q) && inQ(Q, px - nx * 1e-3, py - ny * 1e-3)) && !buried(px + nx * 1e-3, py + ny * 1e-3)); };
       const k = tt.length - 1, P = i => [ax + (bx - ax) * tt[i], ay + (by - ay) * tt[i]], keep = Array.from({ length: k }, (_, i) => { const a = P(i), b = P(i + 1); return !buried((a[0] + b[0]) / 2 + nx * 1e-3, (a[1] + b[1]) / 2 + ny * 1e-3); });
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
-        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey, dz), seg: z1 - z0 > 4 && isExtKind(kind) ? [p0, p1, z0, z1] : null, pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
+        for (let j = 0; j < zc.length - 1; j++) { const c0 = zc[j], c1 = zc[j + 1];
+          items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), band: bandOf(c0, c1), seg: z1 - z0 > 4 && isExtKind(kind) ? [p0, p1, c0, c1] : null, pts: [V(p0[0], p0[1], c0), V(p1[0], p1[1], c0), V(p1[0], p1[1], c1), V(p0[0], p0[1], c1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); } }
     }
     const hd = isExtKind(kind) ? Math.hypot((x0 + x1) / 2 - ex, (y0 + y1) / 2 - ey) : near(x0, y0, x1, y1);   // exterior slab tops/soffits sort by centre (nearest point let a ledge slab paint over its own parapet)
-    if (z1 < H && e > z1) items.push({ d: Math.hypot(hd, e - z1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
-    if (z0 > 0 && e < z0) items.push({ d: Math.hypot(hd, z0 - e), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
+    if (z1 < H && e > z1) items.push({ d: hd, band: bandOf(z1, z1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
+    if (z0 > 0 && e < z0) items.push({ d: hd, band: bandOf(z0, z0), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
   // casement panes: one pane per run of adjoining sashes (a window-line column splits the window, so the column is never under a pane item and painter order
   // cannot restore the outside scene over it); per pane: outer frame + a bar at each sash joint; Windows open → sashes swung out 90° about the hinge
@@ -1509,16 +1513,21 @@ function drawInterior(ctx, cam, env, sp) {
   UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
   poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
   UNIT_PLAN.corr.floors.forEach(r => { poly(box(r, 0), C([188, 184, 176], 0.85)); poly(box(r, H), C([230, 228, 222], 0.9)); });   // common corridor floor tiles + soffit
+  { const [hx0, hy0, hx1, hy1] = UNIT_PLAN.corr.hole; poly(box(UNIT_PLAN.corr.hole, 0), C([96, 94, 90])); for (let y = hy1; y > hy0; y -= 0.28) line(V(hx0, y, 0), V(hx1, y, 0), C([150, 146, 140]), 1); }   // stairwell (down flight)
   // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
   const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
   const L = sp.viewOnly ? null : roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
     L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
   // exterior (fins, recess walls) only through the glass: each window is one painter item at the glass line that restores the outside scene (snapshot) inside
   // its projected pane and draws the exterior faces there, so nearer room walls hide it and nothing indoors leaks into the view out.
-  const ext = items.filter(it => it.ext).sort((a, b) => b.d - a.d);
+  // exterior faces (drawn only inside openings): along any ray looking down (up), higher (lower) storey bands are nearer, so paint bands farthest from the
+  // eye's band first, then plan distance within a band (plan-only sorting let lower-storey slabs/condensers paint over the ledge parapets above, owner photos 2026-10-26)
+  const eb = Math.floor((e + 0.2) / FLOOR_HEIGHT), ext = items.filter(it => it.ext).sort((a, b) => Math.abs(b.band - eb) - Math.abs(a.band - eb) || b.d - a.d);
+  const bbox = q => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of q) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } return [x0, y0, x1, y1]; };
+  ext.forEach(e2 => { e2.q = cam.projDirPoly(e2.pts); if (e2.q) e2.bb = bbox(e2.q); });
   panes.forEach(pn => { const { a0, a1, g, ax, sl, hd } = pn; items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, pn, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, pn, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }); });
   items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => { poly(e2.pts, e2.fill); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); it.pn.open.forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); it.pn.fr.forEach(f => poly(f, fc)); return; }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); const pb = bbox(q); ext.forEach(e2 => { if (!e2.q || e2.bb[2] < pb[0] || e2.bb[0] > pb[2] || e2.bb[3] < pb[1] || e2.bb[1] > pb[3]) return; fillPoly(ctx, e2.q, e2.fill, e2.fill, 0.6); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); it.pn.open.forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); it.pn.fr.forEach(f => poly(f, fc)); return; }
     poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
