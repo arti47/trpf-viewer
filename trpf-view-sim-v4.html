@@ -437,9 +437,8 @@ const UNIT_PLAN = (() => {
   // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 1 System-4 condenser 1.0×0.38×0.95 m (owner 2026-10-26).
   wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
   w.push([1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
-  for (let k = -6; k <= 6; k++) { const z = k * 2.8;
-    w.push([1.63, 6.42, 4.03, 7.65, z - 0.15, z, 'ext'], [1.63, 7.55, 4.03, 7.65, z, z + 1, 'ext'], [1.63, 6.42, 1.73, 7.55, z, z + 1, 'ext'], [3.93, 6.42, 4.03, 7.55, z, z + 1, 'ext'],
-      [2.3, 6.5, 3.3, 6.88, z, z + 0.95, 'ac']); }
+  // ledge outer sides = full-height wall flush with the facade (owner 2026-10-26), replaces the per-storey slab/1.0 m parapets/condenser (now hidden)
+  w.push([1.63, 7.55, 4.03, 7.65, -28, H + 28, 'ext'], [1.63, 6.42, 1.73, 7.55, -28, H + 28, 'ext'], [3.93, 6.42, 4.03, 7.55, -28, H + 28, 'ext']);
   // Common corridor outside the main door (owner stack plan #132/#134/#136, 2026-10-26; plan scaled ≈58 px/m, positions ±0.2 m, finishes estimated): kind 'cor' (always drawn).
   // Corridor end (E, X 9.36–9.51, Y 8.99–10.64): open to air above a 1.0 m parapet (owner), beam 2.4–2.6 m. N side = #132 kitchen/yard wall, its door recess + household shelter, lift shaft;
   // S side = #134 shelter wall (grey plan outline = wall line only, owner: no planter), staircase (X 13.12–15.45: landing, down/up flights), #136 front wall + door. Corridor runs W past the lift lobby to X 58.6.
@@ -460,11 +459,11 @@ const UNIT_PLAN = (() => {
   for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break; w.push([14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
   // #132 exterior across the recess N of #134 (owner plan markup 2026-10-26, ≈75 px/m, ±0.2 m): bath block + master bedroom E end (ground to roof, clamped in drawInterior),
   // yard E wall; per storey ±6: yard grating ledge (plan hatched box, X 8.85–9.42: slab + 1.0 m metal screen, estimate), A/C ledge (X 5.36–8.05, Y 12.11–13.2: slab, 1.0 m parapet, 1 condenser), windows.
-  w.push([5.36, 13.2, 9.7, 15.33, -200, 200, 'ext'], [3.7, 15.07, 9.7, 19.06, -200, 200, 'ext'], [9.42, 10.95, 9.7, 13.2, -200, 200, 'ext']);
+  w.push([5.36, 13.2, 9.7, 15.33, -200, 200, 'ext'], [3.7, 15.07, 9.7, 19.06, -200, 200, 'ext'], [9.42, 10.95, 9.7, 13.2, -200, 200, 'ext'],
+    [5.36, 12.11, 8.05, 12.21, -200, 200, 'ext'], [5.36, 12.21, 5.46, 13.2, -200, 200, 'ext'], [7.95, 12.21, 8.05, 13.2, -200, 200, 'ext']);   // A/C ledge outer sides: full-height flush wall (owner 2026-10-26)
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
     w.push([8.85, 11.08, 9.42, 13.36, z - 0.12, z, 'ext'], [8.85, 11.08, 8.9, 13.36, z, z + 1.0, 'rack'], [8.9, 11.08, 9.42, 11.13, z, z + 1.0, 'rack'], [9.4, 11.3, 9.42, 13.0, z + 1.0, z + 2.4, 'xglass'],
-      [5.36, 12.11, 8.05, 13.2, z - 0.15, z, 'ext'], [5.36, 12.11, 8.05, 12.21, z, z + 1, 'ext'], [5.36, 12.21, 5.46, 13.2, z, z + 1, 'ext'], [7.95, 12.21, 8.05, 13.2, z, z + 1, 'ext'],
-      [6.2, 12.8, 7.2, 13.18, z, z + 0.95, 'ac'], [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
+      [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
