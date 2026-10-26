@@ -397,7 +397,8 @@ const UNIT_SPOTS = GEO.spots.map(s => ({ ...s })).filter(s => s.id !== 'mbrE'); 
 // Window glazing widths from the 4-Room Type 1 plan (double-line spans between solid stubs, owner markup 2026-10-25; W1: 0.55m parapet to ~2.2m head).
 // depth = room depth from window wall (4-Room Type 1 plan: living/dining 7.75m, master 4.75m; BR2/BR3 ≈3.6m scaled from plan).
 const WIN = { living: { w: 2.52, roomW: 3.35, depth: 7.75, room: 'Living' }, br3: { w: 1.97, roomW: 3.25, depth: 3.6, room: 'Bedroom 3' }, br2: { w: 1.96, roomW: 3.05, depth: 3.6, room: 'Bedroom 2' }, mbrS: { w: 2.0, roomW: 3.2, depth: 4.75, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' },
-  yard: { w: 2.0, roomW: 1.36, depth: 2.28, room: 'Service yard' } };   // service yard opening (owner 2026-10-26: typical BTO yard → open, no glass; 1.0 m parapet, 2.4 m beam soffit; view only, no daylight metrics)
+  yard: { w: 2.0, roomW: 1.36, depth: 2.28, room: 'Service yard' },
+  corr: { w: 1.65, roomW: 1.65, depth: 3.75, room: 'Corridor', heading0: 63 } };   // common corridor end (owner 2026-10-26: open to air above a 1.0 m parapet; view only; default look NE per owner arrow)   // service yard opening (owner 2026-10-26: typical BTO yard → open, no glass; 1.0 m parapet, 2.4 m beam soffit; view only, no daylight metrics)
 // Posture presets: eye height above floor, distance back from the glass (sofa: living only; bed: bedrooms only).
 const POSTURES = { stand: { label: 'Standing', eye: 1.55, d: 0.5 }, sofa: { label: 'Sofa', eye: 1.2, d: 3.5, only: ['living'] }, bed: { label: 'Bed', eye: 0.9, d: 2.5, only: ['br3', 'br2', 'mbrS'] } };
 UNIT_SPOTS.forEach(sp => Object.assign(sp, WIN[sp.id]));
@@ -419,7 +420,7 @@ const UNIT_PLAN = (() => {
     [5.35, 4.48, 6.0, 4.58, 2.1, H], [6.0, 4.48, 6.19, 4.58], [4.22, 4.58, 4.3, 6.3], [1.94, 6.3, 6.19, 6.42], [6.19, 4.48, 6.6, 6.42],   // bath/WC1 (en-suite), bath/WC2
     [5.6, 6.3, 7.18, 6.42], [5.6, 6.42, 5.75, 6.6], [5.6, 6.6, 5.75, 8.6, 0, YARD.sill], [5.6, 6.6, 5.75, 8.6, YARD.head, H], [5.6, 8.6, 5.75, 8.7], [7.11, 6.42, 7.18, 7.0], [7.11, 7.0, 7.18, 7.9, 2.1, H], [7.11, 7.9, 7.18, 8.7],   // service yard
     [9.2, 6.1, 9.51, 8.99], [5.6, 8.7, 9.51, 8.99],                                                       // kitchen (open to dining)
-    [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'door'], [11.1, 7.46, 11.3, 7.74],   // main door
+    [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'mainDoor'], [9.88, 6.26, 9.93, 7.46, 0, 2.1, 'doorOpen'], [11.1, 7.46, 11.3, 7.74],   // main door (closed / open leaf swung in against the kitchen side, walk + corridor)
     [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
   // service yard opening (E wall, faces ≈80°): owner-planned casement (2026-10-26) on the 1.0 m parapet up to the 2.4 m beam, 3 side-hung sashes, clear glass (closed);
   // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 1 System-4 condenser 1.0×0.38×0.95 m (owner 2026-10-26).
@@ -428,25 +429,49 @@ const UNIT_PLAN = (() => {
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
     w.push([1.63, 6.42, 4.03, 7.65, z - 0.15, z, 'ext'], [1.63, 7.55, 4.03, 7.65, z, z + 1, 'ext'], [1.63, 6.42, 1.73, 7.55, z, z + 1, 'ext'], [3.93, 6.42, 4.03, 7.55, z, z + 1, 'ext'],
       [2.3, 6.5, 3.3, 6.88, z, z + 0.95, 'ac']); }
+  // Common corridor outside the main door (owner stack plan #132/#134/#136, 2026-10-26; plan scaled ≈58 px/m, positions ±0.2 m, finishes estimated): kind 'cor' (always drawn).
+  // Corridor end (E, X 9.36–9.51, Y 8.99–10.64): open to air above a 1.0 m parapet (owner), beam 2.4–2.6 m. N side = #132 kitchen/yard wall, its door recess + household shelter, lift shaft;
+  // S side = #134 shelter wall (grey plan outline = wall line only, owner: no planter), staircase (X 13.12–15.45: landing, down/up flights), #136 front wall + door. Corridor runs W past the lift lobby to X 58.6.
+  w.push([9.36, 8.99, 9.51, 10.64, 0, 1.0, 'cor'], [9.36, 8.99, 9.51, 10.64, 2.4, H, 'cor'], [9.36, 10.64, 13.34, 10.95, 0, H, 'cor'], [13.04, 10.95, 13.34, 12.24, 0, H, 'cor'],
+    [13.34, 12.24, 13.6, 12.4, 0, H, 'cor'], [13.6, 12.24, 14.6, 12.4, 2.1, H, 'cor'], [13.6, 12.28, 14.6, 12.36, 0, 2.1, 'door'], [14.6, 12.24, 15.4, 12.4, 0, H, 'cor'], [15.1, 11.9, 15.4, 12.24, 0, H, 'cor'],
+    [15.4, 11.9, 16.96, 12.2, 0, H, 'cor'],
+    // lift lobby (owner storey plan 2026-10-26, ≈16.9 px/m): 2 + 2 lifts facing across a 3.1 m lobby, N end to wash area/refuse chutes (closed off here)
+    [16.96, 10.8, 19.6, 16.7, 0, H, 'cor'], [22.7, 10.8, 25.7, 16.7, 0, H, 'cor'], [19.6, 16.7, 22.7, 17.0, 0, H, 'cor'],
+    ...[11.4, 14.0].flatMap(y => [[19.56, y, 19.6, y + 1.1, 0, 2.2, 'steel'], [22.7, y, 22.74, y + 1.1, 0, 2.2, 'steel']]),
+    // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
+    [25.7, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
+    [15.45, 1.6, 15.76, 8.0, -2.8, H, 'cor'], [15.76, 7.85, 17.3, 8.0, 0, H, 'cor'], [17.3, 7.85, 18.3, 8.0, 2.1, H, 'cor'], [17.3, 7.89, 18.3, 7.96, 0, 2.1, 'door'], [18.3, 7.85, 18.9, 8.0, 0, H, 'cor'], [18.6, 8.0, 18.9, 8.75, 0, H, 'cor'],
+    [18.6, 8.75, 52, 9.05, 0, H, 'cor'], [54.7, 8.75, 58.6, 9.05, 0, H, 'cor'], [51.7, 6.5, 52, 8.75, -2.8, H, 'cor'], [54.7, 6.5, 55, 8.75, -2.8, H, 'cor'], [52, 6.2, 54.7, 6.5, -2.8, H, 'cor'],
+    ...[26.6, 51.3, 56.6].map(x => [x, 10.6, x + 1.0, 10.64, 0, 2.1, 'door']), ...[33.0, 37.4, 57.0].map(x => [x, 9.05, x + 1.0, 9.09, 0, 2.1, 'door']),
+    [13.12, 1.3, 15.45, 1.6, -2.8, H, 'cor'], [14.25, 1.6, 14.35, 5.6, -2.8, H, 'cor'], [12.86, 1.6, 13.12, 1.68, -2.8, H, 'cor']);
+  for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break;   // stair flights (0.175 m risers, 0.28 m treads): E half down, W half up
+    w.push([13.12, y0, 14.25, y1, -2.8, -0.175 * i, 'stair'], [14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
+  w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
+  wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
+  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
   // per window: centre X, inner wall face Y, plan room depth to the opposite wall
-  const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 }, yard: { yc: 7.6, xin: 5.75, depth: 1.36 } };   // yard: opening along Y (centre yc), inner face X = xin, eye looks −X
+  const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 }, yard: { yc: 7.6, xin: 5.75, depth: 1.36 }, corr: { yc: 9.815, xin: 9.51, depth: 3.75, walk0: [10.48, 9.3] } };   // corr: walk starts in front of #134's door   // yard: opening along Y (centre yc), inner face X = xin, eye looks −X
   // casement sashes per window [s0, s1, hinge] (owner markups 2026-10-26): master/BR3 = outward pair hinged at the outer ends + column + single hinged at the W end;
   // living = pair | column | pair, each pair hinged at its outer ends; BR2 = pair | column | single (owner markup); yard 3 sashes (estimate, owner OK)
   const sashes = [[[0.695, 1.3, 0.695], [1.3, 1.9, 1.9], [2.06, 2.7, 2.7]], [[3.62, 4.23, 3.62], [4.23, 4.84, 4.84], [5.0, 5.58, 5.58]], [[6.78, 7.375, 6.78], [7.375, 7.97, 7.97], [8.14, 8.75, 8.75]],
-    [[9.99, 10.595, 9.99], [10.595, 11.2, 11.2], [11.37, 11.94, 11.37], [11.94, 12.51, 12.51]], [[6.6, 7.27, 6.6], [7.27, 7.93, 7.93], [7.93, 8.6, 8.6]]];
+    [[9.99, 10.595, 9.99], [10.595, 11.2, 11.2], [11.37, 11.94, 11.37], [11.94, 12.51, 12.51]], [[6.6, 7.27, 6.6], [7.27, 7.93, 7.93], [7.93, 8.6, 8.6]], []];   // corridor end: open (no sashes → no frame)
   w.push([1.9, 0, 2.06, F], [4.84, 0, 5.0, F], [7.97, 0, 8.14, F], [11.2, 1.53, 11.37, 1.68]);   // structural columns in the window lines (plan black squares)
-  return { walls: w, wins, outline, floors, spots, sashes };
+  return { walls: w, wins, outline, floors, spots, sashes, corr };
 })();
 const UNIT_FN = 170.3;   // bedroom/living facade normal: plan ↔ world frame for every spot (yard opening faces UNIT_FN − 90)
 const spotP = S => S.yc != null ? [S.xin - 0.3, S.yc] : [S.xc, S.yin - 0.3];        // plan point of the world spot (0.15 m outside the outer face)
 const spotEyeP = (S, d) => S.yc != null ? [S.xin + d, S.yc] : [S.xc, S.yin + d];    // default interior eye, d back from the opening
 const isExtKind = k => k === 'ext' || k === 'ac' || k === 'rack';
-{ // service yard spot: world position from the 4 window spots (mean of plan → world maps)
-  const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [yx, yy] = spotP(UNIT_PLAN.spots.yard), ws = UNIT_SPOTS.map(sp => { const [px, py] = spotP(UNIT_PLAN.spots[sp.id]); return [sp.x + u[0] * (yx - px) - n[0] * (yy - py), sp.z + u[1] * (yx - px) - n[1] * (yy - py)]; });
-  UNIT_SPOTS.push({ id: 'yard', label: 'Service yard (E)', x: +(ws.reduce((a, p) => a + p[0], 0) / ws.length).toFixed(2), z: +(ws.reduce((a, p) => a + p[1], 0) / ws.length).toFixed(2), normal: +(UNIT_FN - 90).toFixed(1), viewOnly: true, ...WIN.yard }); }
+const doorOpen = () => !!state.walk || state.spot === 'corr';   // main door open while walking or viewing from the corridor
+const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen'; return UNIT_PLAN.walls.filter(q => q[6] !== o); };
+const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen';
+{ // service yard + corridor end spots: world position from the 4 window spots (mean of plan → world maps)
+  const base = UNIT_SPOTS.slice(); for (const [id, label] of [['yard', 'Service yard (E)'], ['corr', 'Corridor end (E)']]) {
+  const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [yx, yy] = spotP(UNIT_PLAN.spots[id]), ws = base.map(sp => { const [px, py] = spotP(UNIT_PLAN.spots[sp.id]); return [sp.x + u[0] * (yx - px) - n[0] * (yy - py), sp.z + u[1] * (yx - px) - n[1] * (yy - py)]; });
+  UNIT_SPOTS.push({ id, label, x: +(ws.reduce((a, p) => a + p[0], 0) / ws.length).toFixed(2), z: +(ws.reduce((a, p) => a + p[1], 0) / ws.length).toFixed(2), normal: +(UNIT_FN - 90).toFixed(1), viewOnly: true, ...WIN[id] }); } }
 const UNIT_FLOOR = { tile: [200, 194, 184], wood: [170, 134, 98], wet: [152, 158, 162], kitchen: [184, 180, 172] };
 const jambDeg = sp => Math.atan((sp.w / 2) / Math.max(0.05, state.standDist)) / DEG;
 UNIT_SPOTS.forEach(sp => { // push each spot out of the rasterised 32A footprint (+0.15m)
@@ -1422,20 +1447,20 @@ function drawInterior(ctx, cam, env, sp) {
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
   const ring = (r, h) => r.map(([X, Y]) => V(X, Y, h)), box = ([x0, y0, x1, y1], h) => ring([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], h);
   const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
-  const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey);
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of UNIT_PLAN.walls) {
-    const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [190, 192, 196] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : [232, 226, 214];
+  const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey), WL = unitWalls();
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of WL) {
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [190, 192, 196] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
     for (const [ax, ay, bx, by, nx, ny] of [[x0, y0, x1, y0, 0, -1], [x1, y0, x1, y1, 1, 0], [x1, y1, x0, y1, 0, 1], [x0, y1, x0, y0, -1, 0]]) {
       if ((ex - ax) * nx + (ey - ay) * ny <= 1e-3) continue;
       const L = Math.hypot(bx - ax, by - ay), fill = C(col, (ny < 0 ? 1 : ny > 0 ? 0.74 : 0.86) * clamp(1.04 - 0.035 * (ay + by) / 2, 0.7, 1));
       // split at the edges of touching/overlapping walls + every ≤0.4 m; drop pieces buried in another wall (face just outside lies inside it, same storey span)
-      const ts = [0, 1]; for (const Q of UNIT_PLAN.walls) { if (Q[0] === x0 && Q[1] === y0 && Q[2] === x1 && Q[3] === y1) continue; for (const c of nx ? [Q[1], Q[3]] : [Q[0], Q[2]]) { const t = nx ? (c - ay) / (by - ay) : (c - ax) / (bx - ax); if (t > 1e-4 && t < 1 - 1e-4) ts.push(t); } }
+      const ts = [0, 1]; for (const Q of WL) { if (Q[0] === x0 && Q[1] === y0 && Q[2] === x1 && Q[3] === y1) continue; for (const c of nx ? [Q[1], Q[3]] : [Q[0], Q[2]]) { const t = nx ? (c - ay) / (by - ay) : (c - ax) / (bx - ax); if (t > 1e-4 && t < 1 - 1e-4) ts.push(t); } }
       ts.sort((a, b) => a - b); const tt = [0]; for (let j = 1; j < ts.length; j++) { const a = ts[j - 1], b = ts[j]; if (b - a < 1e-4) continue; const m = Math.ceil((b - a) * L / 0.4); for (let q = 1; q <= m; q++) tt.push(a + (b - a) * q / m); }
       const inQ = (Q, px, py) => px > Q[0] && px < Q[2] && py > Q[1] && py < Q[3], own = Q => Q[0] === x0 && Q[1] === y0 && Q[2] === x1 && Q[3] === y1;
-      const buried = (px, py) => UNIT_PLAN.walls.some(Q => (Q[4] ?? 0) <= z0 && (Q[5] ?? H) >= z1 && inQ(Q, px, py));
+      const buried = (px, py) => WL.some(Q => (Q[4] ?? 0) <= z0 && (Q[5] ?? H) >= z1 && inQ(Q, px, py));
       // corner line at a run end, unless the face continues flush into a touching wall (that wall solid behind the face line, air in front)
       const edge = t => { const ux = (bx - ax) / L, uy = (by - ay) / L, s0 = t ? 1e-3 : -1e-3, px = ax + (bx - ax) * t + ux * s0, py = ay + (by - ay) * t + uy * s0;
-        return !(UNIT_PLAN.walls.some(Q => !own(Q) && inQ(Q, px - nx * 1e-3, py - ny * 1e-3)) && !buried(px + nx * 1e-3, py + ny * 1e-3)); };
+        return !(WL.some(Q => !own(Q) && inQ(Q, px - nx * 1e-3, py - ny * 1e-3)) && !buried(px + nx * 1e-3, py + ny * 1e-3)); };
       const k = tt.length - 1, P = i => [ax + (bx - ax) * tt[i], ay + (by - ay) * tt[i]], keep = Array.from({ length: k }, (_, i) => { const a = P(i), b = P(i + 1); return !buried((a[0] + b[0]) / 2 + nx * 1e-3, (a[1] + b[1]) / 2 + ny * 1e-3); });
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
         items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
@@ -1448,6 +1473,7 @@ function drawInterior(ctx, cam, env, sp) {
   frames.open = UNIT_PLAN.wins.map(() => []);
   for (const [wi, [a0, a1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax; const Fw = 0.05, M = 0.03;
     bar(a0, a0 + Fw, sl, hd, g); bar(a1 - Fw, a1, sl, hd, g); bar(a0, a1, sl, sl + Fw, g); bar(a0, a1, hd - Fw, hd, g);
+    if (!UNIT_PLAN.sashes[wi].length) { frames[wi].length = 0; continue; }   // open opening (corridor end): no frame
     for (const [s0, s1, hg] of UNIT_PLAN.sashes[wi]) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M + (UNIT_PLAN.sashes[wi].some(q => Math.abs(q[1] - s0) < 0.01) ? 0 : Fw - M), sl, hd, g); if (s1 < a1 - 0.01 && !UNIT_PLAN.sashes[wi].some(q => Math.abs(q[0] - s1) < 0.01)) bar(s1 - Fw, s1, sl, hd, g);   // jamb frame against a column
       if (!state.winOpen) continue; const W = s1 - s0, P = (o, t) => (ax === 'y' ? V(g - o, hg, t) : V(hg, g - o, t)), q = (o0, o1, t0, t1) => frames[wi].push([P(o0, t0), P(o1, t0), P(o1, t1), P(o0, t1)]);
       frames.open[wi].push([P(0, sl), P(W, sl), P(W, hd), P(0, hd)]); q(W - Fw, W, sl, hd); q(0, W, sl, sl + Fw); q(0, W, hd - Fw, hd); } }
@@ -1457,6 +1483,7 @@ function drawInterior(ctx, cam, env, sp) {
     for (let X = 0.31; X < 13; X += 0.6) line(V(X, 0, 0), V(X, 9, 0), gs, 0.7); for (let Y = 0.15; Y < 9; Y += 0.6) line(V(0, Y, 0), V(13.2, Y, 0), gs, 0.7); ctx.restore(); }
   UNIT_PLAN.floors.forEach(([r, f]) => poly(box(r, 0), C(UNIT_FLOOR[f], 0.85)));
   poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
+  UNIT_PLAN.corr.floors.forEach(r => { poly(box(r, 0), C([188, 184, 176], 0.85)); poly(box(r, H), C([230, 228, 222], 0.9)); });   // common corridor floor tiles + soffit
   // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
   const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
   const L = sp.viewOnly ? null : roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
@@ -1471,9 +1498,10 @@ function drawInterior(ctx, cam, env, sp) {
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
 // Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
-const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]]];
+const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]], ['corr', [9.51, 7.6, 13.26, 10.64]]];
 const walkRing = UNIT_PLAN.outline.flat();
-const walkFree = (X, Y, r = 0.2) => ringIn(walkRing, X, Y) && !UNIT_PLAN.walls.some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r);
+const inCorr = (X, Y) => { const [x0, y0, x1, y1] = UNIT_PLAN.corr.walk; return X >= x0 && X <= x1 && Y >= y0 && Y <= y1; };   // corridor: walk bounded by the owner's stop line
+const walkFree = (X, Y, r = 0.2) => (ringIn(walkRing, X, Y) || inCorr(X, Y)) && !unitWalls().some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r);
 function walkSet(X, Y) {
   if (!state.walk) return; state.walk.X = X; state.walk.Y = Y;
   const rm = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
@@ -1487,15 +1515,16 @@ function walkStep(k) {
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; renderAll();
 }
-const WALK_MAP = { s: 13.5, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
+const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
 function drawWalkMap() {
   const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1; if (cv.width !== 190 * dpr) { cv.width = 190 * dpr; cv.height = 140 * dpr; }
   const g = cv.getContext('2d'), sc = WALK_MAP.s, P = (X, Y) => [(X - WALK_MAP.ox) * sc, (Y - WALK_MAP.oy) * sc]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, 190, 140);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of UNIT_PLAN.walls) { if (isExtKind(kind)) continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : kind === 'door' ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  { const [a, b] = P(UNIT_PLAN.corr.walk[0], UNIT_PLAN.corr.walk[1]), [c, d] = P(UNIT_PLAN.corr.walk[2], UNIT_PLAN.corr.walk[3]); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, c - a, d - b); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, b); g.lineTo(c, d); g.stroke(); }   // corridor + stop line
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
   const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
   g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '9px Inter, sans-serif'; g.fillStyle = '#94a3b8'; g.fillText('S ▲ windows', 4, 10);
@@ -1512,7 +1541,7 @@ function roomEyeWorld() {
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4; };
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6); };   // + the common corridor strip (traced corridor replaces it)
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
@@ -1659,7 +1688,7 @@ UNIT_SPOTS.forEach(sp => { const o = document.createElement('option'); o.value =
 spotSel.addEventListener('change', e => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === e.target.value); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } renderAll(); });
 const roomBar = $('roomBar');
 UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.className = 'chip room-btn'; b.dataset.id = sp.id; b.textContent = `${sp.room} • ${sp.normal.toFixed(0)}°`;
-  b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
+  b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = sp.heading0 ?? Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
 function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; renderAll(); }
 { const sep = document.createElement('span'); sep.className = 'text-slate-600 mx-1'; sep.textContent = '|'; roomBar.appendChild(sep);
   Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); roomBar.appendChild(b); }); }
