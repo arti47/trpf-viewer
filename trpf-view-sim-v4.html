@@ -1486,8 +1486,9 @@ function drawInterior(ctx, cam, env, sp) {
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
         items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey, dz), seg: z1 - z0 > 4 && isExtKind(kind) ? [p0, p1, z0, z1] : null, pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
     }
-    if (z1 < H && e > z1) items.push({ d: Math.hypot(near(x0, y0, x1, y1), e - z1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
-    if (z0 > 0 && e < z0) items.push({ d: Math.hypot(near(x0, y0, x1, y1), z0 - e), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
+    const hd = isExtKind(kind) ? Math.hypot((x0 + x1) / 2 - ex, (y0 + y1) / 2 - ey) : near(x0, y0, x1, y1);   // exterior slab tops/soffits sort by centre (nearest point let a ledge slab paint over its own parapet)
+    if (z1 < H && e > z1) items.push({ d: Math.hypot(hd, e - z1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
+    if (z0 > 0 && e < z0) items.push({ d: Math.hypot(hd, z0 - e), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
   const fc = rgbStr([238, 238, 234].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
   // casement frames: outer frame + a bar at each sash joint; Windows open → each sash swung out 90° about its hinge (glass tint + sash frame, outside the glass line)
