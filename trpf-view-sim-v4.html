@@ -416,11 +416,10 @@ const UNIT_PLAN = (() => {
     [9.2, 6.1, 9.51, 8.99], [5.6, 8.7, 9.51, 8.99],                                                       // kitchen (open to dining)
     [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'door'], [11.1, 7.46, 11.3, 7.74],   // main door
     [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
-  // service yard opening (E wall, faces ≈80°; open, no glass) + outside it (estimates, typical BTO): laundry rack (2-rail, rungs every 0.2 m) just under the beam;
-  // bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 2 condensers 0.9×0.35×0.7 m.
+  // service yard opening (E wall, faces ≈80°): owner-planned casement (2026-10-26) on the 1.0 m parapet up to the 2.4 m beam, 3 side-hung sashes, clear glass (closed);
+  // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 2 condensers 0.9×0.35×0.7 m.
   wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
-  w.push([5.08, 6.65, 5.11, 8.55, 2.3, 2.33, 'rack'], [1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
-  for (let y = 6.7; y < 8.55; y += 0.2) w.push([5.08, y, 5.6, y + 0.03, 2.3, 2.33, 'rack']);
+  w.push([1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
     w.push([1.63, 6.42, 4.03, 7.65, z - 0.15, z, 'ext'], [1.63, 7.55, 4.03, 7.65, z, z + 1, 'ext'], [1.63, 6.42, 1.73, 7.55, z, z + 1, 'ext'], [3.93, 6.42, 4.03, 7.55, z, z + 1, 'ext'],
       [1.85, 6.5, 2.75, 6.85, z, z + 0.7, 'ac'], [2.95, 6.5, 3.85, 6.85, z, z + 0.7, 'ac']); }
@@ -1434,8 +1433,11 @@ function drawInterior(ctx, cam, env, sp) {
     if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
     if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
-  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push([V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
-  for (const [wi, [x0, x1, yg, ax]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; if (ax === 'y') continue;   /* yard opening: no glass/frames */ const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
+  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
+  for (const [wi, [x0, x1, yg, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax;
+    if (ax === 'y') { const Fw = 0.05, M = 0.04; bar(x0, x0 + Fw, sl, hd, yg); bar(x1 - Fw, x1, sl, hd, yg); bar(x0, x1, sl, sl + Fw, yg); bar(x0, x1, hd - Fw, hd, yg);   // yard casement: 3 side-hung sashes
+      for (let k = 1; k < 3; k++) { const q = x0 + ((x1 - x0) * k) / 3; bar(q - M, q + M, sl, hd, yg); } continue; }
+    const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
     bar(x0, x0 + Fw, sill, head, yg); bar(x1 - Fw, x1, sill, head, yg); bar(x0, x1, sill, sill + Fw, yg); bar(x0, x1, head - Fw, head, yg);
     const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
