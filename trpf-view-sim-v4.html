@@ -407,7 +407,8 @@ rebuildTRPF();
 const UNIT_SPOTS = GEO.spots.map(s => ({ ...s })).filter(s => s.id !== 'mbrE');   // no east window in the master bedroom (confirmed by owner)
 // Window glazing widths from the 4-Room Type 1 plan (double-line spans between solid stubs, owner markup 2026-10-25; W1: 0.55m parapet to ~2.2m head).
 // depth = room depth from window wall (4-Room Type 1 plan: living/dining 7.75m, master 4.75m; BR2/BR3 ≈3.6m scaled from plan).
-const WIN = { living: { w: 2.52, roomW: 3.35, depth: 7.75, room: 'Living' }, br3: { w: 1.97, roomW: 3.25, depth: 3.6, room: 'Bedroom 3' }, br2: { w: 1.96, roomW: 3.05, depth: 3.6, room: 'Bedroom 2' }, mbrS: { w: 2.0, roomW: 3.2, depth: 4.75, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' },
+// daylight rooms = traced UNIT_ROOMS (owner OK 2026-10-26): roomW × depth = main rect (window inner face → back wall); area/perim incl. L-extension (living + dining, master + robe notch)
+const WIN = { living: { w: 2.52, roomW: 3.48, depth: 5.78, area: 27.5, perim: 24.08, room: 'Living' }, br3: { w: 1.97, roomW: 2.99, depth: 3.18, room: 'Bedroom 3' }, br2: { w: 1.96, roomW: 2.89, depth: 3.18, room: 'Bedroom 2' }, mbrS: { w: 2.0, roomW: 2.89, depth: 4.33, area: 13.57, perim: 16.48, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' },
   yard: { w: 2.0, roomW: 1.36, depth: 2.28, room: 'Service yard' },
   corr: { w: 1.65, roomW: 1.65, depth: 3.75, room: 'Corridor', heading0: 63 } };   // common corridor end (owner 2026-10-26: open to air above a 1.0 m parapet; view only; default look NE per owner arrow)   // service yard opening (owner 2026-10-26: typical BTO yard → open, no glass; 1.0 m parapet, 2.4 m beam soffit; view only, no daylight metrics)
 // Posture presets: eye height above floor, distance back from the glass (sofa: living only; bed: bedrooms only).
@@ -940,7 +941,7 @@ function vscOf(sp) {
   const vsc = (100 * num) / ((7 * Math.PI) / 9); vscCache.set(key, vsc); return vsc;
 }
 function roomMetrics(sp) {
-  const G = GLASS[state.glass] || GLASS.clear, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = Wr * D, A = 2 * (Wr * D + Wr * ROOM_H + D * ROOM_H);
+  const G = GLASS[state.glass] || GLASS.clear, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = sp.area || Wr * D, A = 2 * Af + (sp.perim || 2 * (Wr + D)) * ROOM_H;
   const vsc = vscOf(sp), theta = (90 * vsc) / 39.6, adf = (G.tv * Aw * theta * 0.9) / (A * (1 - R_MEAN * R_MEAN));
   const at = (hr, ds = state.dateStr) => { const Lr = roomLight(sp, ds, hr), cs = clearSky(Lr.sun.elDeg), dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
     return { Lr, cs, q: G.shgc * Aw * (dirIrr + cs.dhi * 0.5 * (vsc / 39.6)), luxSky: (adf / 100) * cs.dhi * 120, luxSun: (G.tv * Aw * dirIrr * 95) / Af,
@@ -1019,7 +1020,7 @@ function drawRoomHud() {
     rows.map(([k, v, ok, ref]) => `<tr style="vertical-align:top"><td class="text-slate-400 pr-2" style="white-space:nowrap">${k}</td><td class="pr-2" style="white-space:nowrap;${c(ok)}">${v}</td><td class="text-slate-500" style="font-size:9px">${ref}</td></tr>`).join('') + '</table>';
   const hint = $('dragHint'); if (hint) hint.style.display = 'none';
 }
-const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m`;
+const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m${sp.area ? ` (${sp.area.toFixed(1)} m² incl. L)` : ''}`;
 
 /* ===================== DASHBOARD ===================== */
 const curSpot = () => UNIT_SPOTS.find(sp => sp.id === state.spot) || null;
