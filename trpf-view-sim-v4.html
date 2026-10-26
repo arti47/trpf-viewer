@@ -903,6 +903,7 @@ function drawSunPath(ctx, m, vx, vy) {
 // VSC (BRE 209): CIE overcast sky L ∝ (1+2 sin el)/3, visible-ray sum over the vertical window plane / unobstructed horizontal (max 39.6%), 4° grid.
 // ADF (BRE): T·Aw·θ·M/(A(1−R²)), θ = 90°·VSC/39.6, M 0.9, R 0.5, A = total room surface, Aw = net glazing.
 const GLASS = { clear: { label: 'Clear 6mm', tv: 0.88, shgc: 0.82 }, light: { label: 'Light tint', tv: 0.65, shgc: 0.65 }, tinted: { label: 'Tinted grey', tv: 0.43, shgc: 0.58 }, lowe: { label: 'Solar-control low-E', tv: 0.6, shgc: 0.35 } };
+const HOPPER_A = 35 * Math.PI / 180;   // top-hung sash opening angle (friction stay, estimate)
 const FRAME_F = 0.75, ROOM_H = 2.6, SILL = 0.55, R_MEAN = 0.5;
 function clearSky(elDeg) {
   if (elDeg <= 0) return { dni: 0, dhi: 0, ghi: 0 }; const se = Math.sin(elDeg * DEG), am = 1 / (se + 0.50572 * Math.pow(elDeg + 6.07995, -1.6364));
@@ -1518,7 +1519,9 @@ function drawInterior(ctx, cam, env, sp) {
     const [o0, o1] = tz.length > 1 ? [tz[0] + M, tz[1] - M] : [sl, hd];   // opening sashes = casement row only
     for (const [s0, s1, hg] of pn.sh) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M, sl, hd);
       if (!state.winOpen) continue; const W = s1 - s0, q = (o0, o1, t0, t1) => pn.fr.push([P(hg, o0, t0), P(hg, o1, t0), P(hg, o1, t1), P(hg, o0, t1)]);
-      pn.open.push([P(hg, 0, o0), P(hg, W, o0), P(hg, W, o1), P(hg, 0, o1)]); q(W - Fw, W, o0, o1); q(0, W, o0, o0 + Fw); q(0, W, o1 - Fw, o1); } }
+      pn.open.push([P(hg, 0, o0), P(hg, W, o0), P(hg, W, o1), P(hg, 0, o1)]); q(W - Fw, W, o0, o1); q(0, W, o0, o0 + Fw); q(0, W, o1 - Fw, o1);
+      if (tz.length > 1) { const R = hd - tz[1] - M, cs = Math.cos(HOPPER_A), sn = Math.sin(HOPPER_A), T = r => [r * sn, hd - r * cs], tp = (sa, sb, r0, r1) => { const [p0, z0] = T(r0), [p1, z1] = T(r1); return [P(sa, p0, z0), P(sb, p0, z0), P(sb, p1, z1), P(sa, p1, z1)]; };   // top row: top-hung, tilts out (owner 2026-10-26)
+        pn.open.push(tp(s0, s1, 0, R)); pn.fr.push(tp(s0, s1, R - Fw, R), tp(s0, s0 + Fw, 0, R), tp(s1 - Fw, s1, 0, R)); } } }
   // extBand: white slab edge per storey on tall exterior faces (as TRPF facades)
   const es = `rgba(70,62,54,${0.45 * lit})`, extBand = rgbStr(TRPF_PAL.white.map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1)));   // face edges: floor/ceiling/top/bottom lines + corners
   const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
