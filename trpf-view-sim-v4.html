@@ -391,16 +391,17 @@ rebuildTRPF();
 const UNIT_SPOTS = GEO.spots.map(s => ({ ...s })).filter(s => s.id !== 'mbrE');   // no east window in the master bedroom (confirmed by owner)
 // Window glazing widths from the 4-Room Type 1 plan (double-line spans between solid stubs, owner markup 2026-10-25; W1: 0.55m parapet to ~2.2m head).
 // depth = room depth from window wall (4-Room Type 1 plan: living/dining 7.75m, master 4.75m; BR2/BR3 ≈3.6m scaled from plan).
-const WIN = { living: { w: 2.52, roomW: 3.35, depth: 7.75, room: 'Living' }, br3: { w: 1.97, roomW: 3.25, depth: 3.6, room: 'Bedroom 3' }, br2: { w: 1.96, roomW: 3.05, depth: 3.6, room: 'Bedroom 2' }, mbrS: { w: 2.0, roomW: 3.2, depth: 4.75, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' } };
+const WIN = { living: { w: 2.52, roomW: 3.35, depth: 7.75, room: 'Living' }, br3: { w: 1.97, roomW: 3.25, depth: 3.6, room: 'Bedroom 3' }, br2: { w: 1.96, roomW: 3.05, depth: 3.6, room: 'Bedroom 2' }, mbrS: { w: 2.0, roomW: 3.2, depth: 4.75, room: 'Master (S)' }, mbrE: { w: 2.9, roomW: 3.2, room: 'Master (E)' },
+  yard: { w: 2.0, roomW: 1.36, depth: 2.28, room: 'Service yard' } };   // service yard opening (owner 2026-10-26: typical BTO yard → open, no glass; 1.0 m parapet, 2.4 m beam soffit; view only, no daylight metrics)
 // Posture presets: eye height above floor, distance back from the glass (sofa: living only; bed: bedrooms only).
 const POSTURES = { stand: { label: 'Standing', eye: 1.55, d: 0.5 }, sofa: { label: 'Sofa', eye: 1.2, d: 3.5, only: ['living'] }, bed: { label: 'Bed', eye: 0.9, d: 2.5, only: ['br3', 'br2', 'mbrS'] } };
 UNIT_SPOTS.forEach(sp => Object.assign(sp, WIN[sp.id]));
 const WIN_HEAD = 2.2;
 // Unit #134 interior, traced from the HDB 4-Room Type 1 plan (owner upload 2026-10-25; dims = wall centre-lines, rest scaled ≈96.7 px/m).
 // Plan metres: X along facade (0 = E/master side → W/living), Y into the flat (0 = bedroom facade outer face). Walls [x0,y0,x1,y1,z0,z1,kind]; visual only.
-const UNIT_H = 2.6;
+const UNIT_H = 2.6, YARD = { sill: 1.0, head: 2.4 };
 const UNIT_PLAN = (() => {
-  const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, y0]); };   // glass at the outer face: reveals/sill/soffit stay wholly indoors (a mid-wall glass line let the window pane erase their outer half)
+  const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, y0, 'x', 0.55, WIN_HEAD]); };   // glass at the outer face: reveals/sill/soffit stay wholly indoors (a mid-wall glass line let the window pane erase their outer half)
   win(0.695, 2.7, 0, F); win(3.62, 5.58, 0, F); win(6.78, 8.75, 0, F); win(9.99, 12.51, 1.53, 1.68);   // W1 glazing (plan double lines): master, BR2, BR3, living
   w.push([0.31, 0, 0.695, F], [2.7, 0, 3.62, F], [8.75, 0, 9.2, F], [9.51, 1.53, 9.99, 1.68], [12.51, 1.53, 12.86, 1.68]);   // solid wall stubs at the window ends (owner markup 2026-10-25)
   w.push([0, 0, 0.31, 4.48], [5.58, 0, 6.79, 0.16], [9.2, 0, 9.3, 1.69], [9.3, 1.53, 9.51, 1.69], [12.86, 1.53, 13.12, 7.74],   // E wall (no window, owner), columns, W wall
@@ -411,17 +412,32 @@ const UNIT_PLAN = (() => {
     [4.22, 3.44, 4.3, 4.48, 2.1, H],                                                                      // master door (into hallway)
     [0, 4.48, 1.94, 4.78], [1.63, 4.78, 1.94, 6.42], [1.94, 4.48, 2.75, 4.58], [2.75, 4.48, 3.45, 4.58, 2.1, H], [3.45, 4.48, 5.35, 4.58],
     [5.35, 4.48, 6.0, 4.58, 2.1, H], [6.0, 4.48, 6.19, 4.58], [4.22, 4.58, 4.3, 6.3], [1.94, 6.3, 6.19, 6.42], [6.19, 4.48, 6.6, 6.42],   // bath/WC1 (en-suite), bath/WC2
-    [5.6, 6.3, 7.18, 6.42], [5.6, 6.42, 5.75, 8.7], [7.11, 6.42, 7.18, 7.0], [7.11, 7.0, 7.18, 7.9, 2.1, H], [7.11, 7.9, 7.18, 8.7],   // service yard
+    [5.6, 6.3, 7.18, 6.42], [5.6, 6.42, 5.75, 6.6], [5.6, 6.6, 5.75, 8.6, 0, YARD.sill], [5.6, 6.6, 5.75, 8.6, YARD.head, H], [5.6, 8.6, 5.75, 8.7], [7.11, 6.42, 7.18, 7.0], [7.11, 7.0, 7.18, 7.9, 2.1, H], [7.11, 7.9, 7.18, 8.7],   // service yard
     [9.2, 6.1, 9.51, 8.99], [5.6, 8.7, 9.51, 8.99],                                                       // kitchen (open to dining)
     [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'door'], [11.1, 7.46, 11.3, 7.74],   // main door
     [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
+  // service yard opening (E wall, faces ≈80°; open, no glass) + outside it (estimates, typical BTO): laundry rack (2-rail, rungs every 0.2 m) just under the beam;
+  // bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 2 condensers 0.9×0.35×0.7 m.
+  wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
+  w.push([5.08, 6.65, 5.11, 8.55, 2.3, 2.33, 'rack'], [1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
+  for (let y = 6.7; y < 8.55; y += 0.2) w.push([5.08, y, 5.6, y + 0.03, 2.3, 2.33, 'rack']);
+  for (let k = -6; k <= 6; k++) { const z = k * 2.8;
+    w.push([1.63, 6.42, 4.03, 7.65, z - 0.15, z, 'ext'], [1.63, 7.55, 4.03, 7.65, z, z + 1, 'ext'], [1.63, 6.42, 1.73, 7.55, z, z + 1, 'ext'], [3.93, 6.42, 4.03, 7.55, z, z + 1, 'ext'],
+      [1.85, 6.5, 2.75, 6.85, z, z + 0.7, 'ac'], [2.95, 6.5, 3.85, 6.85, z, z + 0.7, 'ac']); }
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
   // per window: centre X, inner wall face Y, plan room depth to the opposite wall
-  const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 } };
+  const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 }, yard: { yc: 7.6, xin: 5.75, depth: 1.36 } };   // yard: opening along Y (centre yc), inner face X = xin, eye looks −X
   return { walls: w, wins, outline, floors, spots };
 })();
+const UNIT_FN = 170.3;   // bedroom/living facade normal: plan ↔ world frame for every spot (yard opening faces UNIT_FN − 90)
+const spotP = S => S.yc != null ? [S.xin - 0.3, S.yc] : [S.xc, S.yin - 0.3];        // plan point of the world spot (0.15 m outside the outer face)
+const spotEyeP = (S, d) => S.yc != null ? [S.xin + d, S.yc] : [S.xc, S.yin + d];    // default interior eye, d back from the opening
+const isExtKind = k => k === 'ext' || k === 'ac' || k === 'rack';
+{ // service yard spot: world position from the 4 window spots (mean of plan → world maps)
+  const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [yx, yy] = spotP(UNIT_PLAN.spots.yard), ws = UNIT_SPOTS.map(sp => { const [px, py] = spotP(UNIT_PLAN.spots[sp.id]); return [sp.x + u[0] * (yx - px) - n[0] * (yy - py), sp.z + u[1] * (yx - px) - n[1] * (yy - py)]; });
+  UNIT_SPOTS.push({ id: 'yard', label: 'Service yard (E)', x: +(ws.reduce((a, p) => a + p[0], 0) / ws.length).toFixed(2), z: +(ws.reduce((a, p) => a + p[1], 0) / ws.length).toFixed(2), normal: +(UNIT_FN - 90).toFixed(1), viewOnly: true, ...WIN.yard }); }
 const UNIT_FLOOR = { tile: [200, 194, 184], wood: [170, 134, 98], wet: [152, 158, 162], kitchen: [184, 180, 172] };
 const jambDeg = sp => Math.atan((sp.w / 2) / Math.max(0.05, state.standDist)) / DEG;
 UNIT_SPOTS.forEach(sp => { // push each spot out of the rasterised 32A footprint (+0.15m)
@@ -796,7 +812,7 @@ function drawSunChart() {
   el.style.color = now.state === 'direct' ? '#fbbf24' : now.state === 'blocked' ? '#fb7185' : '#64748b';
   // per-room comparison: mean daily direct-sun hours, cool months (Nov–Feb) / hot months (Apr–Sep)
   const avg = (g, ms) => ms.reduce((a, k) => a + g[k].hrs, 0) / ms.length, COOL = [10, 11, 0, 1], HOT = [3, 4, 5, 6, 7, 8];
-  $('sunRooms').innerHTML = 'h/day Nov–Feb / Apr–Sep: ' + UNIT_SPOTS.map(sp => { const g = sunGrid({ x: sp.x, z: sp.z, normal: sp.normal }), on = sp.id === state.spot; return `<span style="color:${on ? '#fbbf24' : '#cbd5e1'}">${sp.room.replace('Bedroom ', 'BR').replace('Master (S)', 'Master')} ${avg(g, COOL).toFixed(1)}/${avg(g, HOT).toFixed(1)}</span>`; }).join(' • ');
+  $('sunRooms').innerHTML = 'h/day Nov–Feb / Apr–Sep: ' + UNIT_SPOTS.filter(sp => !sp.viewOnly).map(sp => { const g = sunGrid({ x: sp.x, z: sp.z, normal: sp.normal }), on = sp.id === state.spot; return `<span style="color:${on ? '#fbbf24' : '#cbd5e1'}">${sp.room.replace('Bedroom ', 'BR').replace('Master (S)', 'Master')} ${avg(g, COOL).toFixed(1)}/${avg(g, HOT).toFixed(1)}</span>`; }).join(' • ');
   sunChart._L = L; sunChart._R = R; sunChart._T = T; sunChart._B = B; sunChart._cw = cw; sunChart._ch = ch;
 }
 sunChart.addEventListener('pointerdown', e => { const { x, y } = localXY(sunChart, e), c = sunChart; const j = Math.floor((x - c._L) / c._cw), i = Math.floor((y - c._T) / c._ch); if (i < 0 || i > 11 || j < 0 || x > c._w - c._R) return;
@@ -875,7 +891,7 @@ function roomMetrics(sp) {
 }
 let rmCache = { key: '', v: null }, kwhCache = { key: '', v: 0 };
 function drawRoomPanel() {
-  const sp = curSpot(), el = $('roomLight'); if (!el) return; if (!sp) { el.innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
+  const sp = roomSpot(), el = $('roomLight'); if (!el) return; if (!sp) { el.innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
   const key = [sp.id, state.obsFloor, state.eyeOffset, state.dateStr, state.hour, state.glass, WORLD_VER].join('|'); if (rmCache.key !== key) rmCache = { key, v: roomMetrics(sp) };
   const M = rmCache.v, N = M.now, P = N.Lr, tag = (v, good, ok) => `<span style="color:${v >= good ? '#34d399' : v >= ok ? '#fbbf24' : '#fb7185'}">`;
   el.innerHTML = `${sp.room}: ${Wr2(sp)} • glazing ${M.Aw.toFixed(1)} m² net<br>` +
@@ -899,7 +915,7 @@ const cmpDefault = ds => { const y = ds.slice(0, 4), m = +ds.slice(5, 7); return
 let cmpDate = '';
 const fmtT = t => `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.round((t % 1) * 60)).padStart(2, '0')}`;
 function drawLightChart() {
-  const w = lightChart._w, h = lightChart._h, sp = curSpot(), ctx = lightCtx; if (!w) return; ctx.clearRect(0, 0, w, h);
+  const w = lightChart._w, h = lightChart._h, sp = roomSpot(), ctx = lightCtx; if (!w) return; ctx.clearRect(0, 0, w, h);
   if (!sp) { $('lightSum').innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
   if (!cmpDate) cmpDate = cmpDefault(state.dateStr); if (cmpDateEl.value !== cmpDate) cmpDateEl.value = cmpDate;
   const A = dayCurve(sp, state.dateStr), B = dayCurve(sp, cmpDate), L = 34, R = 6, T = 6, Bm = 14, lo = 1, hi = 5;   // log10 lux 10..100k
@@ -925,7 +941,7 @@ lightChart.addEventListener('pointerdown', e => { const { x } = localXY(lightCha
 // heat vs 1 room aircon 9,000 BTU/h ≈ 2.6 kW cooling.
 const ROOM_REF = { living: { lux: [100, 300], adf: 1.5 }, br3: { lux: [50, 150], adf: 1 }, br2: { lux: [50, 150], adf: 1 }, mbrS: { lux: [50, 150], adf: 1 } };
 function drawRoomHud() {
-  const el = $('roomHud'), sp = curSpot(); if (!el) return; if (!sp || !$('hudToggle').checked) { el.style.display = 'none'; if ($('dragHint')) $('dragHint').style.display = ''; return; } el.style.display = '';
+  const el = $('roomHud'), sp = roomSpot(); if (!el) return; if (!sp || !$('hudToggle').checked) { el.style.display = 'none'; if ($('dragHint')) $('dragHint').style.display = ''; return; } el.style.display = '';
   const M = rmCache.v || roomMetrics(sp), N = M.now, P = N.Lr, R = ROOM_REF[sp.id] || ROOM_REF.living, D = dayCurve(sp, state.dateStr), E = dayCurve(sp, `${state.dateStr.slice(0, 4)}-03-21`);
   const lux = Math.round(N.luxSky + N.luxSun), day = P.sun.elDeg > 0, c = ok => `color:${ok === 2 ? '#34d399' : ok === 1 ? '#fbbf24' : '#fb7185'}`;
   const luxOk = !day ? 0 : lux > 3000 ? 0 : lux >= R.lux[0] ? 2 : 1, lab = lux > 3000 ? ' glare' : lux >= 300 ? ' task' : lux >= R.lux[0] ? ' ok' : ' dim';
@@ -947,6 +963,7 @@ const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m`;
 
 /* ===================== DASHBOARD ===================== */
 const curSpot = () => UNIT_SPOTS.find(sp => sp.id === state.spot) || null;
+const roomSpot = () => { const sp = curSpot(); return sp && !sp.viewOnly ? sp : null; };   // daylight/heat panels: windowed rooms only (yard = view only)
 function setTag(el, text, tone) { const t = { ok: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', bad: 'bg-rose-500/15 text-rose-300 border-rose-500/30', mid: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }; el.textContent = text; el.className = `text-[10px] mono px-2 py-0.5 rounded border ${t[tone]}`; }
 function buildGroupRows() {
   const c = $('groupRows'); c.innerHTML = '';
@@ -1390,7 +1407,7 @@ function drawInterior(ctx, cam, env, sp) {
   const S = UNIT_PLAN.spots[sp.id]; if (!S) return;
   const snap = drawInterior.snap || (drawInterior.snap = document.createElement('canvas')); if (snap.width !== ctx.canvas.width || snap.height !== ctx.canvas.height) { snap.width = ctx.canvas.width; snap.height = ctx.canvas.height; }
   { const g = snap.getContext('2d'); g.clearRect(0, 0, snap.width, snap.height); g.drawImage(ctx.canvas, 0, 0); }   // outside scene, restored inside window panes
-  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + d;
+  const e = state.eyeOffset, d = Math.max(0.1, state.standDist), nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], H = UNIT_H, [ex, ey] = state.walk ? [state.walk.X, state.walk.Y] : spotEyeP(S, d);
   const V = (X, Y, h) => { const s = X - ex, dd = ey - Y; return [n[0] * dd + u[0] * s, h - e, n[1] * dd + u[1] * s]; };
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), C = (rgb, k = 1) => rgbStr(rgb.map(c => clamp(c * lit * k, 0, 255)));
   const poly = (pts, fill) => { const q = cam.projDirPoly(pts); if (q) fillPoly(ctx, q, fill, fill, 0.6); return q; };
@@ -1398,7 +1415,7 @@ function drawInterior(ctx, cam, env, sp) {
   const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
   const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey);
   for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of UNIT_PLAN.walls) {
-    const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'ext' ? TRPF_PAL.greige.map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : [232, 226, 214];
+    const col = kind === 'door' ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [190, 192, 196] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : [232, 226, 214];
     for (const [ax, ay, bx, by, nx, ny] of [[x0, y0, x1, y0, 0, -1], [x1, y0, x1, y1, 1, 0], [x1, y1, x0, y1, 0, 1], [x0, y1, x0, y0, -1, 0]]) {
       if ((ex - ax) * nx + (ey - ay) * ny <= 1e-3) continue;
       const L = Math.hypot(bx - ax, by - ay), fill = C(col, (ny < 0 ? 1 : ny > 0 ? 0.74 : 0.86) * clamp(1.04 - 0.035 * (ay + by) / 2, 0.7, 1));
@@ -1412,13 +1429,13 @@ function drawInterior(ctx, cam, env, sp) {
         return !(UNIT_PLAN.walls.some(Q => !own(Q) && inQ(Q, px - nx * 1e-3, py - ny * 1e-3)) && !buried(px + nx * 1e-3, py + ny * 1e-3)); };
       const k = tt.length - 1, P = i => [ax + (bx - ax) * tt[i], ay + (by - ay) * tt[i]], keep = Array.from({ length: k }, (_, i) => { const a = P(i), b = P(i + 1); return !buried((a[0] + b[0]) / 2 + nx * 1e-3, (a[1] + b[1]) / 2 + ny * 1e-3); });
       for (let i = 0; i < k; i++) { if (!keep[i]) continue; const p0 = P(i), p1 = P(i + 1);
-        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: kind === 'ext', ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
+        items.push({ d: Math.hypot((p0[0] + p1[0]) / 2 - ex, (p0[1] + p1[1]) / 2 - ey), pts: [V(p0[0], p0[1], z0), V(p1[0], p1[1], z0), V(p1[0], p1[1], z1), V(p0[0], p0[1], z1)], fill, ext: isExtKind(kind), ends: [i === 0 ? edge(0) : !keep[i - 1], i === k - 1 ? edge(1) : !keep[i + 1]] }); }
     }
-    if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05) });   // sill top
-    if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8) });    // head / lintel soffit
+    if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
+    if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
   const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push([V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
-  for (const [wi, [x0, x1, yg]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
+  for (const [wi, [x0, x1, yg, ax]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; if (ax === 'y') continue;   /* yard opening: no glass/frames */ const Fw = 0.05, M = 0.03, sill = 0.55, head = WIN_HEAD;
     bar(x0, x0 + Fw, sill, head, yg); bar(x1 - Fw, x1, sill, head, yg); bar(x0, x1, sill, sill + Fw, yg); bar(x0, x1, head - Fw, head, yg);
     const nP = Math.max(2, Math.round((x1 - x0) / 0.7)); for (let k = 1; k < nP; k++) { const s = x0 + ((x1 - x0) * k) / nP; bar(s - M, s + M, sill, head, yg); } bar(x0, x1, 1.8 - M, 1.8 + M, yg); }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
@@ -1429,19 +1446,19 @@ function drawInterior(ctx, cam, env, sp) {
   poly(ring(UNIT_PLAN.outline, H), C([238, 236, 230], 0.95));
   // sun patch on the floor, drawn before walls so they occlude it (wall-relative u, y above floor, z' into room; roomLight box) → plan (xc+u, yin+z'), clipped to the plan room depth
   const clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
-  const L = roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
+  const L = sp.viewOnly ? null : roomLight(sp); if (L && L.patches.length) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const a = 0.5 * clamp(L.sun.elDeg / 6, 0, 1);
     L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length > 2) poly(q.map(([uu, yy, zz]) => V(S.xc + uu, S.yin + zz, yy)), `rgba(255,226,170,${a})`); }); ctx.restore(); }
   // exterior (fins, recess walls) only through the glass: each window is one painter item at the glass line that restores the outside scene (snapshot) inside
   // its projected pane and draws the exterior faces there, so nearer room walls hide it and nothing indoors leaks into the view out.
   const ext = items.filter(it => it.ext).sort((a, b) => b.d - a.d);
-  UNIT_PLAN.wins.forEach(([x0, x1, yg], wi) => items.push({ d: near(x0, yg, x1, yg) - 0.02, wi, pane: [V(x0, yg, 0.55), V(x1, yg, 0.55), V(x1, yg, WIN_HEAD), V(x0, yg, WIN_HEAD)] }));
+  UNIT_PLAN.wins.forEach(([a0, a1, g, ax, sl, hd], wi) => items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, wi, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, wi, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }));
   items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => poly(e2.pts, e2.fill)); ctx.restore(); frames[it.wi].forEach(f => poly(f, fc)); return; }
     poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
 // Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
-const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['living', [6.6, 3.44, 9.38, 6.1]]];
+const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]]];
 const walkRing = UNIT_PLAN.outline.flat();
 const walkFree = (X, Y, r = 0.2) => ringIn(walkRing, X, Y) && !UNIT_PLAN.walls.some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r);
 function walkSet(X, Y) {
@@ -1450,14 +1467,14 @@ function walkSet(X, Y) {
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
 function walkStep(k) {
-  const sp = curSpot(); if (!state.walk || !sp) return; const nb = sp.normal * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
+  const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk;
   if (walkFree(X + dX, Y + dY)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY)) walkSet(X, Y + dY);   // slide along walls
   renderAll();
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } state.walk = { X: S.xc, Y: S.yin + Math.max(0.3, state.standDist) }; state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; renderAll();
 }
 const WALK_MAP = { s: 13.5, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
@@ -1465,8 +1482,8 @@ function drawWalkMap() {
   const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1; if (cv.width !== 190 * dpr) { cv.width = 190 * dpr; cv.height = 140 * dpr; }
   const g = cv.getContext('2d'), sc = WALK_MAP.s, P = (X, Y) => [(X - WALK_MAP.ox) * sc, (Y - WALK_MAP.oy) * sc]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, 190, 140);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of UNIT_PLAN.walls) { if (kind === 'ext') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : kind === 'door' ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
-  const sp = curSpot(), nb = (sp ? sp.normal : 170.3) * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of UNIT_PLAN.walls) { if (isExtKind(kind)) continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : kind === 'door' ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
   const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
   g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '9px Inter, sans-serif'; g.fillStyle = '#94a3b8'; g.fillText('S ▲ windows', 4, 10);
 }
@@ -1474,15 +1491,15 @@ function drawWalkMap() {
 // Spot ≈ window centre 0.15 m outside the outer face (outer face = yin − 0.15). Window metrics/masks keep using the spot.
 function roomEyeWorld() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
-  const ex = state.walk ? state.walk.X : S.xc, ey = state.walk ? state.walk.Y : S.yin + Math.max(0.1, state.standDist), nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - S.yin + 0.3, s = ex - S.xc;
+  const [ex, ey] = state.walk ? [state.walk.X, state.walk.Y] : spotEyeP(S, Math.max(0.1, state.standDist)), [px, py] = spotP(S), nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - py, s = ex - px;
   return [sp.x + u[0] * s - n[0] * back, sp.z + u[1] * s - n[1] * back];
 }
 // Room interior on: Blk 32A raster boxes whose centre lies in #134's own plan footprint are skipped in the 3D view (the traced interior + ext walls replace them;
 // their 0.5 m staircase edges otherwise stood up to ~0.5 m proud of the true facade and filled the glass once the eye moved inside, owner report 2026-10-25).
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
-  const nb = sp.normal * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)];
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = S.xc + rx * u[0] + rz * u[1], Y = S.yin - 0.3 - (rx * n[0] + rz * n[1]); return X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4; };
+  const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4; };
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
