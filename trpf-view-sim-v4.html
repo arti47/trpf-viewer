@@ -446,6 +446,13 @@ const UNIT_PLAN = (() => {
     [13.12, 1.3, 15.45, 1.6, -2.8, H, 'cor'], [14.25, 1.6, 14.35, 5.6, -2.8, H, 'cor'], [12.86, 1.6, 13.12, 1.68, -2.8, H, 'cor']);
   for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break;   // stair flights (0.175 m risers, 0.28 m treads): E half down, W half up
     w.push([13.12, y0, 14.25, y1, -2.8, -0.175 * i, 'stair'], [14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
+  // #132 exterior across the recess N of #134 (owner plan markup 2026-10-26, ≈75 px/m, ±0.2 m): bath block + master bedroom E end (ground to roof, clamped in drawInterior),
+  // yard E wall; per storey ±6: yard grating ledge (plan hatched box, X 8.85–9.42: slab + 1.0 m metal screen, estimate), A/C ledge (X 5.36–8.05, Y 12.11–13.2: slab, 1.0 m parapet, 1 condenser), windows.
+  w.push([5.36, 13.2, 9.7, 15.33, -200, 200, 'ext'], [3.7, 15.07, 9.7, 19.06, -200, 200, 'ext'], [9.42, 10.95, 9.7, 13.2, -200, 200, 'ext']);
+  for (let k = -6; k <= 6; k++) { const z = k * 2.8;
+    w.push([8.85, 11.08, 9.42, 13.36, z - 0.12, z, 'ext'], [8.85, 11.08, 8.9, 13.36, z, z + 1.0, 'rack'], [8.9, 11.08, 9.42, 11.13, z, z + 1.0, 'rack'], [9.4, 11.3, 9.42, 13.0, z + 1.0, z + 2.4, 'xglass'],
+      [5.36, 12.11, 8.05, 13.2, z - 0.15, z, 'ext'], [5.36, 12.11, 8.05, 12.21, z, z + 1, 'ext'], [5.36, 12.21, 5.46, 13.2, z, z + 1, 'ext'], [7.95, 12.21, 8.05, 13.2, z, z + 1, 'ext'],
+      [6.2, 12.8, 7.2, 13.18, z, z + 0.95, 'ac'], [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
@@ -464,7 +471,7 @@ const UNIT_PLAN = (() => {
 const UNIT_FN = 170.3;   // bedroom/living facade normal: plan ↔ world frame for every spot (yard opening faces UNIT_FN − 90)
 const spotP = S => S.yc != null ? [S.xin - 0.3, S.yc] : [S.xc, S.yin - 0.3];        // plan point of the world spot (0.15 m outside the outer face)
 const spotEyeP = (S, d) => S.yc != null ? [S.xin + d, S.yc] : [S.xc, S.yin + d];    // default interior eye, d back from the opening
-const isExtKind = k => k === 'ext' || k === 'ac' || k === 'rack';
+const isExtKind = k => k === 'ext' || k === 'ac' || k === 'rack' || k === 'xglass';
 const doorOpen = () => !!state.walk || state.spot === 'corr';   // main door open while walking or viewing from the corridor
 const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen'; return UNIT_PLAN.walls.filter(q => q[6] !== o); };
 const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen';
@@ -1448,8 +1455,10 @@ function drawInterior(ctx, cam, env, sp) {
   const ring = (r, h) => r.map(([X, Y]) => V(X, Y, h)), box = ([x0, y0, x1, y1], h) => ring([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], h);
   const line = (a, b, st, lw = 1) => { const q = cam.projDirPoly([a, b, b]); if (!q) return; ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); q.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.strokeStyle = st; ctx.lineWidth = lw; ctx.stroke(); };
   const items = [], near = (x0, y0, x1, y1) => Math.hypot(clamp(ex, x0, x1) - ex, clamp(ey, y0, y1) - ey), WL = unitWalls();
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of WL) {
-    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [190, 192, 196] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
+  const zG = -(VOID_DECK_HEIGHT + (state.obsFloor - 1) * FLOOR_HEIGHT), zR = BLK_TOP + TRPF_CROWN + zG;   // ground / roof relative to this slab: exterior faces clamped
+  for (let [x0, y0, x1, y1, z0 = 0, z1 = H, kind] of WL) {
+    if (isExtKind(kind)) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : isExtKind(kind) ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige).map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1) / lit) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
     for (const [ax, ay, bx, by, nx, ny] of [[x0, y0, x1, y0, 0, -1], [x1, y0, x1, y1, 1, 0], [x1, y1, x0, y1, 0, 1], [x0, y1, x0, y0, -1, 0]]) {
       if ((ex - ax) * nx + (ey - ay) * ny <= 1e-3) continue;
       const L = Math.hypot(bx - ax, by - ay), fill = C(col, (ny < 0 ? 1 : ny > 0 ? 0.74 : 0.86) * clamp(1.04 - 0.035 * (ay + by) / 2, 0.7, 1));
@@ -1541,7 +1550,7 @@ function roomEyeWorld() {
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6); };   // + the common corridor strip (traced corridor replaces it)
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
