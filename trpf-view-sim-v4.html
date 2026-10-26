@@ -1215,7 +1215,7 @@ const STACK_W = 7.5, STACK_TYPES = ['brown', 'greige', 'white'];
 function trpfFaceInfo(P, f) {
   const B = P.B, p0 = f.pts[0], p1 = f.pts[1], loc = (x, z) => { const dx = x - B.ox, dz = z - B.oz; return [B.c * dx + B.s * dz, -B.s * dx + B.c * dz]; };
   const a = loc(p0[0], p0[2]), b = loc(p1[0], p1[2]), k = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]) ? 0 : 1, off = B.name.charCodeAt(4) + B.name.charCodeAt(6);
-  const type = al => STACK_TYPES[(((Math.floor(al / STACK_W) + off) % 3) + 3) % 3];
+  const plain = B.name.startsWith('Blk 31B'), type = al => { const t = STACK_TYPES[(((Math.floor(al / STACK_W) + off) % 3) + 3) % 3]; return plain && t === 'brown' ? 'plain' : t; };   // 31B: no brown frames/bands (owner 2026-10-26: no rendering of 31B, remove)
   return { a0: a[k], a1: b[k], type, mid: type((a[k] + b[k]) / 2) };
 }
 function trpfFacade(ctx, cam, f, P, env, dist, info) {
