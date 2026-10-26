@@ -148,7 +148,7 @@
             <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
             <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
             <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
-            <button id="expoBtn" class="chip" aria-pressed="true" title="Eye/phone exposure from inside the room: bright outside washes out, room darker" style="border-color:#34d399">◐ Exposure</button>
+            <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
             <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
             <button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷</button>
             <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
@@ -560,7 +560,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: true, live: false
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, live: false
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -1554,7 +1554,7 @@ function exposureOf(env) {
   const rs = roomSpot(), W = env.W, cs = clearSky(env.sun.elDeg); let adf = 1.5, inSun = 0;
   if (rs) { const key = [rs.id, state.obsFloor, state.eyeOffset, state.dateStr, state.hour, state.glass, WORLD_VER].join('|'); if (rmCache.key !== key) rmCache = { key, v: roomMetrics(rs) }; adf = rmCache.v.adf; inSun = rmCache.v.now.luxSun; }
   const out = W.sun > 0 ? 120 * cs.dhi + 95 * cs.dni * Math.sin(env.sun.elDeg * DEG) * W.sun : (300 + 21000 * Math.sin(env.sun.elDeg * DEG)) * W.dark, inn = Math.max(5, (adf / 100) * (W.sun > 0 ? 120 * cs.dhi : out) + inSun * W.sun);
-  const st = Math.log2(out / inn); return { wash: clamp((st - 3) * 0.11, 0, 0.45), kIn: clamp(1.1 - (st - 3) * 0.07, 0.72, 1.05), glow: clamp((st - 3) * 0.2, 0, 0.8), st };
+  const st = Math.log2(out / inn); return { wash: clamp((st - 4) * 0.05, 0, 0.18), kIn: clamp(1.05 - (st - 4) * 0.04, 0.85, 1.05), glow: 0, st };   // subtle; owner 2026-10-26: strong wash + bloom read as permanent haze
 }
 // Live mode: redraw the 3D view ~10×/s with a running clock (traffic, ships, clouds, glitter, rain); time of day itself is not advanced.
 const LIVE = { t: 0, last: 0 };
