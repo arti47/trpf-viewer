@@ -1444,7 +1444,7 @@ function drawInterior(ctx, cam, env, sp) {
   frames.open = UNIT_PLAN.wins.map(() => []);
   for (const [wi, [a0, a1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax; const Fw = 0.05, M = 0.03;
     bar(a0, a0 + Fw, sl, hd, g); bar(a1 - Fw, a1, sl, hd, g); bar(a0, a1, sl, sl + Fw, g); bar(a0, a1, hd - Fw, hd, g);
-    for (const [s0, s1, hg] of UNIT_PLAN.sashes[wi]) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M, sl, hd, g);
+    for (const [s0, s1, hg] of UNIT_PLAN.sashes[wi]) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M + (UNIT_PLAN.sashes[wi].some(q => Math.abs(q[1] - s0) < 0.01) ? 0 : Fw - M), sl, hd, g); if (s1 < a1 - 0.01 && !UNIT_PLAN.sashes[wi].some(q => Math.abs(q[0] - s1) < 0.01)) bar(s1 - Fw, s1, sl, hd, g);   // jamb frame against a column
       if (!state.winOpen) continue; const W = s1 - s0, P = (o, t) => (ax === 'y' ? V(g - o, hg, t) : V(hg, g - o, t)), q = (o0, o1, t0, t1) => frames[wi].push([P(o0, t0), P(o1, t0), P(o1, t1), P(o0, t1)]);
       frames.open[wi].push([P(0, sl), P(W, sl), P(W, hd), P(0, hd)]); q(W - Fw, W, sl, hd); q(0, W, sl, sl + Fw); q(0, W, hd - Fw, hd); } }
   const es = `rgba(70,62,54,${0.45 * lit})`;   // face edges: floor/ceiling/top/bottom lines + corners
