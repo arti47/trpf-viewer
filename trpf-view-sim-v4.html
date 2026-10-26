@@ -430,9 +430,9 @@ const UNIT_PLAN = (() => {
   // per window: centre X, inner wall face Y, plan room depth to the opposite wall
   const spots = { mbrS: { xc: 1.6975, yin: F, depth: 4.33 }, br2: { xc: 4.6, yin: F, depth: 3.18 }, br3: { xc: 7.765, yin: F, depth: 3.18 }, living: { xc: 11.25, yin: 1.68, depth: 5.78 }, yard: { yc: 7.6, xin: 5.75, depth: 1.36 } };   // yard: opening along Y (centre yc), inner face X = xin, eye looks −X
   // casement sashes per window [s0, s1, hinge] (owner markups 2026-10-26): master/BR3 = outward pair hinged at the outer ends + column + single hinged at the W end;
-  // living = pair | column | pair, each pair hinged at its outer ends; BR2 = master pattern (no markup, estimate); yard 3 sashes (estimate)
+  // living = pair | column | fixed pane 11.37–11.94 + single hinged at the W end (owner re-markup); BR2 = master pattern (no markup, estimate); yard 3 sashes (estimate)
   const sashes = [[[0.695, 1.3, 0.695], [1.3, 1.9, 1.9], [2.06, 2.7, 2.7]], [[3.62, 4.22, 3.62], [4.22, 4.82, 4.82], [4.98, 5.58, 5.58]], [[6.78, 7.375, 6.78], [7.375, 7.97, 7.97], [8.14, 8.75, 8.75]],
-    [[9.99, 10.595, 9.99], [10.595, 11.2, 11.2], [11.37, 11.94, 11.37], [11.94, 12.51, 12.51]], [[6.6, 7.27, 6.6], [7.27, 7.93, 7.93], [7.93, 8.6, 8.6]]];
+    [[9.99, 10.595, 9.99], [10.595, 11.2, 11.2], [11.94, 12.51, 12.51]], [[6.6, 7.27, 6.6], [7.27, 7.93, 7.93], [7.93, 8.6, 8.6]]];
   w.push([1.9, 0, 2.06, F], [4.82, 0, 4.98, F], [7.97, 0, 8.14, F], [11.2, 1.53, 11.37, 1.68]);   // structural columns in the window lines (plan black squares; BR2 estimate)
   return { walls: w, wins, outline, floors, spots, sashes };
 })();
