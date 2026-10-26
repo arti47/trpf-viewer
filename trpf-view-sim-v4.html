@@ -1439,7 +1439,7 @@ function drawInterior(ctx, cam, env, sp) {
     if (z1 < H && e > z1) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
     if (z0 > 0 && e < z0) items.push({ d: near(x0, y0, x1, y1), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
-  const fc = rgbStr([58, 62, 68].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
+  const fc = rgbStr([238, 238, 234].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
   // casement frames: outer frame + a bar at each sash joint; Windows open → each sash swung out 90° about its hinge (glass tint + sash frame, outside the glass line)
   frames.open = UNIT_PLAN.wins.map(() => []);
   for (const [wi, [a0, a1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax; const Fw = 0.05, M = 0.03;
