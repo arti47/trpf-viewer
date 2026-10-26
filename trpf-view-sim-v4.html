@@ -417,12 +417,12 @@ const UNIT_PLAN = (() => {
     [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'door'], [11.1, 7.46, 11.3, 7.74],   // main door
     [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
   // service yard opening (E wall, faces ≈80°): owner-planned casement (2026-10-26) on the 1.0 m parapet up to the 2.4 m beam, 3 side-hung sashes, clear glass (closed);
-  // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 2 condensers 0.9×0.35×0.7 m.
+  // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 1 System-4 condenser 1.0×0.38×0.95 m (owner 2026-10-26).
   wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
   w.push([1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
     w.push([1.63, 6.42, 4.03, 7.65, z - 0.15, z, 'ext'], [1.63, 7.55, 4.03, 7.65, z, z + 1, 'ext'], [1.63, 6.42, 1.73, 7.55, z, z + 1, 'ext'], [3.93, 6.42, 4.03, 7.55, z, z + 1, 'ext'],
-      [1.85, 6.5, 2.75, 6.85, z, z + 0.7, 'ac'], [2.95, 6.5, 3.85, 6.85, z, z + 0.7, 'ac']); }
+      [2.3, 6.5, 3.3, 6.88, z, z + 0.95, 'ac']); }
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
