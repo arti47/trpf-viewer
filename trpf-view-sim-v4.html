@@ -354,6 +354,10 @@ const PARCELS = GEO.parcels.concat([{"id":"E1","label":"Planned residential E of
 // RT excludes the 106 ha Marina East reserve that merely touches the 700m radius (it is group RE).
 const groupParcels = g => PARCELS.filter(p => (g.id === 'RT' ? /^R\d/.test(p.id) && p.area < 500000 : g.id === 'EA' ? /^E\d/.test(p.id) : p.id === g.id));
 const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP + TRPF_CROWN : b.h === 'MSCP_TOP' ? MSCP_TOP : +b.h }));
+// Blk 32A raster fix (owner stack plan #132/#134, 2026-10-26): the gap N of #134's kitchen/yard recess (plan Y ≈9–11.9, E of the corridor end line) is open air,
+// but the 0.5 m raster filled it as full-height block → drop box [28.5,-2,31.5,0.5] (plan X 3.18–6.18, Y 8.56–11.06) and trim [25.5,-4,28.5,0.5] at the kitchen N face (v −1.5 ≈ Y 9.06).
+{ const B = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), eq = (a, q) => a.every((v, i) => v === q[i]);
+  B.boxes = B.boxes.filter(bx => !eq(bx, [28.5, -2, 31.5, 0.5])).map(bx => (eq(bx, [25.5, -4, 28.5, 0.5]) ? [25.5, -4, 28.5, -1.5] : bx)); }
 const blkToWorld = (B, lx, lz) => [B.ox + B.c * lx - B.s * lz, B.oz + B.s * lx + B.c * lz];
 const GAP_FITTED = GEO.gapFitted, GAP_DIR = [Math.sin(GEO.normal32 * DEG), Math.cos(GEO.normal32 * DEG)];
 let gap3132 = GAP_FITTED;
