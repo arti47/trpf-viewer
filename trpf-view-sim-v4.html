@@ -1489,15 +1489,17 @@ function drawInterior(ctx, cam, env, sp) {
     if (z1 < H && e > z1) items.push({ d: Math.hypot(near(x0, y0, x1, y1), e - z1), pts: box([x0, y0, x1, y1], z1), fill: C(col, 1.05), ext: isExtKind(kind) });   // sill top
     if (z0 > 0 && e < z0) items.push({ d: Math.hypot(near(x0, y0, x1, y1), z0 - e), pts: box([x0, y0, x1, y1], z0), fill: C(col, 0.8), ext: isExtKind(kind) });    // head / lintel soffit
   }
-  const fc = rgbStr([238, 238, 234].map(c => c * Math.max(0.55, lit + 0.1))), frames = UNIT_PLAN.wins.map(() => []), bar = (s0, s1, t0, t1, yg) => frames[frames.cur].push(frames.ax === 'y' ? [V(yg, s0, t0), V(yg, s1, t0), V(yg, s1, t1), V(yg, s0, t1)] : [V(s0, yg, t0), V(s1, yg, t0), V(s1, yg, t1), V(s0, yg, t1)]);
-  // casement frames: outer frame + a bar at each sash joint; Windows open → each sash swung out 90° about its hinge (glass tint + sash frame, outside the glass line)
-  frames.open = UNIT_PLAN.wins.map(() => []);
-  for (const [wi, [a0, a1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { frames.cur = wi; frames.ax = ax; const Fw = 0.05, M = 0.03;
-    bar(a0, a0 + Fw, sl, hd, g); bar(a1 - Fw, a1, sl, hd, g); bar(a0, a1, sl, sl + Fw, g); bar(a0, a1, hd - Fw, hd, g);
-    if (!UNIT_PLAN.sashes[wi].length) { frames[wi].length = 0; continue; }   // open opening (corridor end): no frame
-    for (const [s0, s1, hg] of UNIT_PLAN.sashes[wi]) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M + (UNIT_PLAN.sashes[wi].some(q => Math.abs(q[1] - s0) < 0.01) ? 0 : Fw - M), sl, hd, g); if (s1 < a1 - 0.01 && !UNIT_PLAN.sashes[wi].some(q => Math.abs(q[0] - s1) < 0.01)) bar(s1 - Fw, s1, sl, hd, g);   // jamb frame against a column
-      if (!state.winOpen) continue; const W = s1 - s0, P = (o, t) => (ax === 'y' ? V(g - o, hg, t) : V(hg, g - o, t)), q = (o0, o1, t0, t1) => frames[wi].push([P(o0, t0), P(o1, t0), P(o1, t1), P(o0, t1)]);
-      frames.open[wi].push([P(0, sl), P(W, sl), P(W, hd), P(0, hd)]); q(W - Fw, W, sl, hd); q(0, W, sl, sl + Fw); q(0, W, hd - Fw, hd); } }
+  // casement panes: one pane per run of adjoining sashes (a window-line column splits the window, so the column is never under a pane item and painter order
+  // cannot restore the outside scene over it); per pane: outer frame + a bar at each sash joint; Windows open → sashes swung out 90° about the hinge
+  const fc = rgbStr([238, 238, 234].map(c => c * Math.max(0.55, lit + 0.1))), Fw = 0.05, M = 0.03, panes = [];
+  for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { if (!UNIT_PLAN.sashes[wi].length) { panes.push({ wi, a0: w0, a1: w1, g, ax, sl, hd, sh: [], fr: [], open: [], bare: true }); continue; }   // open opening (corridor end): no frame
+    for (const sh of UNIT_PLAN.sashes[wi]) {
+    let pn = panes[panes.length - 1]; if (!pn || pn.wi !== wi || sh[0] > pn.a1 + 0.01) panes.push(pn = { wi, a0: sh[0], a1: sh[1], g, ax, sl, hd, sh: [], fr: [], open: [] }); pn.a1 = sh[1]; pn.sh.push(sh); } }
+  for (const pn of panes) { if (pn.bare) continue; const { a0, a1, g, ax, sl, hd } = pn, P = (s0, o, t) => (ax === 'y' ? V(g - o, s0, t) : V(s0, g - o, t)), bar = (s0, s1, t0, t1) => pn.fr.push([P(s0, 0, t0), P(s1, 0, t0), P(s1, 0, t1), P(s0, 0, t1)]);
+    bar(a0, a0 + Fw, sl, hd); bar(a1 - Fw, a1, sl, hd); bar(a0, a1, sl, sl + Fw); bar(a0, a1, hd - Fw, hd);
+    for (const [s0, s1, hg] of pn.sh) { if (s0 > a0 + 0.01) bar(s0 - M, s0 + M, sl, hd);
+      if (!state.winOpen) continue; const W = s1 - s0, q = (o0, o1, t0, t1) => pn.fr.push([P(hg, o0, t0), P(hg, o1, t0), P(hg, o1, t1), P(hg, o0, t1)]);
+      pn.open.push([P(hg, 0, sl), P(hg, W, sl), P(hg, W, hd), P(hg, 0, hd)]); q(W - Fw, W, sl, hd); q(0, W, sl, sl + Fw); q(0, W, hd - Fw, hd); } }
   // extBand: white slab edge per storey on tall exterior faces (as TRPF facades)
   const es = `rgba(70,62,54,${0.45 * lit})`, extBand = rgbStr(TRPF_PAL.white.map(c => c * clamp(0.35 + env.ambient * 1.3, 0.15, 1)));   // face edges: floor/ceiling/top/bottom lines + corners
   const fl = poly(ring(UNIT_PLAN.outline, 0), C(UNIT_FLOOR.tile, 0.85));
@@ -1513,9 +1515,9 @@ function drawInterior(ctx, cam, env, sp) {
   // exterior (fins, recess walls) only through the glass: each window is one painter item at the glass line that restores the outside scene (snapshot) inside
   // its projected pane and draws the exterior faces there, so nearer room walls hide it and nothing indoors leaks into the view out.
   const ext = items.filter(it => it.ext).sort((a, b) => b.d - a.d);
-  UNIT_PLAN.wins.forEach(([a0, a1, g, ax, sl, hd], wi) => items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, wi, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, wi, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }));
+  panes.forEach(pn => { const { a0, a1, g, ax, sl, hd } = pn; items.push(ax === 'y' ? { d: near(g, a0, g, a1) - 0.02, pn, pane: [V(g, a0, sl), V(g, a1, sl), V(g, a1, hd), V(g, a0, hd)] } : { d: near(a0, g, a1, g) - 0.02, pn, pane: [V(a0, g, sl), V(a1, g, sl), V(a1, g, hd), V(a0, g, hd)] }); });
   items.filter(it => !it.ext).sort((a, b) => b.d - a.d).forEach(it => { if (it.pane) { const q = cam.projDirPoly(it.pane); if (!q) return; ctx.save(); ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.clip();
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => { poly(e2.pts, e2.fill); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); frames.open[it.wi].forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); frames[it.wi].forEach(f => poly(f, fc)); return; }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ext.forEach(e2 => { poly(e2.pts, e2.fill); if (e2.seg) { const [p0, p1, z0, z1] = e2.seg; for (let k = Math.ceil(z0 / FLOOR_HEIGHT); k * FLOOR_HEIGHT < z1; k++) { const zk = k * FLOOR_HEIGHT; poly([V(p0[0], p0[1], zk - 0.1), V(p1[0], p1[1], zk - 0.1), V(p1[0], p1[1], zk + 0.15), V(p0[0], p0[1], zk + 0.15)], extBand); } } }); it.pn.open.forEach(f => poly(f, 'rgba(200,215,225,0.16)')); ctx.restore(); it.pn.fr.forEach(f => poly(f, fc)); return; }
     poly(it.pts, it.fill); if (!it.ends) return; const [a, b, c, dd] = it.pts; line(a, b, es); line(dd, c, es); if (it.ends[0]) line(a, dd, es); if (it.ends[1]) line(b, c, es); });
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
