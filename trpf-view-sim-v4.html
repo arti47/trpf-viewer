@@ -2,14 +2,15 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>TRPF #134 View Simulator</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     :root { color-scheme: dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-    html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+    html { scroll-padding-top: env(safe-area-inset-top, 0px); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    * { touch-action: pan-x pan-y; }
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0b0f17; color: #e2e8f0;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow-x: hidden; user-select: none; -webkit-user-select: none; }
     .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -50,6 +51,16 @@
     .view-max .canvas-pane-bottom { flex: 1 1 auto; min-height: 0; height: auto; }
     @media (max-width: 1024px) { .view-max.app-shell { height: 100%; overflow: hidden; } .view-max .app-workspace { flex: 1 1 auto; min-height: 0; } .view-max .canvas-pane-bottom { height: auto; flex: 1 1 auto; } }
   </style>
+  <script>
+    // No page zoom: pinch (iOS gesture*, multi-touch), double-tap (touch-action pan-x pan-y), ctrl/cmd+wheel, ctrl/cmd +/-/0. Canvas drag handlers unaffected.
+    (() => { const stop = e => e.preventDefault(), o = { passive: false };
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, stop, o));
+      document.addEventListener('touchmove', e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, o);
+      document.addEventListener('dblclick', stop, o);
+      window.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) e.preventDefault(); }, o);
+      window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && ['+', '=', '-', '_', '0'].includes(e.key)) e.preventDefault(); });
+    })();
+  </script>
 </head>
 <body>
 <div class="app-shell">
