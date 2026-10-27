@@ -237,6 +237,9 @@
 <div><span id="sunPill" class="text-[10px] mono bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded"></span></div>
 <div class="panel"><div class="flex justify-between items-center text-[11px] mb-1"><span class="text-slate-300">Weather</span><select id="weatherSel" class="bg-slate-800 border border-slate-700 rounded px-1 text-[11px] text-slate-200"></select></div>
 <div class="text-[9px] text-slate-500 mb-2">Visual only (sky, clouds, sun, rain); light/heat readings stay clear-sky. Sets haze visibility.</div></div>
+<div class="panel"><div class="flex justify-between items-center text-[11px] mb-1"><span class="text-slate-300">Traffic</span><select id="trafSel" class="bg-slate-800 border border-slate-700 rounded px-1 text-[11px] text-slate-200"></select></div>
+<div id="trafTxt" class="text-[10px] mono text-slate-300"></div>
+<div class="text-[9px] text-slate-500 mt-1">Cars follow hour + day (▶ Animate moves them). Typical-day profile, not live data: no public hourly ECP counts; tuned so weekday peaks ≈60 km/h (LTA peak-hour average 55–60 km/h).</div></div>
 <details class="more" data-more="time"><summary></summary><div class="more-b">
 <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
 <input type="range" id="visSlider" min="2" max="40" step="1" value="12" aria-label="Visibility">
@@ -652,7 +655,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -1203,7 +1206,7 @@ function updateDashboard(m) {
   $('lensBadge').textContent = `${state.focalLength}mm • HFOV ${Math.round(m.hFovDeg)}° × VFOV ${Math.round(m.vFovDeg)}°`;
   document.querySelectorAll('.range-btn').forEach(b => { b.className = `range-btn px-1.5 py-0.5 rounded border ${+b.dataset.range === state.profileRange ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`; });
   $('planSiteBtn').style.borderColor = state.planMode === 'site' ? '#34d399' : ''; $('planAreaBtn').style.borderColor = state.planMode === 'area' ? '#34d399' : '';
-  $('weatherSel').value = state.weather; $('lensBtn').textContent = LENS_LABEL[state.focalLength] || `${state.focalLength}mm`;
+  $('weatherSel').value = state.weather; $('trafSel').value = state.traffic; $('trafTxt').textContent = trafText(); $('lensBtn').textContent = LENS_LABEL[state.focalLength] || `${state.focalLength}mm`;
   $('visVal').textContent = `${state.visibilityKm} km`; $('visSlider').value = state.visibilityKm;
   $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateChip').textContent = new Date(state.dateStr + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); $('inlineMonth').value = +state.dateStr.slice(5, 7); $('inlineMonthVal').textContent = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+state.dateStr.slice(5, 7) - 1];
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
@@ -1386,22 +1389,61 @@ function trpfFaceInfo(P, f) {
 const CAR_COL = [[236, 236, 236], [236, 236, 236], [190, 192, 196], [190, 192, 196], [34, 36, 40], [34, 36, 40], [120, 124, 130], [160, 40, 36], [40, 70, 140], [230, 200, 60]];
 let CAR_SINK = null;   // gpuFx: receives each car (drawCars/deckCars only enumerate positions)
 const carAt = (ctx, cam, env, x, y, z, hx, hz, k, dd) => CAR_SINK && CAR_SINK(x, y, z, hx, hz, k, dd);
-const CAR_CLS = [[30, 22], [55, 15], [140, 11]];   // [spacing m per lane, speed m/s] for road class 0/1/2
+// Traffic by time/day (estimate: no public hourly ECP counts). v/c per lane by hour for weekday / Sat / Sun-PH (Mon AM, Fri PM nudged);
+// tidal split on weekdays (AM westbound = city-bound +15%, PM eastbound +15%); flow q = x·cap, speed BPR v = vf/(1 + 0.6x⁴), spacing = v/q.
+// Calibrated so a weekday-peak expressway lane runs ≈60 km/h (data.gov.sg: expressway peak-hour mean 55–60 km/h 2019–2025).
+const TRAF_H = {
+  wk: [0.20, 0.13, 0.10, 0.09, 0.11, 0.28, 0.62, 0.92, 0.95, 0.80, 0.66, 0.62, 0.62, 0.62, 0.64, 0.68, 0.76, 0.90, 0.93, 0.80, 0.63, 0.52, 0.42, 0.30],
+  sat: [0.28, 0.20, 0.14, 0.10, 0.09, 0.13, 0.24, 0.38, 0.52, 0.62, 0.68, 0.70, 0.70, 0.68, 0.67, 0.68, 0.70, 0.72, 0.72, 0.66, 0.60, 0.53, 0.45, 0.36],
+  sun: [0.30, 0.22, 0.15, 0.11, 0.09, 0.11, 0.18, 0.28, 0.40, 0.52, 0.60, 0.64, 0.65, 0.64, 0.63, 0.64, 0.66, 0.68, 0.68, 0.62, 0.55, 0.46, 0.37, 0.28]
+};
+const TRAF_DAYS = { auto: 'Auto (from date)', mon: 'Monday', wk: 'Tue–Thu', fri: 'Friday', sat: 'Saturday', sun: 'Sunday / public holiday', off: 'No traffic' };
+const TRAF_PH = ['01-01', '05-01', '08-09', '12-25'];   // fixed-date SG public holidays only; lunar/moving ones → pick "Sunday / public holiday"
+const TRAF_CLS = [[2000, 25, 1], [900, 13, 0.85], [500, 11, 0.7]];   // [capacity veh/h/lane, free speed m/s, peak scale] for road class 0/1/2
+const LANE_W = 3.4;
+function trafDay(ds) {
+  if (state.traffic !== 'auto') return state.traffic; if (TRAF_PH.includes(ds.slice(5))) return 'sun';
+  return ['sun', 'mon', 'wk', 'wk', 'wk', 'fri', 'sat'][new Date(ds + 'T12:00').getDay()];
+}
+function trafX(day, h, c, west) {   // v/c per lane at hour h (fractional)
+  const H = TRAF_H[day === 'sat' || day === 'sun' ? day : 'wk'], i = Math.floor(((h % 24) + 24) % 24), a = h - Math.floor(h);
+  let x = H[i] * (1 - a) + H[(i + 1) % 24] * a;
+  if (day === 'mon' && h >= 6 && h < 11) x *= 1.03; if (day === 'fri' && h >= 16) x *= 1.07;
+  if (day !== 'sat' && day !== 'sun') x *= 1 + 0.15 * (Math.exp(-(((h - 8.5) / 2) ** 2)) - Math.exp(-(((h - 18.5) / 2) ** 2))) * (west ? 1 : -1);
+  return Math.min(0.98, x * TRAF_CLS[c][2]);
+}
+function trafLane(day, h, c, west) {   // → [veh/h per lane, speed m/s]
+  const x = trafX(day, h, c, west), [cap, vf] = TRAF_CLS[c]; return [x * cap, vf / (1 + 0.6 * x ** 4)];
+}
+function trafRow(t, day, c, west, L, sc, j, Lp) {   // one drawn lane: [spacing m, speed m/s, s offset]
+  let [q, v] = trafLane(day, state.hour, c, west); v *= 1 + 0.08 * (Lp > 1 ? j / (Lp - 1) - 0.5 : 0);
+  return [Math.max(7, v * 3600 / Math.max(1, q) * sc), v];
+}
 function drawCars(ctx, cam, env) {
-  const t = simT();
+  const t = simT(), day = trafDay(state.dateStr); if (day === 'off') return;
   for (const R of ROADS) { if (R.c > 2 || !cam.inWedge(R.minx, R.maxx, R.minz, R.maxz, 2200)) continue;
     if (!R.cum) { R.cum = [0]; for (let i = 0; i + 3 < R.pts.length; i += 2) R.cum.push(R.cum[R.cum.length - 1] + Math.hypot(R.pts[i + 2] - R.pts[i], R.pts[i + 3] - R.pts[i + 1])); R.len = R.cum[R.cum.length - 1]; }
-    if (R.len < 5) continue; const [sp, v] = CAR_CLS[R.c], ph = hash01(R.minx, R.minz, 3) * sp;
-    for (const dir of [1, -1]) for (let s0 = ((ph + dir * v * t) % sp + sp) % sp, k = 0; s0 < R.len; s0 += sp, k++) {
-      const s = dir > 0 ? s0 : R.len - s0; let i = 1; while (i < R.cum.length - 1 && R.cum[i] < s) i++; const a = (s - R.cum[i - 1]) / Math.max(1e-6, R.cum[i] - R.cum[i - 1]), ax = R.pts[2 * i - 2], az = R.pts[2 * i - 1], bx = R.pts[2 * i], bz = R.pts[2 * i + 1], L = Math.hypot(bx - ax, bz - az) || 1, hx = ((bx - ax) / L) * dir, hz = ((bz - az) / L) * dir;
-      const x = ax + (bx - ax) * a - hz * R.w * 0.25, z = az + (bz - az) * a + hx * R.w * 0.25, dd = Math.hypot(x - cam.ex, z - cam.ez); if (dd > 2200) continue;
-      carAt(ctx, cam, env, x, 0.1, z, hx, hz, Math.floor(hash01(R.minx + k, dir, 5) * 97), dd); } }
+    if (R.len < 5) continue; const L = Math.max(1, Math.round((R.w - 1.2) / LANE_W)), Lp = Math.max(1, Math.round(L / 2)), sc = 2 * Lp / L, dxR = R.pts[R.pts.length - 2] - R.pts[0];
+    for (const dir of [1, -1]) for (let j = 0; j < Lp; j++) { const [sp, v] = trafRow(t, day, R.c, dir * dxR < 0, L, sc, j, Lp), ph = hash01(R.minx + j * 7, R.minz, 3 + dir) * sp, off = R.w * 0.45 * (j + 0.5) / Lp;
+    for (let s0 = ((ph + dir * v * t) % sp + sp) % sp, k = 0; s0 < R.len; s0 += sp, k++) {
+      const s = dir > 0 ? s0 : R.len - s0; let i = 1; while (i < R.cum.length - 1 && R.cum[i] < s) i++; const a = (s - R.cum[i - 1]) / Math.max(1e-6, R.cum[i] - R.cum[i - 1]), ax = R.pts[2 * i - 2], az = R.pts[2 * i - 1], bx = R.pts[2 * i], bz = R.pts[2 * i + 1], Ls = Math.hypot(bx - ax, bz - az) || 1, hx = ((bx - ax) / Ls) * dir, hz = ((bz - az) / Ls) * dir;
+      const x = ax + (bx - ax) * a - hz * off, z = az + (bz - az) * a + hx * off, dd = Math.hypot(x - cam.ex, z - cam.ez); if (dd > 2200) continue;
+      carAt(ctx, cam, env, x, 0.1, z, hx, hz, Math.floor(hash01(R.minx + k + j * 31, dir, 5) * 97), dd); } } }
 }
 function deckCars(ctx, cam, env, P) {
+  const day = trafDay(state.dateStr); if (day === 'off') return;
   const e01 = Math.hypot(P.xs[1] - P.xs[0], P.zs[1] - P.zs[0]), e12 = Math.hypot(P.xs[2] - P.xs[1], P.zs[2] - P.zs[1]), [i0, i1, Lg, W] = e01 >= e12 ? [0, 1, e01, e12] : [1, 2, e12, e01];
-  if (Lg < 4 || W < 5) return; const hx = (P.xs[i1] - P.xs[i0]) / Lg, hz = (P.zs[i1] - P.zs[i0]) / Lg, t = simT(), dd = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), sp = 28, v = 20;
-  for (const dir of [1, -1]) for (let s = ((hash01(P.cx, P.cz, 9) * sp + dir * v * t) % sp + sp) % sp - Lg / 2, k = 0; s < Lg / 2; s += sp, k++) {
-    const x = P.cx + hx * s - dir * hz * W * 0.25, z = P.cz + hz * s + dir * hx * W * 0.25; carAt(ctx, cam, env, x, P.h, z, hx * dir, hz * dir, Math.floor(hash01(P.cx + k, dir, 4) * 97), dd); }
+  if (Lg < 4 || W < 5) return; const hx = (P.xs[i1] - P.xs[i0]) / Lg, hz = (P.zs[i1] - P.zs[i0]) / Lg, t = simT(), dd = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), c = /Expressway|Parkway|Sheares/.test(P.name) ? 0 : 1;
+  const L = Math.max(1, Math.round((W - 1.2) / LANE_W)), Lp = Math.max(1, Math.round(L / 2)), sc = 2 * Lp / L;
+  for (const dir of [1, -1]) for (let j = 0; j < Lp; j++) { const [sp, v] = trafRow(t, day, c, dir * hx < 0, L, sc, j, Lp), off = W * 0.45 * (j + 0.5) / Lp;
+    for (let s = ((hash01(P.cx + j * 7, P.cz, 9 + dir) * sp + dir * v * t) % sp + sp) % sp - Lg / 2, k = 0; s < Lg / 2; s += sp, k++) {
+      const x = P.cx + hx * s - dir * hz * off, z = P.cz + hz * s + dir * hx * off; carAt(ctx, cam, env, x, P.h, z, hx * dir, hz * dir, Math.floor(hash01(P.cx + k + j * 31, dir, 4) * 97), dd); } }
+}
+// ECP readout (3 lanes each way past Tanjong Rhu, estimate) for the Time panel.
+function trafText() {
+  const day = trafDay(state.dateStr); if (day === 'off') return 'Traffic off';
+  const [qw, vw] = trafLane(day, state.hour, 0, true), [qe, ve] = trafLane(day, state.hour, 0, false), r = q => (Math.round(q * 3 / 100) * 100).toLocaleString('en-GB'), kmh = v => Math.round(v * 3.6);
+  return `${TRAF_DAYS[day]} · ECP → city ≈${r(qw)} veh/h ${kmh(vw)} km/h · → east ≈${r(qe)} veh/h ${kmh(ve)} km/h (estimate)`;
 }
 // Ships under way in Singapore Strait (E/W, ~6 m/s), wrapped over x −4500..5000; anchored SHIPS stay put.
 const MOVERS = [[-3000, -4500, 220, 6], [1500, -5000, 160, -5], [3500, -6200, 260, 7], [-500, -6800, 120, -8], [200, -3900, 35, 9]];
@@ -2786,6 +2828,8 @@ $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.
 $('walkBtn').addEventListener('click', () => setWalk(!state.walk));
 const LENS = [13, 26, 52, 77], LENS_LABEL = { 13: '0.5×', 26: '1×', 52: '2×', 77: '3×' };
 $('weatherSel').innerHTML = Object.entries(WEATHER).map(([k, W]) => `<option value="${k}">${W.label}</option>`).join('');
+$('trafSel').innerHTML = Object.entries(TRAF_DAYS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+$('trafSel').addEventListener('change', e => { state.traffic = e.target.value; renderAll(); });
 $('weatherSel').addEventListener('change', e => { state.weather = e.target.value; state.visibilityKm = WEATHER[state.weather].vis; renderAll(); });
 $('lensBtn').addEventListener('click', () => { const i = LENS.indexOf(state.focalLength); state.focalLength = LENS[(i + 1) % LENS.length]; renderAll(); });
 const pressChip = (id, on) => { $(id).setAttribute('aria-pressed', String(on)); $(id).style.borderColor = on ? '#34d399' : ''; };
