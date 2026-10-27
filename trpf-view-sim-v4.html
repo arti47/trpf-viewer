@@ -14,23 +14,62 @@
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0b0f17; color: #e2e8f0;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow-x: hidden; user-select: none; -webkit-user-select: none; }
     .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .app-shell { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; }
-    .app-header { flex-shrink: 0; background: rgba(15,23,42,0.96); border-bottom: 1px solid #1e293b; padding: 8px 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-    .app-workspace { flex: 1 1 auto; display: flex; min-height: 0; width: 100%; overflow: hidden; }
+    .app-shell { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
+    .app-workspace { flex: 1 1 auto; display: flex; min-height: 0; width: 100%; overflow: hidden; position: relative; }
     .viz-column { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #060911; }
-    .canvas-pane-top { position: relative; flex: 1 1 36%; min-height: 200px; border-bottom: 1px solid #1e293b; overflow: hidden; }
-    .middle-ribbon { flex-shrink: 0; background: #0f172a; border-bottom: 1px solid #1e293b; padding: 6px 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-    .canvas-pane-bottom { position: relative; flex: 1 1 64%; min-height: 260px; overflow: hidden; }
+    .canvas-pane-bottom { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+    .canvas-pane-top { position: relative; height: 230px; border: 1px solid #1e293b; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
     canvas.sim-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     #planCanvas { display: block; width: 100%; touch-action: none; }
-    .control-sidebar { width: 430px; min-width: 350px; max-width: 100%; flex-shrink: 0; height: 100%; overflow-y: auto; background: #0f172a; border-left: 1px solid #1e293b; display: flex; flex-direction: column; }
-    @media (max-width: 1024px) {
-      .app-shell { height: auto; min-height: 100%; overflow-y: auto; }
-      .app-workspace { flex-direction: column; overflow: visible; }
-      .canvas-pane-top { height: 250px; flex: none; }
-      .canvas-pane-bottom { height: 380px; flex: none; }
-      .control-sidebar { width: 100%; min-width: 0; height: auto; overflow-y: visible; border-left: none; border-top: 1px solid #1e293b; }
-    }
+    /* Panels: right rail (icon + label) opens a drawer of stacked sections; 📌 keeps a section open while opening others */
+    .rail { flex-shrink: 0; width: 66px; background: #0f172a; border-left: 1px solid #1e293b; display: flex; flex-direction: column; gap: 2px; padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+    .rail-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; border-radius: 8px; color: #94a3b8; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+    .rail-btn .ic { font-size: 19px; line-height: 1; }
+    .rail-btn:hover { background: #1e293b; color: #e2e8f0; }
+    .rail-btn[aria-pressed="true"] { background: #1e293b; color: #6ee7b7; box-shadow: inset 0 0 0 1px #34d39966; }
+    .drawer { display: none; width: 380px; flex-shrink: 0; overflow-y: auto; overscroll-behavior: contain; background: #0f172a; border-left: 1px solid #1e293b; }
+    .drawer.open { display: block; }
+    .sheet-grip { display: none; }
+    .pnl { display: none; border-bottom: 1px solid #1e293b; }
+    .pnl.open { display: block; }
+    .pnl-h { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 9px 10px 9px 14px; background: #111a2e; border-bottom: 1px solid #1e293b; font-size: 13px; font-weight: 700; color: #f1f5f9; }
+    .pnl-h .t { flex: 1; }
+    .pnl-pin, .pnl-x { font-size: 12px; padding: 3px 7px; border-radius: 6px; color: #94a3b8; }
+    .pnl-pin { filter: grayscale(1); opacity: 0.55; }
+    .pnl-pin[aria-pressed="true"] { filter: none; opacity: 1; background: #1e293b; }
+    .pnl-pin:hover, .pnl-x:hover { background: #1e293b; color: #e2e8f0; }
+    .pnl-b { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 11px; }
+    .pnl-b .mb-2\.5 { margin-bottom: 0; }
+    details.more > summary { cursor: pointer; list-style: none; font-size: 12px; font-weight: 600; color: #7dd3fc; padding: 6px 0 2px; border-top: 1px dashed #1e293b; }
+    details.more > summary::-webkit-details-marker { display: none; }
+    details.more > summary::before { content: '▸ More…'; }
+    details.more[open] > summary::before { content: '▾ Less'; }
+    .more-b { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    @media (max-width: 1100px) and (min-width: 641px) and (min-height: 501px) { .drawer { position: absolute; top: 0; bottom: 0; right: 66px; z-index: 30; width: min(380px, 70vw); box-shadow: -10px 0 30px rgba(0,0,0,0.55); } }
+    /* On-view overlays: status badge + ?, room menu + Walk (top), time bar (bottom), one-time hint */
+    .ov-top { position: absolute; top: 8px; left: 10px; right: 10px; z-index: 12; display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; pointer-events: none; }
+    .ov-top > div { display: flex; align-items: center; gap: 6px; pointer-events: auto; min-width: 0; }
+    .ov-badge { background: rgba(15,23,42,0.88); border: 1px solid #334155; border-radius: 8px; padding: 5px 9px; font-size: 11px; color: #6ee7b7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ov-btn { background: rgba(15,23,42,0.9); border: 1px solid #334155; border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
+    .ov-btn:hover { background: #1e293b; }
+    #helpBtn { width: 29px; padding-left: 0; padding-right: 0; text-align: center; color: #7dd3fc; }
+    #walkBtn[aria-pressed="true"] { border-color: #34d399; background: #064e3b; }
+    .room-wrap { position: relative; }
+    .room-menu { position: absolute; right: 0; top: calc(100% + 6px); width: 236px; max-height: 70vh; overflow-y: auto; background: rgba(15,23,42,0.97); border: 1px solid #334155; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 12px 30px rgba(0,0,0,0.55); }
+    .room-menu .chip { font-size: 12px; padding: 6px 9px; text-align: left; }
+    .room-menu .rm-h { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 2px 0 0; }
+    .room-menu .rm-row { display: flex; gap: 4px; }
+    .room-menu .rm-row .chip { flex: 1; text-align: center; padding: 6px 2px; }
+    .ov-time { position: absolute; left: 10px; right: 10px; bottom: 10px; margin: 0 auto; max-width: 560px; z-index: 12; display: flex; align-items: center; gap: 8px; background: rgba(15,23,42,0.88); border: 1px solid #334155; border-radius: 10px; padding: 6px 10px; }
+    .ov-time #inlineHourVal { width: 40px; text-align: right; }
+    .date-chip { position: relative; flex-shrink: 0; font-size: 12px; font-weight: 600; padding: 3px 9px; border: 1px solid #b4530966; background: #451a0355; border-radius: 6px; color: #fcd34d; white-space: nowrap; cursor: pointer; }
+    .date-chip input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+    #roomHud { bottom: 60px !important; right: 10px !important; pointer-events: auto !important; cursor: pointer; }
+    #walkMap { top: 46px !important; }
+    #walkPad { bottom: 62px !important; }
+    .hint { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,0.55); }
+    .hint-card { max-width: 360px; background: #0f172a; border: 1px solid #334155; border-radius: 14px; padding: 16px 18px; font-size: 13px; line-height: 1.55; color: #cbd5e1; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+    .hint-card b { color: #f8fafc; }
     input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; width: 100%; }
     input[type="range"]::-webkit-slider-runnable-track { background: #1e293b; height: 6px; border-radius: 999px; border: 1px solid #334155; }
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -5px; background: #38bdf8; height: 14px; width: 14px; border-radius: 999px; }
@@ -45,16 +84,11 @@
     .chip { font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; }
     .chip:hover { background: #334155; }
     .panel { background: rgba(2,6,23,0.6); padding: 8px; border-radius: 8px; border: 1px solid #1e293b; }
-    /* Expanded 3D view: hide section + sidebar, keep header and room/heading ribbon */
-    .view-max .control-sidebar, .view-max .canvas-pane-top { display: none !important; }
-    .view-max .app-workspace { overflow: hidden; }
-    .view-max .canvas-pane-bottom { flex: 1 1 auto; min-height: 0; height: auto; }
-    @media (max-width: 1024px) { .view-max.app-shell { height: 100%; overflow: hidden; } .view-max .app-workspace { flex: 1 1 auto; min-height: 0; } .view-max .canvas-pane-bottom { height: auto; flex: 1 1 auto; } }
-    /* Phone (≤640 px): 3D view unobstructed — tools behind ☰, small minimap/pad, one-row room bar, compact header */
     .phone-only { display: none; }
     /* Furnish editor: docked right of the 3D view (desktop), full screen on phones */
     .furn-ed { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 20; overflow-y: auto; background: rgba(15,23,42,0.97); border-left: 1px solid #334155; padding: 8px; }
-    .furnishing > .absolute.top-2, .furnishing #roomHud { right: 352px !important; }
+    .furnishing .ov-top, .furnishing #roomHud { right: 352px !important; }
+    .furnishing .ov-time { right: 352px; }
     .furn-ed .fe-f { display: flex; flex-direction: column; font-size: 9px; color: #94a3b8; gap: 1px; }
     .furn-ed .fe-f.fe-inl { flex-direction: row; align-items: center; gap: 3px; }
     .furn-ed input[type=number], .furn-ed .fe-name { background: #0b1220; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0; font-size: 11px; padding: 2px 4px; width: 100%; min-width: 0; }
@@ -73,42 +107,41 @@
     #feCol { width: 26px; height: 22px; padding: 0; border: none; background: none; }
     @media (max-width: 640px), (max-height: 500px) {
       .phone-only { display: inline-block; }
-      .app-header { padding: 5px 10px; gap: 5px; }
-      .app-header h1 { display: none; }
-      #scenarioPreset { max-width: 100%; font-size: 11px; padding: 2px 4px; }
-      .view-max .app-header { display: none; }
-      .middle-ribbon { padding: 4px 10px; gap: 4px 10px; }
-      .middle-ribbon > div { min-width: 140px !important; }
-      #roomBar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
-      #roomBar::-webkit-scrollbar { display: none; }
-      #roomBar > * { flex-shrink: 0; }
-      #roomBar > span:first-child { display: none; }
       .chip { font-size: 11px; padding: 3px 7px; }
-      #viewTitle { display: none; }
-      #viewTools { gap: 4px 6px; padding: 3px; }
-      #viewTools:not(.open) > :not(.keep) { display: none; }
-      #walkMap { width: 120px !important; height: 88px !important; top: 40px !important; opacity: 0.85; }
-      #walkPad { grid-template-columns: repeat(3, 34px) !important; grid-template-rows: repeat(2, 34px) !important; bottom: 10px !important; opacity: 0.8; }
-      .walking #roomHud, .walking #dragHint { display: none !important; }
+      .pnl-pin { display: none; }
+      .ov-badge { font-size: 10px; padding: 5px 7px; }
+      .ov-btn { font-size: 12px; padding: 5px 8px; }
+      #walkMap { width: 120px !important; height: 88px !important; opacity: 0.85; }
+      #walkPad { grid-template-columns: repeat(3, 34px) !important; grid-template-rows: repeat(2, 34px) !important; opacity: 0.8; }
+      .walking #roomHud { display: none !important; }
       .furn-ed { position: fixed; inset: 0; width: auto; z-index: 60; border-left: none; background: #0f172a; padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
       .furn-ed .fe-desk { display: none; }
-      .furnishing > .absolute.top-2, .furnishing #roomHud { right: 12px !important; }
+      .furnishing .ov-top, .furnishing #roomHud { right: 10px !important; }
     }
-    /* Phone landscape (short screen): 3D pane fills the screen, ribbon = one scrollable row, overlays tighter */
+    /* Phone portrait: bottom tab bar, panels = bottom sheet over the view (tap the grip for taller) */
+    @media (max-width: 640px) and (min-height: 501px) {
+      .app-workspace { flex-direction: column; }
+      .rail { order: 3; width: auto; flex-direction: row; border-left: none; border-top: 1px solid #1e293b; padding: 3px 2px calc(3px + env(safe-area-inset-bottom, 0px)); overflow: visible; }
+      .rail-btn { flex: 1 1 0; padding: 5px 0; min-width: 0; }
+      .rail-btn .ic { font-size: 18px; }
+      .drawer { position: absolute; left: 0; right: 0; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); width: auto; height: 58%; z-index: 30; border-left: none; border-top: 1px solid #334155; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.55); }
+      .drawer.tall { height: calc(100% - 60px - env(safe-area-inset-bottom, 0px)); }
+      .sheet-grip { display: flex; justify-content: center; position: sticky; top: 0; z-index: 4; padding: 6px 0 4px; background: #111a2e; cursor: pointer; }
+      .sheet-grip span { width: 40px; height: 4px; border-radius: 2px; background: #475569; }
+      .pnl-h { top: 14px; }
+    }
+    /* Phone landscape (short screen): slim right rail, panel = right-side sheet over the view */
     @media (max-height: 500px) {
-      .canvas-pane-bottom { height: calc(100dvh - 4px); min-height: 220px; }
-      .view-max.app-shell { height: 100dvh; }
-      .view-max:not(.ribbon-open) .middle-ribbon { display: none; }
-      .view-max #ribbonBtn { display: inline-block !important; }
-      .canvas-pane-top { height: 200px; }
-      .middle-ribbon { flex-wrap: wrap; padding: 3px 8px; gap: 2px 8px; }
-      .middle-ribbon > div:not(#roomBar) { flex: 1 1 0 !important; min-width: 0 !important; gap: 4px; }
-      .middle-ribbon > div:not(#roomBar) input[type="range"] { min-width: 40px; }
-      .middle-ribbon > div:not(#roomBar) > span { font-size: 10px; width: auto !important; }
-      #inlineDate { display: none; }
-      .canvas-pane-bottom > .absolute.top-2 { top: 4px; }
-      #walkMap { top: 34px !important; width: 104px !important; height: 77px !important; }
-      #walkPad { bottom: 6px !important; }
+      .rail { width: 54px; padding: 2px 3px calc(2px + env(safe-area-inset-bottom, 0px)); gap: 0; justify-content: space-evenly; }
+      .rail-btn { padding: 3px 1px; gap: 1px; font-size: 9px; }
+      .rail-btn .ic { font-size: 16px; }
+      .drawer { position: absolute; top: 0; bottom: 0; right: 54px; width: min(360px, 58vw); z-index: 30; box-shadow: -10px 0 30px rgba(0,0,0,0.55); }
+      .ov-top { top: 6px; }
+      .ov-time { bottom: 6px; padding: 4px 8px; }
+      #roomHud { bottom: 50px !important; }
+      #walkMap { top: 40px !important; width: 104px !important; height: 77px !important; }
+      #walkPad { bottom: 50px !important; }
+      .room-menu { max-height: calc(100vh - 60px); }
     }
   </style>
   <script>
@@ -124,234 +157,196 @@
 </head>
 <body>
 <div class="app-shell">
-  <header class="app-header">
-    <div class="flex items-center gap-2.5">
-      <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 font-bold text-[10px]">#134</div>
-      <h1 class="font-semibold text-xs sm:text-sm md:text-base text-white tracking-tight">TRPF #134 View Simulator</h1>
-      <span id="statusPill" class="hidden xl:inline-block text-[10px] mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full"></span>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <div class="bg-slate-800/90 p-0.5 rounded-lg border border-slate-700 flex items-center text-xs">
-        <button data-time="day" class="time-btn px-2 py-0.5 rounded-md text-slate-300 hover:text-white">☀️ 13:00</button>
-        <button data-time="sunset" class="time-btn px-2 py-0.5 rounded-md text-slate-300 hover:text-white">🌅 Sunset</button>
-        <button data-time="night" class="time-btn px-2 py-0.5 rounded-md text-slate-300 hover:text-white">🌙 21:00</button>
-      </div>
-      <span id="sunPill" class="text-[10px] mono bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded"></span>
-      <select id="scenarioPreset" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 border border-slate-700">
-        <option value="custom">-- Scenario --</option>
-        <option value="movein">2029 move-in: no new towers</option>
-        <option value="low">Low: Marina East GPR 3.5, 20–30F</option>
-        <option value="base" selected>Base: Marina East GPR 4.0, 30–44F</option>
-        <option value="tall">Upside: Marina East GPR 5.6, 35–50F</option>
-        <option value="allres">Full build-out: Base + all reserves</option>
-      </select>
-    </div>
-  </header>
-
   <div class="app-workspace">
     <div class="viz-column">
-      <div class="canvas-pane-top">
-        <div class="absolute top-2 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
-          <div class="bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700/80 text-[11px] font-semibold text-slate-200 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span id="profileTitle">Section along gaze</span>
-            <span class="text-[10px] text-emerald-300 font-normal hidden sm:inline">Drag in the left strip to change floor</span>
-          </div>
-          <div class="pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[10px] mono flex items-center gap-1">
-            <span class="text-slate-400">Range:</span>
-            <button data-range="2000" class="range-btn px-1.5 py-0.5 rounded border">2km</button>
-            <button data-range="4000" class="range-btn px-1.5 py-0.5 rounded border">4km</button>
-            <button data-range="6000" class="range-btn px-1.5 py-0.5 rounded border">6km</button>
-          </div>
-        </div>
-        <canvas id="profileCanvas" class="sim-canvas"></canvas>
-      </div>
-      <div class="middle-ribbon">
-        <div id="roomBar" class="flex items-center gap-1 flex-wrap w-full"><span class="text-[11px] font-semibold text-emerald-300 mr-1">#134 room window:</span></div>
-        <div class="flex items-center gap-2 flex-[1.3] min-w-[230px]">
-          <span class="text-[11px] font-semibold text-sky-300 whitespace-nowrap">Heading:</span>
-          <input type="range" id="inlineHeading" min="0" max="359.5" step="0.5" value="220" aria-label="Heading">
-          <span id="inlineHeadingVal" class="mono text-xs font-bold text-sky-400 w-16 text-right"></span>
-        </div>
-        <div class="flex items-center gap-2 flex-1 min-w-[160px]">
-          <span class="text-[11px] font-semibold text-emerald-300 whitespace-nowrap">Floor:</span>
-          <input type="range" id="inlineFloor" min="1" max="30" step="1" value="27" class="emerald" aria-label="Floor">
-          <span id="inlineFloorVal" class="mono text-xs font-bold text-emerald-400 w-10 text-right"></span>
-        </div>
-        <div class="flex items-center gap-2 flex-1 min-w-[160px]">
-          <span class="text-[11px] font-semibold text-sky-300 whitespace-nowrap">Tilt:</span>
-          <input type="range" id="inlinePitch" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch">
-          <span id="inlinePitchVal" class="mono text-xs font-bold text-sky-400 w-12 text-right"></span>
-        </div>
-        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
-          <span class="text-[11px] font-semibold text-amber-300 whitespace-nowrap">Time:</span>
-          <input type="range" id="inlineHour" min="5" max="23" step="0.25" value="13" class="amber" aria-label="Time">
-          <span id="inlineHourVal" class="mono text-xs font-bold text-amber-400 w-11 text-right"></span>
-        </div>
-        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
-          <span class="text-[11px] font-semibold text-amber-300 whitespace-nowrap">Month:</span>
-          <input type="range" id="inlineMonth" min="1" max="12" step="1" value="10" class="amber" aria-label="Month">
-          <span id="inlineMonthVal" class="mono text-xs font-bold text-amber-400 w-8 text-right"></span>
-          <input type="date" id="inlineDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700 mono" aria-label="Date">
-        </div>
-      </div>
       <div class="canvas-pane-bottom">
-        <div class="absolute top-2 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
-          <div id="viewTitle" class="bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700/80 text-[11px] font-semibold text-slate-200 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-sky-400"></span><span>3D window view</span>
-            <span id="lensBadge" class="text-[10px] mono bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded border border-slate-700"></span>
-          </div>
-          <div id="viewTools" class="ml-auto pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[11px] flex flex-wrap items-center gap-2">
-            <button id="viewMenuBtn" class="chip phone-only keep" aria-expanded="false" title="View options">☰</button>
-            <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-Ray new</label>
-            <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
-            <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
-            <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
-            <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
-            <button id="walkBtn" class="chip keep text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
-            <button id="furnBtn" class="chip keep text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link">🛋 Furnish</button>
-            <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
-            <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
-            <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
-            <button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷</button>
-            <button id="ribbonBtn" class="chip keep" style="display:none" aria-pressed="false" title="Show / hide the room bar and sliders (phone landscape, Expand)">🎚</button>
-            <button id="expandBtn" class="chip keep text-emerald-300" aria-pressed="false">⤢ Expand</button>
-          </div>
+        <div class="ov-top">
+          <div><span id="statusPill" class="ov-badge mono"></span><button id="helpBtn" class="ov-btn" title="How to use this view">?</button></div>
+          <div><div class="room-wrap"><button id="roomBtn" class="ov-btn" aria-expanded="false" title="Room window and posture">🏠 <span id="roomBtnLbl">Living</span> ▾</button>
+            <div id="roomBar" class="room-menu" style="display:none"><div class="rm-h">Room window</div></div></div>
+            <button id="walkBtn" class="ov-btn text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button></div>
         </div>
-        <canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
-        <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
-        <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
-        <div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
-          <button id="walkHand" class="chip" style="font-size:16px" title="First-person hand: off / hand / green lightsaber (H)">✋</button><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
-          <button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
-        </div>
-        <div id="furnEd" class="furn-ed" style="display:none">
-          <div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
-            <select id="feLayout" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
-            <button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
-            <button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
-          <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
-          <canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
-          <div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div><div id="feTabLt" style="display:none"></div>
-          <div id="feTabFurn"><div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div>
-          <div class="flex items-center gap-1 mt-1.5 text-[11px] text-slate-300"><span class="text-amber-300">Kitchen</span><select id="feKit" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Kitchen counter"></select><label class="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" id="feKitTop" class="accent-amber-400">Top cabinets</label></div>
-          <div id="feSel" class="panel mt-1.5"></div></div>
-          <div id="feMsg" class="text-[10px] text-emerald-300 mt-1 min-h-[12px]"></div>
-          <div class="text-[9px] text-slate-500 leading-snug">IKEA-style sizes (editable). Visual only: daylight/heat readings ignore furniture and finishes (removed walls do merge rooms in the readings); the sun in the 3D room is lit and shadowed by it. Edits save on this device; 🔗 Share carries the layout to another device.</div>
-        </div>
-        <div id="dragHint" class="absolute bottom-2.5 left-3 pointer-events-none bg-slate-900/85 px-2.5 py-1 rounded border border-slate-800 text-[10px] text-slate-300 z-10">Drag L/R = turn • Drag U/D = tilt</div>
+<canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
+<div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
+<canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
+<div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
+<button id="walkHand" class="chip" style="font-size:16px" title="First-person hand: off / hand / green lightsaber (H)">✋</button><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
+<button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
+</div>
+<div id="furnEd" class="furn-ed" style="display:none">
+<div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
+<select id="feLayout" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
+<button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
+<button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
+<div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
+<canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
+<div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div><div id="feTabLt" style="display:none"></div>
+<div id="feTabFurn"><div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div>
+<div class="flex items-center gap-1 mt-1.5 text-[11px] text-slate-300"><span class="text-amber-300">Kitchen</span><select id="feKit" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Kitchen counter"></select><label class="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" id="feKitTop" class="accent-amber-400">Top cabinets</label></div>
+<div id="feSel" class="panel mt-1.5"></div></div>
+<div id="feMsg" class="text-[10px] text-emerald-300 mt-1 min-h-[12px]"></div>
+<div class="text-[9px] text-slate-500 leading-snug">IKEA-style sizes (editable). Visual only: daylight/heat readings ignore furniture and finishes (removed walls do merge rooms in the readings); the sun in the 3D room is lit and shadowed by it. Edits save on this device; 🔗 Share carries the layout to another device.</div>
+</div>
+        <div id="timeBar" class="ov-time"><span class="text-amber-300 text-[13px]">🕐</span><input type="range" id="inlineHour" min="5" max="23" step="0.25" value="13" class="amber" aria-label="Time"><span id="inlineHourVal" class="mono text-xs font-bold text-amber-400 w-11 text-right"></span><label class="date-chip" title="Change date"><span id="dateChip"></span><input type="date" id="inlineDate"  aria-label="Date"></label></div>
+        <div id="hint" class="hint" style="display:none"><div class="hint-card">
+          <div class="text-[15px] font-bold text-white mb-2">The view from #134, 27th floor</div>
+          <div>👆 <b>Drag</b> the view to look around (left/right turns, up/down tilts).</div>
+          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat.</div>
+          <div>🕐 <b>Slide the time</b> at the bottom, and tap the date to change the day.</div>
+          <div>☰ <b>Panels</b> (<span class="hint-where"></span>): View, Time, Future buildings, Sun &amp; light, Maps, Home.</div>
+          <button id="hintOk" class="chip mt-3 w-full" style="font-size:13px;padding:7px">Got it</button>
+        </div></div>
       </div>
     </div>
+    <aside id="drawer" class="drawer"><div class="sheet-grip" title="Taller / shorter"><span></span></div>
+<section class="pnl" data-p="view">
+<header class="pnl-h"><span class="t">📍 View</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Heading (compass)</span><span id="headingVal" class="mono text-sky-400 font-semibold"></span></div>
+<input type="range" id="headingSlider" min="0" max="359.5" step="0.5" value="220" aria-label="Heading">
+<div id="aimChips" class="flex flex-wrap gap-1 mt-1.5"></div></div>
+<div class="grid grid-cols-2 gap-2">
+<div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Your floor</span><span id="floorVal" class="mono text-emerald-400 font-semibold"></span></div>
+<input type="range" id="floorSlider" min="1" max="30" step="1" value="27" class="emerald" aria-label="Floor"></div>
+<div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Tilt</span><span id="pitchVal" class="mono text-sky-400 font-semibold"></span></div>
+<input type="range" id="pitchSlider" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch">
+<div class="flex gap-1 mt-1"><button id="aimRoofBtn" class="chip flex-1 text-amber-300">Aim roofline</button><button id="levelBtn" class="chip flex-1">Level</button></div></div></div>
+<div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Lens</span><span id="focalVal" class="mono text-sky-400 font-semibold"></span></div>
+<input type="range" id="focalSlider" min="13" max="85" step="1" value="26" aria-label="Focal length">
+<div class="flex items-center gap-2 mt-1"><button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button><span id="lensBadge" class="text-[10px] mono text-sky-300"></span></div></div>
+<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Landmark pins</label><button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷 Save image</button><button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button></div>
+<details class="more" data-more="view"><summary></summary><div class="more-b">
+<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-ray new towers</label><button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button></div>
+<div class="panel flex items-center gap-2 flex-wrap"><label class="flex items-center gap-1 text-[10px] text-slate-300"><input type="checkbox" id="facadeToggle" checked class="accent-emerald-500">Window limits</label>
+<div class="w-full flex items-center gap-2"><span class="text-[10px] text-slate-400 whitespace-nowrap">Stand-back from glass</span><input type="range" id="standSlider" min="0.1" max="3" step="0.1" value="0.5" aria-label="Stand-back distance"><span id="standVal" class="mono text-[10px] text-emerald-300 w-10 text-right"></span></div></div>
+</div></details>
+</div></section>
+<section class="pnl" data-p="time">
+<header class="pnl-h"><span class="t">🕐 Time & weather</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<div class="flex gap-1"><button data-time="day" class="time-btn chip flex-1">☀️ 13:00</button>
+<button data-time="sunset" class="time-btn chip flex-1">🌅 Sunset</button>
+<button data-time="night" class="time-btn chip flex-1">🌙 21:00</button></div>
+<div class="flex items-center gap-2"><span class="text-[11px] text-slate-300 w-12">Month</span><input type="range" id="inlineMonth" min="1" max="12" step="1" value="10" class="amber" aria-label="Month"><span id="inlineMonthVal" class="mono text-xs font-bold text-amber-400 w-8 text-right"></span></div>
+<div><span id="sunPill" class="text-[10px] mono bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded"></span></div>
+<div class="panel"><div class="flex justify-between items-center text-[11px] mb-1"><span class="text-slate-300">Weather</span><select id="weatherSel" class="bg-slate-800 border border-slate-700 rounded px-1 text-[11px] text-slate-200"></select></div>
+<div class="text-[9px] text-slate-500 mb-2">Visual only (sky, clouds, sun, rain); light/heat readings stay clear-sky. Sets haze visibility.</div></div>
+<details class="more" data-more="time"><summary></summary><div class="more-b">
+<div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
+<input type="range" id="visSlider" min="2" max="40" step="1" value="12" aria-label="Visibility">
+<div class="text-[9px] text-slate-500 mt-1">T = e<sup>−3.912·d/V</sup></div></div>
+</div></details>
+</div></section>
+<section class="pnl" data-p="future">
+<header class="pnl-h"><span class="t">🏗 Future buildings</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<div class="text-[11px] text-slate-400">Pick what gets built around TRPF (Marina East and nearby sites).</div>
+<select id="scenarioPreset" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 border border-slate-700">
+<option value="custom">-- Scenario --</option>
+<option value="movein">2029 move-in: no new towers</option>
+<option value="low">Low: Marina East GPR 3.5, 20–30F</option>
+<option value="base" selected>Base: Marina East GPR 4.0, 30–44F</option>
+<option value="tall">Upside: Marina East GPR 5.6, 35–50F</option>
+<option value="allres">Full build-out: Base + all reserves</option>
+</select>
+<div><span id="towerCount" class="text-[10px] mono text-slate-400"></span></div>
+<details class="more" data-more="future"><summary></summary><div class="more-b">
+<div class="text-[10px] text-slate-500">Fine-tune each site group (the scenario sets these).</div>
+<label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" id="existingToggle" checked class="accent-sky-500">Existing buildings (OSM + MP2025 HDB)</label>
+<label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" id="roadsToggle" checked class="accent-amber-500">Roads + flyovers/bridges (OSM; tunnels hidden)</label>
+<div id="groupRows" class="space-y-1.5"></div>
+<div class="grid grid-cols-2 gap-2">
+<div><div class="flex justify-between text-[10px] text-slate-400"><span>Tower spacing (reserve sites)</span><span id="spacingVal" class="mono"></span></div><input type="range" id="spacingSlider" min="50" max="200" step="5" value="95"></div>
+<div><div class="flex justify-between text-[10px] text-slate-400"><span>Footprint</span><span id="footprintVal" class="mono"></span></div><input type="range" id="footprintSlider" min="18" max="60" step="2" value="34"></div>
+<div><div class="flex justify-between text-[10px] text-slate-400"><span>Opacity (new)</span><span id="opacityVal" class="mono"></span></div><input type="range" id="opacitySlider" min="15" max="100" step="1" value="92"></div>
+<div class="flex items-end"><button id="reshuffleBtn" class="chip w-full text-rose-300">Reshuffle heights</button></div>
+</div>
+<div class="flex items-center gap-1 flex-wrap text-[10px]">
+<span class="text-slate-400">Typology:</span>
+<button class="chip typo-btn" data-fp="34" data-sp="100" title="MP2025 HDB blocks: median footprint 1,116 m² (≈33m square); grid giving GPR ≈3.5–4 at 35F">HDB • 34m / 100m</button>
+<button class="chip typo-btn" data-fp="30" data-sp="100" title="OSM residential towers ≥50m nearby: median footprint 871 m² (≈30m square); grid giving GPR ≈3 at 36F">Condo • 30m / 100m</button>
+<button class="chip typo-btn" data-fp="34" data-sp="75" title="Dense cluster spacing (HDB nearest-neighbour ≈50m) — upper-bound density">Dense • 34m / 75m</button>
+</div>
+<div class="panel">
+<div class="flex justify-between text-[10px] text-slate-400"><span>Blk 31A ↔ 32A facade gap</span><span id="gapVal" class="mono text-sky-300"></span></div>
+<input type="range" id="gapSlider" min="15" max="35" step="0.1" value="20.1" aria-label="31A to 32A gap">
+<div id="gapNote" class="text-[9px] text-slate-500 mt-0.5"></div>
+</div>
+</div></details>
+</div></section>
+<section class="pnl" data-p="light">
+<header class="pnl-h"><span class="t">☀️ Sun & light</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings box on the view</label>
+<div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Light & heat in room</span>
+<select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="light" selected>Light tint (BTO std)</option><option value="tinted">Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
+<div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
+<div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Readings: reveals/ledges/furniture not modelled. The Room interior view draws the sun per pixel through the openings (window recess, frames and furniture cast shadows), so its patch can be smaller than the reading.</div></div>
+<div class="panel mb-2.5"><div class="flex justify-between items-center"><span class="text-[10px] font-semibold text-amber-300">Direct sun on window (year)</span><span id="sunNow" class="text-[10px] mono"></span></div>
+<canvas id="sunChart" style="display:block;width:100%;height:150px;touch-action:none"></canvas>
+<div id="sunRooms" class="text-[10px] mono text-slate-300 mb-1"></div>
+<div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
+<details class="more" data-more="light"><summary></summary><div class="more-b">
+<div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Daylight over the day</span>
+<span class="text-[9px] text-slate-400">vs <input type="date" id="cmpDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0 border border-slate-700 mono"></span></div>
+<canvas id="lightChart" style="display:block;width:100%;height:140px;touch-action:none"></canvas>
+<div id="lightSum" class="text-[10px] mono text-slate-300 leading-relaxed mt-1"></div>
+<div class="text-[9px] text-slate-500 leading-snug mt-1">Indoor average lux (room average, log scale), 06:30–19:30, selected room/floor/glass. Amber = selected date, sky blue = compare date (solid = clear sky, dashed = overcast sky: ADF × CIE overcast 300+21000·sin el). ≥300 lx = enough to work without lights; ≥3000 lx = glare/heat risk. Tap to set time.</div></div>
+</div></details>
+</div></section>
+<section class="pnl" data-p="maps">
+<header class="pnl-h"><span class="t">🗺 Maps & sightline</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<div class="panel"><div class="flex items-center justify-between text-[10px] text-slate-400 mb-1 gap-1 flex-wrap">
+<span>Drag <span class="text-emerald-400 font-semibold">green dot</span> to move • tap to aim</span>
+<span class="flex gap-1"><button id="planSiteBtn" class="chip">Site</button><button id="planAreaBtn" class="chip">Area</button></span>
+</div>
+<canvas id="planCanvas" class="rounded border border-slate-800/80 cursor-crosshair"></canvas></div>
+<div class="canvas-pane-top">
+<div class="absolute top-2 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
+<div class="bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700/80 text-[11px] font-semibold text-slate-200 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span id="profileTitle">Section along gaze</span>
+<span class="text-[10px] text-emerald-300 font-normal hidden sm:inline">Drag in the left strip to change floor</span>
+</div>
+<div class="pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[10px] mono flex items-center gap-1">
+<span class="text-slate-400">Range:</span>
+<button data-range="2000" class="range-btn px-1.5 py-0.5 rounded border">2km</button>
+<button data-range="4000" class="range-btn px-1.5 py-0.5 rounded border">4km</button>
+<button data-range="6000" class="range-btn px-1.5 py-0.5 rounded border">6km</button>
+</div>
+</div>
+<canvas id="profileCanvas" class="sim-canvas"></canvas>
+</div>
+<div class="flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-300">Sightline</span><span id="eyeTag" class="text-[10px] mono px-2 py-0.5 rounded border"></span></div>
+<div class="grid grid-cols-3 gap-2 mb-2.5">
+<div class="panel"><div class="text-[10px] text-slate-400">Center gaze ray</div><div id="mGaze" class="text-sm font-semibold mono mt-0.5 truncate"></div><div id="mGazeSub" class="text-[10px] text-slate-500 truncate"></div></div>
+<div class="panel"><div class="text-[10px] text-slate-400">Ground dead-zone</div><div id="mDead" class="text-sm font-semibold mono mt-0.5 truncate"></div><div id="mDeadSub" class="text-[10px] text-slate-500 truncate"></div></div>
+<div class="panel"><div class="text-[10px] text-slate-400">Frame blocked</div><div id="mFov" class="text-sm font-semibold mono text-amber-400 mt-0.5"></div><div id="mFovSub" class="text-[10px] text-slate-500 truncate"></div></div>
+</div>
+<div id="insightBox" class="text-[11px] leading-relaxed bg-sky-950/40 border border-sky-800/50 text-sky-200/90 rounded-lg p-2.5 mb-2"></div>
+<details class="more" data-more="maps"><summary></summary><div class="more-b">
+<div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
+<div id="landmarkList" class="space-y-1 text-xs"></div>
+<div id="physicsReadout" class="text-[10px] mono leading-relaxed bg-slate-950/70 border border-slate-800 text-slate-400 rounded-lg p-2 mb-2.5"></div>
+<div class="text-[9px] text-slate-500 mt-2 leading-snug">
+Geo frame: URA Master Plan 2025 land use (data.gov.sg), OSM buildings, MP2025 HDB footprints. Origin = TRPF parcel centroid (1.29682N, 103.87826E).
+Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: cumulus field drifting ≈4°/h, count/greyness per Weather preset (visual only). Realism (visual only): facade/roof cast shadows, foot-of-wall contact shading, Fresnel sky reflection + mirrored buildings + sun glitter on water, glass-tower sky reflection + sun glint, traffic on roads/decks, ships under way, room exposure (outside washes out, window bloom). Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
+TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the URA parcel (0.225 m/px). Marina East parcels are “subject to detailed planning” (no published GPR or height): base case GPR 4.0 on ~70% net site (estimate 3.5–4.5), 30–44F stepping down toward Founders' Memorial, 10-storey frontage; GPR 5.6 (Marina South GLS, Marina Gardens Lane) is an upside scenario. Built floor area never exceeds GPR × net site. New towers: 3.15 m/storey + 4.5 m lobby + 3 m roof. Heights are above ground; URA height controls are in m SHD (add ~4 m site level). Layout synthetic, all sliders unclamped.
+</div>
+</div></details>
+</div></section>
+<section class="pnl" data-p="home">
+<header class="pnl-h"><span class="t">🏠 Home</span><button class="pnl-pin" title="Keep this panel open while opening others" aria-pressed="false">📌</button><button class="pnl-x" title="Close">✕</button></header>
+<div class="pnl-b">
+<label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior (walls, furniture)</label>
+<div class="flex gap-2 flex-wrap"><button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open windows</button><button id="furnBtn" class="chip text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link">🛋 Furnish</button></div>
+<div class="text-[10px] text-slate-500 leading-snug">🚶 Walk (on the view) lets you move through the flat: ▲▼◀▶ or W/A/S/D, ✋ hand, 🚪 doors. 🛋 Furnish edits furniture, finishes, walls, doors and lights.</div>
 
-    <aside class="control-sidebar">
-      <div class="p-3 border-b border-slate-800 space-y-2.5 bg-slate-900">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-bold text-emerald-400">1. Viewer</h3>
-          <span id="viewerBadge" class="text-[10px] mono bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30"></span>
-        </div>
-        <div class="panel">
-          <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1 gap-1 flex-wrap">
-            <span>Drag <span class="text-emerald-400 font-semibold">green dot</span> to move • tap to aim</span>
-            <span class="flex gap-1"><button id="planSiteBtn" class="chip">Site</button><button id="planAreaBtn" class="chip">Area</button><button id="resetViewerBtn" class="chip">#134</button></span>
-          </div>
-          <canvas id="planCanvas" class="rounded border border-slate-800/80 cursor-crosshair"></canvas>
-        </div>
-        <div class="panel flex items-center gap-2 flex-wrap">
-          <span class="text-[11px] text-slate-300">#134 window:</span>
-          <select id="spotSelect" class="flex-1 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700"></select>
-          <label class="flex items-center gap-1 text-[10px] text-slate-300"><input type="checkbox" id="facadeToggle" checked class="accent-emerald-500">Window limits</label>
-          <div class="w-full flex items-center gap-2"><span class="text-[10px] text-slate-400 whitespace-nowrap">Stand-back from glass</span><input type="range" id="standSlider" min="0.1" max="3" step="0.1" value="0.5" aria-label="Stand-back distance"><span id="standVal" class="mono text-[10px] text-emerald-300 w-10 text-right"></span></div>
-        </div>
-        <div class="panel">
-          <div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Heading (compass)</span><span id="headingVal" class="mono text-sky-400 font-semibold"></span></div>
-          <input type="range" id="headingSlider" min="0" max="359.5" step="0.5" value="220" aria-label="Heading">
-          <div id="aimChips" class="flex flex-wrap gap-1 mt-1.5"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Your floor</span><span id="floorVal" class="mono text-emerald-400 font-semibold"></span></div>
-            <input type="range" id="floorSlider" min="1" max="30" step="1" value="27" class="emerald" aria-label="Floor"></div>
-          <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Tilt</span><span id="pitchVal" class="mono text-sky-400 font-semibold"></span></div>
-            <input type="range" id="pitchSlider" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch">
-            <div class="flex gap-1 mt-1"><button id="aimRoofBtn" class="chip flex-1 text-amber-300">Aim roofline</button><button id="levelBtn" class="chip flex-1">Level</button></div></div>
-          <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Lens</span><span id="focalVal" class="mono text-sky-400 font-semibold"></span></div>
-            <input type="range" id="focalSlider" min="13" max="85" step="1" value="26" aria-label="Focal length">
-            <div class="flex gap-1 mt-1"><button data-focal="16" class="focal-preset chip flex-1">16</button><button data-focal="26" class="focal-preset chip flex-1">26</button><button data-focal="50" class="focal-preset chip flex-1">50</button></div></div>
-          <div class="panel"><div class="flex justify-between items-center text-[11px] mb-1"><span class="text-slate-300">Weather</span><select id="weatherSel" class="bg-slate-800 border border-slate-700 rounded px-1 text-[11px] text-slate-200"></select></div>
-            <div class="text-[9px] text-slate-500 mb-2">Visual only (sky, clouds, sun, rain); light/heat readings stay clear-sky. Sets haze visibility.</div>
-            <div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
-            <input type="range" id="visSlider" min="2" max="40" step="1" value="12" aria-label="Visibility">
-            <div class="text-[9px] text-slate-500 mt-1">T = e<sup>−3.912·d/V</sup></div></div>
-        </div>
-        <div class="panel border-amber-500/30">
-          <div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Time (SGT)</span><span id="hourVal" class="mono text-amber-300 font-semibold"></span></div>
-          <input type="range" id="hourSlider" min="5" max="23" step="0.25" value="13" class="amber" aria-label="Time">
-          <input type="date" id="dateInput" class="mt-1 w-full bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700 mono">
-        </div>
-      </div>
-
-      <div class="p-3 border-b border-slate-800 space-y-2 bg-slate-900/75">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-bold text-rose-400">2. Buildings</h3>
-          <span id="towerCount" class="text-[10px] mono text-slate-400"></span>
-        </div>
-        <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" id="existingToggle" checked class="accent-sky-500">Existing buildings (OSM + MP2025 HDB)</label>
-        <label class="flex items-center gap-1.5 text-[11px] text-slate-300"><input type="checkbox" id="roadsToggle" checked class="accent-amber-500">Roads + flyovers/bridges (OSM; tunnels hidden)</label>
-        <div id="groupRows" class="space-y-1.5"></div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><div class="flex justify-between text-[10px] text-slate-400"><span>Tower spacing (reserve sites)</span><span id="spacingVal" class="mono"></span></div><input type="range" id="spacingSlider" min="50" max="200" step="5" value="95"></div>
-          <div><div class="flex justify-between text-[10px] text-slate-400"><span>Footprint</span><span id="footprintVal" class="mono"></span></div><input type="range" id="footprintSlider" min="18" max="60" step="2" value="34"></div>
-          <div><div class="flex justify-between text-[10px] text-slate-400"><span>Opacity (new)</span><span id="opacityVal" class="mono"></span></div><input type="range" id="opacitySlider" min="15" max="100" step="1" value="92"></div>
-          <div class="flex items-end"><button id="reshuffleBtn" class="chip w-full text-rose-300">Reshuffle heights</button></div>
-        </div>
-        <div class="flex items-center gap-1 flex-wrap text-[10px]">
-          <span class="text-slate-400">Typology:</span>
-          <button class="chip typo-btn" data-fp="34" data-sp="100" title="MP2025 HDB blocks: median footprint 1,116 m² (≈33m square); grid giving GPR ≈3.5–4 at 35F">HDB • 34m / 100m</button>
-          <button class="chip typo-btn" data-fp="30" data-sp="100" title="OSM residential towers ≥50m nearby: median footprint 871 m² (≈30m square); grid giving GPR ≈3 at 36F">Condo • 30m / 100m</button>
-          <button class="chip typo-btn" data-fp="34" data-sp="75" title="Dense cluster spacing (HDB nearest-neighbour ≈50m) — upper-bound density">Dense • 34m / 75m</button>
-        </div>
-        <div class="panel">
-          <div class="flex justify-between text-[10px] text-slate-400"><span>Blk 31A ↔ 32A facade gap</span><span id="gapVal" class="mono text-sky-300"></span></div>
-          <input type="range" id="gapSlider" min="15" max="35" step="0.1" value="20.1" aria-label="31A to 32A gap">
-          <div id="gapNote" class="text-[9px] text-slate-500 mt-0.5"></div>
-        </div>
-      </div>
-
-      <div class="p-3 bg-slate-900/40 pb-6">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xs font-bold text-slate-400">3. Sightline analysis</h2>
-          <span id="eyeTag" class="text-[10px] mono px-2 py-0.5 rounded border"></span>
-        </div>
-        <div class="grid grid-cols-3 gap-2 mb-2.5">
-          <div class="panel"><div class="text-[10px] text-slate-400">Center gaze ray</div><div id="mGaze" class="text-sm font-semibold mono mt-0.5 truncate"></div><div id="mGazeSub" class="text-[10px] text-slate-500 truncate"></div></div>
-          <div class="panel"><div class="text-[10px] text-slate-400">Ground dead-zone</div><div id="mDead" class="text-sm font-semibold mono mt-0.5 truncate"></div><div id="mDeadSub" class="text-[10px] text-slate-500 truncate"></div></div>
-          <div class="panel"><div class="text-[10px] text-slate-400">Frame blocked</div><div id="mFov" class="text-sm font-semibold mono text-amber-400 mt-0.5"></div><div id="mFovSub" class="text-[10px] text-slate-500 truncate"></div></div>
-        </div>
-        <div id="insightBox" class="text-[11px] leading-relaxed bg-sky-950/40 border border-sky-800/50 text-sky-200/90 rounded-lg p-2.5 mb-2"></div>
-        <div id="physicsReadout" class="text-[10px] mono leading-relaxed bg-slate-950/70 border border-slate-800 text-slate-400 rounded-lg p-2 mb-2.5"></div>
-        <div class="panel mb-2.5"><div class="flex justify-between items-center"><span class="text-[10px] font-semibold text-amber-300">Direct sun on window (year)</span><span id="sunNow" class="text-[10px] mono"></span></div>
-          <canvas id="sunChart" style="display:block;width:100%;height:150px;touch-action:none"></canvas>
-          <div id="sunRooms" class="text-[10px] mono text-slate-300 mb-1"></div>
-          <div class="text-[9px] text-slate-500 leading-snug">15th of each month, 06:30–19:30, 15-min steps, at the selected window & floor. Amber = direct sun (brighter = more head-on); rose = sun in front but blocked by a building; slate = sun behind the facade. Tap a cell to set date & time. Plan: sun path (Jun 21 / Mar 20 / Dec 21 + selected date) around the viewer.</div></div>
-        <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Light & heat in room</span>
-            <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="light" selected>Light tint (BTO std)</option><option value="tinted">Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
-          <div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
-          <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Readings: reveals/ledges/furniture not modelled. The Room interior view draws the sun per pixel through the openings (window recess, frames and furniture cast shadows), so its patch can be smaller than the reading.</div></div>
-        <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Daylight over the day</span>
-            <span class="text-[9px] text-slate-400">vs <input type="date" id="cmpDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0 border border-slate-700 mono"></span></div>
-          <canvas id="lightChart" style="display:block;width:100%;height:140px;touch-action:none"></canvas>
-          <div id="lightSum" class="text-[10px] mono text-slate-300 leading-relaxed mt-1"></div>
-          <div class="text-[9px] text-slate-500 leading-snug mt-1">Indoor average lux (room average, log scale), 06:30–19:30, selected room/floor/glass. Amber = selected date, sky blue = compare date (solid = clear sky, dashed = overcast sky: ADF × CIE overcast 300+21000·sin el). ≥300 lx = enough to work without lights; ≥3000 lx = glare/heat risk. Tap to set time.</div></div>
-        <div class="text-[10px] font-semibold text-slate-400 mb-1">Landmarks (7 samples each • tap to aim)</div>
-        <div id="landmarkList" class="space-y-1 text-xs"></div>
-        <div class="text-[9px] text-slate-500 mt-2 leading-snug">
-          Geo frame: URA Master Plan 2025 land use (data.gov.sg), OSM buildings, MP2025 HDB footprints. Origin = TRPF parcel centroid (1.29682N, 103.87826E).
-          Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: cumulus field drifting ≈4°/h, count/greyness per Weather preset (visual only). Realism (visual only): facade/roof cast shadows, foot-of-wall contact shading, Fresnel sky reflection + mirrored buildings + sun glitter on water, glass-tower sky reflection + sun glint, traffic on roads/decks, ships under way, room exposure (outside washes out, window bloom). Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
-          TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the URA parcel (0.225 m/px). Marina East parcels are “subject to detailed planning” (no published GPR or height): base case GPR 4.0 on ~70% net site (estimate 3.5–4.5), 30–44F stepping down toward Founders' Memorial, 10-storey frontage; GPR 5.6 (Marina South GLS, Marina Gardens Lane) is an upside scenario. Built floor area never exceeds GPR × net site. New towers: 3.15 m/storey + 4.5 m lobby + 3 m roof. Heights are above ground; URA height controls are in m SHD (add ~4 m site level). Layout synthetic, all sliders unclamped.
-        </div>
-      </div>
+</div></section>
     </aside>
+    <nav id="rail" class="rail"><button class="rail-btn" data-p="view" aria-pressed="false" title="View"><span class="ic">📍</span><span class="lb">View</span></button><button class="rail-btn" data-p="time" aria-pressed="false" title="Time"><span class="ic">🕐</span><span class="lb">Time</span></button><button class="rail-btn" data-p="future" aria-pressed="false" title="Future"><span class="ic">🏗</span><span class="lb">Future</span></button><button class="rail-btn" data-p="light" aria-pressed="false" title="Light"><span class="ic">☀️</span><span class="lb">Light</span></button><button class="rail-btn" data-p="maps" aria-pressed="false" title="Maps"><span class="ic">🗺</span><span class="lb">Maps</span></button><button class="rail-btn" data-p="home" aria-pressed="false" title="Home"><span class="ic">🏠</span><span class="lb">Home</span></button></nav>
   </div>
 </div>
-
 <script>
 'use strict';
 const FLOOR_HEIGHT = 2.8, VOID_DECK_HEIGHT = 3.5, EYE_OFFSET = 1.55;
@@ -989,7 +984,7 @@ function drawSunChart() {
   sunChart._L = L; sunChart._R = R; sunChart._T = T; sunChart._B = B; sunChart._cw = cw; sunChart._ch = ch;
 }
 sunChart.addEventListener('pointerdown', e => { const { x, y } = localXY(sunChart, e), c = sunChart; const j = Math.floor((x - c._L) / c._cw), i = Math.floor((y - c._T) / c._ch); if (i < 0 || i > 11 || j < 0 || x > c._w - c._R) return;
-  state.dateStr = `${state.dateStr.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-15`; $('dateInput').value = state.dateStr; state.hour = Math.round((SUN_T0 + (j + 0.5) * SUN_DT) * 4) / 4; renderAll(); });
+  state.dateStr = `${state.dateStr.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-15`; state.hour = Math.round((SUN_T0 + (j + 0.5) * SUN_DT) * 4) / 4; renderAll(); });
 // Plan overlay: sun path around the viewer (stereographic-ish: radius ∝ zenith angle), hour ticks, current sun ray (amber if window sunlit).
 function drawSunPath(ctx, m, vx, vy) {
   const Rp = Math.min(planCanvas._w, planCanvas._h) * 0.42, pos = (ds, t) => { const s = solarPosition(ds, t); if (s.elDeg < 0) return null; const rr = Rp * (1 - s.elDeg / 90), a = s.azDeg * DEG; return [vx + rr * Math.sin(a), vy - rr * Math.cos(a)]; };
@@ -1134,7 +1129,7 @@ lightChart.addEventListener('pointerdown', e => { const { x } = localXY(lightCha
 // heat vs 1 room aircon 9,000 BTU/h ≈ 2.6 kW cooling.
 const ROOM_REF = { living: { lux: [100, 300], adf: 1.5 }, br3: { lux: [50, 150], adf: 1 }, br2: { lux: [50, 150], adf: 1 }, mbrS: { lux: [50, 150], adf: 1 } };
 function drawRoomHud() {
-  const el = $('roomHud'), sp = roomSpot(); if (!el) return; if (!sp || !$('hudToggle').checked) { el.style.display = 'none'; if ($('dragHint')) $('dragHint').style.display = ''; return; } el.style.display = '';
+  const el = $('roomHud'), sp = roomSpot(); if (!el) return; if (!sp || !$('hudToggle').checked) { el.style.display = 'none'; return; } el.style.display = '';
   const M = rmCache.v || roomMetrics(sp), N = M.now, P = N.Lr, R = ROOM_REF[sp.id] || ROOM_REF.living, D = dayCurve(sp, state.dateStr), E = dayCurve(sp, `${state.dateStr.slice(0, 4)}-03-21`);
   const lux = Math.round(N.luxSky + N.luxSun), day = P.sun.elDeg > 0, c = ok => `color:${ok === 2 ? '#34d399' : ok === 1 ? '#fbbf24' : '#fb7185'}`;
   const luxOk = !day ? 0 : lux > 3000 ? 0 : lux >= R.lux[0] ? 2 : 1, lab = lux > 3000 ? ' glare' : lux >= 300 ? ' task' : lux >= R.lux[0] ? ' ok' : ' dim';
@@ -1148,9 +1143,11 @@ function drawRoomHud() {
     ['Sun patch', P.patches.length ? `${(P.aFloor + P.aBack).toFixed(1)} m² • ${P.depth.toFixed(1)} m` : 'none', 2, '—'],
     ['Heat now', `${Math.round(N.q)} W (${Math.round((100 * N.q) / 2600)}% AC)`, N.q < 500 ? 2 : N.q < 1300 ? 1 : 0, 'AC 2.6 kW'],
     ['Heat today', `${D.kwh.toFixed(1)} kWh`, D.kwh < 5 ? 2 : D.kwh < 10 ? 1 : 0, '—'] ];
-  el.innerHTML = `<div class="text-amber-300 font-semibold mb-0.5">${M.label || sp.room} ${state.dateStr.slice(5)} ${fmtT(state.hour)} • ${M.G.label} • clear sky</div><table style="border-collapse:collapse"><tr class="text-slate-500"><td></td><td class="pr-2">value</td><td>typical</td></tr>` +
+  if (!UI.hudFull) { el.innerHTML = `<div class="text-amber-300 font-semibold mb-0.5">${M.label || sp.room} • readings <span class="text-sky-300">▸ more</span></div><table style="border-collapse:collapse">` +
+      [rows[0], rows[4], rows[7]].map(([k, v, ok]) => `<tr><td class="text-slate-400 pr-2" style="white-space:nowrap">${k}</td><td style="white-space:nowrap;${c(ok)}">${v}</td></tr>`).join('') + '</table>'; el.title = 'Tap for all readings'; return; }
+  el.title = 'Tap for the short version';
+  el.innerHTML = `<div class="text-amber-300 font-semibold mb-0.5">${M.label || sp.room} ${state.dateStr.slice(5)} ${fmtT(state.hour)} • ${M.G.label} • clear sky <span class="text-sky-300">▾ less</span></div><table style="border-collapse:collapse"><tr class="text-slate-500"><td></td><td class="pr-2">value</td><td>typical</td></tr>` +
     rows.map(([k, v, ok, ref]) => `<tr style="vertical-align:top"><td class="text-slate-400 pr-2" style="white-space:nowrap">${k}</td><td class="pr-2" style="white-space:nowrap;${c(ok)}">${v}</td><td class="text-slate-500" style="font-size:9px">${ref}</td></tr>`).join('') + '</table>';
-  const hint = $('dragHint'); if (hint) hint.style.display = 'none';
 }
 const Wr2 = sp => `${sp.roomW.toFixed(2)}×${(sp.depth || 6).toFixed(2)} m${sp.area ? ` (${sp.area.toFixed(1)} m² incl. L)` : ''}`;
 
@@ -1186,24 +1183,24 @@ function buildGroupRows() {
 }
 function updateDashboard(m) {
   const env = m.env, sp0 = curSpot(), dU = Math.hypot(state.vx - UNIT134[0], state.vz - UNIT134[1]);
-  $('spotSelect').value = state.spot || ''; $('facadeToggle').checked = state.facadeLimit;
+  $('facadeToggle').checked = state.facadeLimit;
   document.querySelectorAll('.room-btn').forEach(b => { const on = b.dataset.id === state.spot; b.style.borderColor = on ? '#34d399' : ''; b.style.color = on ? '#6ee7b7' : ''; });
   $('standVal').textContent = `${state.standDist.toFixed(1)}m`; $('standSlider').value = state.standDist;
   document.querySelectorAll('.posture-btn').forEach(b => { const P0 = POSTURES[b.dataset.k], ok = !P0.only || !state.spot || P0.only.includes(state.spot), on = b.dataset.k === state.posture; b.disabled = !ok; b.style.opacity = ok ? '1' : '0.35'; b.style.borderColor = on ? '#34d399' : ''; b.style.color = on ? '#6ee7b7' : ''; });
-  $('viewerBadge').textContent = sp0 ? `#134 ${sp0.label}` : `${fmtDist(dU)} ${compassName(bearingTo(UNIT134[0], UNIT134[1], state.vx, state.vz))} of #134`;
-  $('statusPill').textContent = `${sp0 ? '#134 Blk 32A' : 'Custom spot'} • ${state.obsFloor}F (${m.hEye.toFixed(1)}m) • facing ${state.heading.toFixed(1)}° ${compassName(state.heading)}`;
-  $('headingVal').textContent = `${state.heading.toFixed(1)}° ${compassName(state.heading)}`; $('inlineHeadingVal').textContent = `${state.heading.toFixed(1)}°`;
-  $('headingSlider').value = state.heading; $('inlineHeading').value = state.heading;
-  $('floorVal').textContent = `${state.obsFloor}F (${m.hEye.toFixed(1)}m)`; $('inlineFloorVal').textContent = `${state.obsFloor}F`; $('floorSlider').value = state.obsFloor; $('inlineFloor').value = state.obsFloor;
-  $('pitchVal').textContent = `${signed(state.pitchDeg.toFixed(1))}°`; $('inlinePitchVal').textContent = `${signed(state.pitchDeg.toFixed(1))}°`; $('pitchSlider').value = state.pitchDeg; $('inlinePitch').value = state.pitchDeg;
+  $('statusPill').textContent = `${sp0 ? '#134' : `${fmtDist(dU)} ${compassName(bearingTo(UNIT134[0], UNIT134[1], state.vx, state.vz))} of #134`} · ${state.obsFloor}F · ${Math.round(state.heading)}° ${compassName(state.heading)}`;
+  $('statusPill').title = `${sp0 ? `#134 Blk 32A ${sp0.label}` : 'Custom spot'} • eye ${m.hEye.toFixed(1)} m • facing ${state.heading.toFixed(1)}°`;
+  $('roomBtnLbl').textContent = `${sp0 ? sp0.room : 'Custom spot'}${state.posture !== 'stand' ? ` · ${POSTURES[state.posture].label}` : ''}`;
+  $('headingVal').textContent = `${state.heading.toFixed(1)}° ${compassName(state.heading)}`;
+  $('headingSlider').value = state.heading;
+  $('floorVal').textContent = `${state.obsFloor}F (${m.hEye.toFixed(1)}m)`; $('floorSlider').value = state.obsFloor;
+  $('pitchVal').textContent = `${signed(state.pitchDeg.toFixed(1))}°`; $('pitchSlider').value = state.pitchDeg;
   $('focalVal').textContent = `${state.focalLength}mm`; $('focalSlider').value = state.focalLength;
   $('lensBadge').textContent = `${state.focalLength}mm • HFOV ${Math.round(m.hFovDeg)}° × VFOV ${Math.round(m.vFovDeg)}°`;
-  document.querySelectorAll('.focal-preset').forEach(b => b.style.borderColor = +b.dataset.focal === state.focalLength ? '#38bdf8' : '');
   document.querySelectorAll('.range-btn').forEach(b => { b.className = `range-btn px-1.5 py-0.5 rounded border ${+b.dataset.range === state.profileRange ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700'}`; });
   $('planSiteBtn').style.borderColor = state.planMode === 'site' ? '#34d399' : ''; $('planAreaBtn').style.borderColor = state.planMode === 'area' ? '#34d399' : '';
   $('weatherSel').value = state.weather; $('lensBtn').textContent = LENS_LABEL[state.focalLength] || `${state.focalLength}mm`;
   $('visVal').textContent = `${state.visibilityKm} km`; $('visSlider').value = state.visibilityKm;
-  $('hourVal').textContent = fmtHour(state.hour); $('hourSlider').value = state.hour; $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateInput').value = state.dateStr; $('inlineMonth').value = +state.dateStr.slice(5, 7); $('inlineMonthVal').textContent = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+state.dateStr.slice(5, 7) - 1];
+  $('inlineHourVal').textContent = fmtHour(state.hour); $('inlineHour').value = state.hour; $('inlineDate').value = state.dateStr; $('dateChip').textContent = new Date(state.dateStr + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); $('inlineMonth').value = +state.dateStr.slice(5, 7); $('inlineMonthVal').textContent = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+state.dateStr.slice(5, 7) - 1];
   $('sunPill').textContent = `${env.phase} • Sun el ${env.sun.elDeg.toFixed(1)}° az ${env.sun.azDeg.toFixed(0)}°`;
   GROUPS.forEach(g => { const s = state.groups[g.id]; document.querySelector(`.g-on[data-g="${g.id}"]`).checked = s.on;
     document.querySelector(`.g-rng[data-g="${g.id}"][data-k="min"]`).value = s.min; document.querySelector(`.g-rng[data-g="${g.id}"][data-k="max"]`).value = s.max;
@@ -1486,7 +1483,8 @@ function walkStep(k) {
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
   if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
-  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
+  if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
+  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').textContent = on ? '✕ Stop' : '🚶 Walk'; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
 const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
 function drawWalkMap() {
@@ -1862,6 +1860,7 @@ function furnHit(X, Y) { for (let i = FURN.items.length - 1; i >= 0; i--) { cons
 function furnPick(i) { FURN.sel = i; furnSelUI(); furnDrawPlan(); }
 function furnEdit(fn, full) { const it = FURN.items[FURN.sel]; if (!it) return; fn(it); furnChanged(); if (full) furnSelUI(); furnDrawPlan(); renderView(); }
 function furnOpen(on) {
+  if (on && PNL.open.length) { PNL.open = []; pnlApply(); }   // editor docks where the panel drawer was
   FURN.open = on; const ed = $('furnEd'); ed.style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('furnishing', on); pressChip('furnBtn', on);
   if (on && (!state.showBalcony || !curSpot())) { state.showBalcony = true; $('balconyToggle').checked = true; if (!curSpot()) { const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z }); } }
   furnLayoutSel(); furnSelUI(); requestAnimationFrame(() => { resizeCanvases(); furnDrawPlan(); });
@@ -2496,11 +2495,11 @@ perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX
 perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 30) * 2) / 2; renderView(); });
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
-bind('headingSlider', v => { state.heading = parseFloat(v); }); bind('inlineHeading', v => { state.heading = parseFloat(v); });
-bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); }); bind('inlineFloor', v => { state.obsFloor = parseInt(v, 10); });
-bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); }); bind('inlinePitch', v => { state.pitchDeg = parseFloat(v); });
+bind('headingSlider', v => { state.heading = parseFloat(v); });
+bind('floorSlider', v => { state.obsFloor = parseInt(v, 10); });
+bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
-bind('hourSlider', v => { state.hour = parseFloat(v); }); bind('inlineHour', v => { state.hour = parseFloat(v); });
+bind('inlineHour', v => { state.hour = parseFloat(v); });
 bind('inlineMonth', v => { const [y, , d] = state.dateStr.split('-').map(Number), mo = parseInt(v, 10), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); state.dateStr = `${y}-${String(mo).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`; });   // keep day, clamp to month length
 $('glassSelect').addEventListener('change', e => { state.glass = e.target.value; renderAll(); });
 $('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
@@ -2511,26 +2510,24 @@ document.querySelectorAll('.typo-btn').forEach(b => b.addEventListener('click', 
 $('roadsToggle').addEventListener('change', e => { state.showRoads = e.target.checked; custom(); rebuildIndex(); renderAll(); });
 $('existingToggle').addEventListener('change', e => { state.showExisting = e.target.checked; custom(); rebuildIndex(); renderAll(); });
 $('gapSlider').addEventListener('input', e => { gap3132 = parseFloat(e.target.value); rebuildTRPF(); rebuildIndex(); custom(); renderAll(); });
-$('dateInput').value = state.dateStr; $('dateInput').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } });
-document.querySelectorAll('.focal-preset').forEach(b => b.addEventListener('click', () => { state.focalLength = +b.dataset.focal; renderAll(); }));
+$('dateChip').parentElement.addEventListener('click', e => { const d = $('inlineDate'); if (e.target === d && d.showPicker) { try { d.showPicker(); } catch (_) {} } });
 document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click', () => { state.profileRange = +b.dataset.range; renderAll(); }));
-const spotSel = $('spotSelect');
-UNIT_SPOTS.forEach(sp => { const o = document.createElement('option'); o.value = sp.id; o.textContent = `${sp.label} • faces ${sp.normal}°`; spotSel.appendChild(o); });
-{ const o = document.createElement('option'); o.value = ''; o.textContent = 'Custom (dragged)'; spotSel.appendChild(o); }
-spotSel.addEventListener('change', e => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === e.target.value); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } renderAll(); });
 const roomBar = $('roomBar');
-UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.className = 'chip room-btn'; b.dataset.id = sp.id; b.textContent = `${sp.room} • ${sp.normal.toFixed(0)}°`;
-  b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = sp.heading0 ?? Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
+UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.className = 'chip room-btn'; b.dataset.id = sp.id; b.textContent = `${sp.room} · faces ${sp.normal.toFixed(0)}°`; b.title = sp.label;
+  b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = sp.heading0 ?? Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); roomMenu(false); }); roomBar.appendChild(b); });
 function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; const ss = k === 'sofa' && state.showBalcony && !state.walk && furnSofaSeat(); if (ss) state.heading = ss.heading; renderAll(); }   // sofa: look where the placed sofa faces
-{ const sep = document.createElement('span'); sep.className = 'text-slate-600 mx-1'; sep.textContent = '|'; roomBar.appendChild(sep);
-  Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); roomBar.appendChild(b); }); }
+{ const h = document.createElement('div'); h.className = 'rm-h'; h.textContent = 'Posture (eye height)'; roomBar.appendChild(h); const row = document.createElement('div'); row.className = 'rm-row'; roomBar.appendChild(row);
+  Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); row.appendChild(b); }); }
 // Home: back to #134 living window, 27F, standing, facing 220°, tilt −1.5° (scenario/world untouched).
-{ const b = document.createElement('button'); b.className = 'chip ml-1'; b.style.borderColor = '#34d399'; b.style.color = '#6ee7b7'; b.textContent = '⌂ Back to #134'; b.title = 'Living window, 27F, standing, facing 220°';
-  b.addEventListener('click', () => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z, obsFloor: 27, heading: 220, pitchDeg: -1.5 }); setPosture('stand'); });
+{ const b = document.createElement('button'); b.className = 'chip mt-1'; b.style.borderColor = '#34d399'; b.style.color = '#6ee7b7'; b.textContent = '⌂ Back to #134'; b.title = 'Living window, 27F, standing, facing 220°';
+  b.addEventListener('click', () => { if (state.walk) setWalk(false); const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z, obsFloor: 27, heading: 220, pitchDeg: -1.5 }); setPosture('stand'); roomMenu(false); });
   roomBar.appendChild(b); }
+// Room menu (on the view): rooms, posture, back to #134; closes on outside tap
+function roomMenu(on) { $('roomBar').style.display = on ? '' : 'none'; $('roomBtn').setAttribute('aria-expanded', String(on)); }
+$('roomBtn').addEventListener('click', e => { e.stopPropagation(); roomMenu($('roomBar').style.display === 'none'); });
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.room-wrap')) roomMenu(false); });
 $('standSlider').addEventListener('input', e => { state.standDist = parseFloat(e.target.value); renderAll(); });
 $('facadeToggle').addEventListener('change', e => { state.facadeLimit = e.target.checked; renderAll(); });
-$('resetViewerBtn').addEventListener('click', () => { state.vx = UNIT134[0]; state.vz = UNIT134[1]; state.spot = 'living'; renderAll(); });
 const setPlanMode = md => { state.planMode = md; resizeCanvases(); };
 $('planSiteBtn').addEventListener('click', () => setPlanMode('site')); $('planAreaBtn').addEventListener('click', () => setPlanMode('area'));
 $('levelBtn').addEventListener('click', () => { state.pitchDeg = 0; renderAll(); });
@@ -2540,16 +2537,37 @@ $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked;
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
 const PHONE_MQ = '(max-width: 640px), (max-height: 500px)';   // phone portrait or landscape (same as the CSS phone block)
 $('hudToggle').addEventListener('change', () => drawRoomHud());
-$('viewMenuBtn').addEventListener('click', () => { const o = $('viewTools').classList.toggle('open'); $('viewMenuBtn').setAttribute('aria-expanded', String(o)); $('viewMenuBtn').textContent = o ? '✕' : '☰'; });
-if (matchMedia(PHONE_MQ).matches) $('hudToggle').checked = false;   // phone: readings off by default (☰ → Readings)
-$('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
-function setExpanded(on) {
-  const shell = document.querySelector('.app-shell'); shell.classList.toggle('view-max', on);
-  const b = $('expandBtn'); b.textContent = on ? '⤡ Collapse' : '⤢ Expand'; b.setAttribute('aria-pressed', String(on));
+// Readings box: compact 3 lines by default, tap for the full table (remembered on this device)
+const UI = (() => { try { return JSON.parse(localStorage.getItem('trpf134.ui')) || {}; } catch (_) { return {}; } })();
+const uiSave = () => { try { localStorage.setItem('trpf134.ui', JSON.stringify(UI)); } catch (_) {} };
+$('roomHud').addEventListener('click', () => { UI.hudFull = !UI.hudFull; uiSave(); drawRoomHud(); });
+// Panels: rail button opens its section in the drawer (phone: one at a time, bottom/side sheet); 📌 keeps a section open (desktop)
+const PNL = { open: [], pin: (UI.pin || []).filter(k => document.querySelector(`.pnl[data-p="${k}"]`)) };
+function pnlApply(scrollTo) {
+  const phone = matchMedia(PHONE_MQ).matches; if (phone && PNL.open.length > 1) PNL.open = PNL.open.slice(-1);
+  document.querySelectorAll('.pnl').forEach(p => { const k = p.dataset.p, on = PNL.open.includes(k); p.classList.toggle('open', on); p.querySelector('.pnl-pin').setAttribute('aria-pressed', String(PNL.pin.includes(k))); });
+  document.querySelectorAll('.rail-btn').forEach(b => b.setAttribute('aria-pressed', String(PNL.open.includes(b.dataset.p))));
+  const dr = $('drawer'); dr.classList.toggle('open', PNL.open.length > 0); if (!PNL.open.length) dr.classList.remove('tall');
+  if (scrollTo) { const el = document.querySelector(`.pnl[data-p="${scrollTo}"]`); if (el) dr.scrollTop = Math.max(0, el.offsetTop - (phone ? 16 : 0)); }
   requestAnimationFrame(resizeCanvases);
 }
-$('ribbonBtn').addEventListener('click', () => { const o = document.querySelector('.app-shell').classList.toggle('ribbon-open'); $('ribbonBtn').setAttribute('aria-pressed', String(o)); $('ribbonBtn').style.borderColor = o ? '#34d399' : ''; requestAnimationFrame(resizeCanvases); });
-$('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
+function pnlToggle(k) { if (PNL.open.includes(k)) { PNL.open = PNL.open.filter(q => q !== k); PNL.pin = PNL.pin.filter(q => q !== k); UI.pin = PNL.pin; uiSave(); }
+  else { if (FURN.open) furnOpen(false); PNL.open = PNL.open.filter(q => PNL.pin.includes(q)).concat(k); PNL.open.sort((a, b) => RAIL_ORDER.indexOf(a) - RAIL_ORDER.indexOf(b)); }
+  pnlApply(PNL.open.includes(k) ? k : null); }
+const RAIL_ORDER = [...document.querySelectorAll('.rail-btn')].map(b => b.dataset.p);
+document.querySelectorAll('.rail-btn').forEach(b => b.addEventListener('click', () => pnlToggle(b.dataset.p)));
+document.querySelectorAll('.pnl').forEach(p => { const k = p.dataset.p;
+  p.querySelector('.pnl-x').addEventListener('click', () => pnlToggle(k));
+  p.querySelector('.pnl-pin').addEventListener('click', () => { PNL.pin = PNL.pin.includes(k) ? PNL.pin.filter(q => q !== k) : PNL.pin.concat(k); UI.pin = PNL.pin; uiSave(); pnlApply(); }); });
+document.querySelectorAll('details.more').forEach(d => { const k = d.dataset.more; d.open = !!(UI.more && UI.more[k]); d.addEventListener('toggle', () => { UI.more = { ...(UI.more || {}), [k]: d.open }; uiSave(); requestAnimationFrame(resizeCanvases); }); });
+document.querySelector('.sheet-grip').addEventListener('click', () => $('drawer').classList.toggle('tall'));
+if (!matchMedia(PHONE_MQ).matches && PNL.pin.length) { PNL.open = PNL.pin.slice(); pnlApply(); }
+// One-time hint (first visit on this device); ? reopens it
+function hintShow(on) { $('hint').style.display = on ? '' : 'none'; if (!on) { UI.hint = 1; uiSave(); } }
+document.querySelector('.hint-where').textContent = matchMedia('(max-width: 640px) and (min-height: 501px)').matches ? 'bottom bar' : 'right edge';
+$('helpBtn').addEventListener('click', () => hintShow(true)); $('hintOk').addEventListener('click', () => hintShow(false)); $('hint').addEventListener('click', e => { if (e.target.id === 'hint') hintShow(false); });
+if (!UI.hint) hintShow(true);
+$('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
 $('walkBtn').addEventListener('click', () => setWalk(!state.walk));
 const LENS = [13, 26, 52, 77], LENS_LABEL = { 13: '0.5×', 26: '1×', 52: '2×', 77: '3×' };
 $('weatherSel').innerHTML = Object.entries(WEATHER).map(([k, W]) => `<option value="${k}">${W.label}</option>`).join('');
@@ -2585,7 +2603,7 @@ window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTA
   if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
   if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
-window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
+window.addEventListener('keydown', e => { if (e.key === 'Escape') { roomMenu(false); if ($('hint').style.display !== 'none') hintShow(false); } });
 // Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
   movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false } },
@@ -2596,7 +2614,7 @@ const PRESETS = {
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(state, { spacing: 95, showExisting: true, showRoads: true });
-  state.dateStr = p.date || todayISO(); $('dateInput').value = state.dateStr;
+  state.dateStr = p.date || todayISO();
   GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {})); regen(); });
 function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(cssW * dpr)); cv.height = Math.max(1, Math.round(cssH * dpr)); cv._w = cssW; cv._h = cssH; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 function resizeCanvases() {
