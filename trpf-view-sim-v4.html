@@ -212,9 +212,9 @@
             <select id="feLayout" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
             <button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
             <button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
-          <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls">🧱 Walls &amp; doors</button></div>
+          <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
           <canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
-          <div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div>
+          <div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div><div id="feTabLt" style="display:none"></div>
           <div id="feTabFurn"><div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div>
           <div class="flex items-center gap-1 mt-1.5 text-[11px] text-slate-300"><span class="text-amber-300">Kitchen</span><select id="feKit" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Kitchen counter"></select><label class="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" id="feKitTop" class="accent-amber-400">Top cabinets</label></div>
           <div id="feSel" class="panel mt-1.5"></div></div>
@@ -1037,16 +1037,16 @@ function vscOf(sp) {
 // Wall toggles merge rooms for the readings (owner 2026-10-27): Bedroom 3 walls off → living + BR3, BR2/3 partition off → BR2 + BR3 (both → all three).
 const ROOM_SHARED = { 'living|br3': 4.73, 'br3|br2': 3.18 };   // removed wall length (m) between the rooms: perimeter −2× this
 const roomGroup = id => { if (!['living', 'br3', 'br2'].includes(id)) return [id]; const set = new Set([id]); for (let i = 0; i < 2; i++) for (const [a, b, on] of [['living', 'br3', !UNIT_W.br3], ['br3', 'br2', !UNIT_W.br23]]) if (on && (set.has(a) || set.has(b))) { set.add(a); set.add(b); } return ['living', 'br3', 'br2'].filter(x => set.has(x)); };
-const mergeKey = () => `${UNIT_W.br3}${UNIT_W.br23}`;
+const mergeKey = () => `${UNIT_W.br3}${UNIT_W.br23}|${Object.keys(CV_WIN).map(id => covF(id).join(',')).join(';')}`;   // also window coverings (τv/SHGC factors)
 function roomMetricsN(sp, grp) {   // merged room: one floor area/surface area, every window (ADF, sky + sun lux, heat summed per window)
-  const G = GLASS[state.glass] || GLASS.clear, ids = grp.map(q => q.id), Ws = grp.map(q => ({ q, Aw: q.w * (WIN_HEAD - SILL) * FRAME_F, vsc: vscOf(q) }));
+  const G = GLASS[state.glass] || GLASS.clear, ids = grp.map(q => q.id), Ws = grp.map(q => ({ q, Aw: q.w * (WIN_HEAD - SILL) * FRAME_F, vsc: vscOf(q), f: covF(q.id) }));
   const Af = grp.reduce((a, q) => a + (q.area || q.roomW * q.depth), 0); let per = grp.reduce((a, q) => a + (q.perim || 2 * (q.roomW + q.depth)), 0);
   for (const [k, l] of Object.entries(ROOM_SHARED)) { const [a, b] = k.split('|'); if (ids.includes(a) && ids.includes(b)) per -= 2 * l; }
   const A = 2 * Af + per * ROOM_H, Aw = Ws.reduce((a, w) => a + w.Aw, 0), vsc = Ws.reduce((a, w) => a + w.vsc * w.Aw, 0) / Aw;
-  const adf = Ws.reduce((a, w) => a + G.tv * w.Aw * ((90 * w.vsc) / 39.6) * 0.9, 0) / (A * (1 - R_MEAN * R_MEAN));
+  const adf = Ws.reduce((a, w) => a + G.tv * w.f[0] * w.Aw * ((90 * w.vsc) / 39.6) * 0.9, 0) / (A * (1 - R_MEAN * R_MEAN));
   const at = (hr, ds = state.dateStr) => { let q = 0, luxSun = 0, Lr0 = null, cs = null;
     for (const w of Ws) { const Lr = roomLight(w.q, ds, hr); cs = cs || clearSky(Lr.sun.elDeg); const dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
-      q += G.shgc * w.Aw * (dirIrr + cs.dhi * 0.5 * (w.vsc / 39.6)); luxSun += (G.tv * w.Aw * dirIrr * 95) / Af; if (w.q.id === sp.id) Lr0 = Lr; }
+      q += G.shgc * w.f[1] * w.Aw * (dirIrr + cs.dhi * 0.5 * (w.vsc / 39.6)); luxSun += (G.tv * w.f[0] * w.Aw * dirIrr * 95) / Af; if (w.q.id === sp.id) Lr0 = Lr; }
     return { Lr: Lr0, cs, q, luxSky: (adf / 100) * cs.dhi * 120, luxSun, luxOvc: Lr0.sun.elDeg > 0 ? (adf / 100) * (300 + 21000 * Math.sin(Lr0.sun.elDeg * DEG)) : 0 }; };
   const now = at(state.hour), kk = [sp.id, mergeKey(), state.obsFloor, state.eyeOffset, state.dateStr, state.glass, WORLD_VER, mergeKey()].join('|');
   if (kwhCache.key !== kk) { let k = 0; for (let t = 6.5; t < 19.5; t += 0.25) k += (at(t + 0.125).q * 0.25) / 1000; kwhCache = { key: kk, v: k }; }
@@ -1054,7 +1054,7 @@ function roomMetricsN(sp, grp) {   // merged room: one floor area/surface area, 
 }
 function roomMetrics(sp) {
   const grp = roomGroup(sp.id); if (grp.length > 1) return roomMetricsN(sp, grp.map(id => UNIT_SPOTS.find(q => q.id === id)));
-  const G = GLASS[state.glass] || GLASS.clear, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = sp.area || Wr * D, A = 2 * Af + (sp.perim || 2 * (Wr + D)) * ROOM_H;
+  const G0 = GLASS[state.glass] || GLASS.clear, cf = covF(sp.id), G = cf[0] < 1 ? { ...G0, tv: G0.tv * cf[0], shgc: G0.shgc * cf[1], label: `${G0.label} + ${CV_T[FURN.cv.w[sp.id].t].split(' (')[0].toLowerCase()} ${FURN.cv.w[sp.id].s === 'half' ? (FURN.cv.w[sp.id].t === 'curtain' ? 'sheer' : 'half') : FURN.cv.w[sp.id].s}` } : G0, Aw = sp.w * (WIN_HEAD - SILL) * FRAME_F, D = sp.depth || 6, Wr = sp.roomW, Af = sp.area || Wr * D, A = 2 * Af + (sp.perim || 2 * (Wr + D)) * ROOM_H;
   const vsc = vscOf(sp), theta = (90 * vsc) / 39.6, adf = (G.tv * Aw * theta * 0.9) / (A * (1 - R_MEAN * R_MEAN));
   const at = (hr, ds = state.dateStr) => { const Lr = roomLight(sp, ds, hr), cs = clearSky(Lr.sun.elDeg), dirIrr = cs.dni * (Lr.cosInc || 0) * Lr.litFrac;
     return { Lr, cs, q: G.shgc * Aw * (dirIrr + cs.dhi * 0.5 * (vsc / 39.6)), luxSky: (adf / 100) * cs.dhi * 120, luxSun: (G.tv * Aw * dirIrr * 95) / Af,
@@ -1612,7 +1612,7 @@ function kitParts(kit) {
     if (kit.top) at(C.hob, 0.6, 0, 0.5, 1.45, 1.55, '#5a5e63'); else { at(C.hob, 0.6, 0, 0.5, 1.55, 1.7, '#8f9499'); at(C.hob, 0.25, 0, 0.25, 1.7, 2.6, '#8f9499'); } }
   return P;
 }
-const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => ({ i: FURN_SAMPLE(), k: { c: 'L', top: 1 } }) };
+const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => ({ i: FURN_SAMPLE(), k: { c: 'L', top: 1 }, l: { m: 'auto', r: { living: { t: 'cove', k: 3000 }, dining: { t: 'down', k: 3000 }, mbrS: { t: 'ceil', k: 3000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'down', k: 4000 } } }, v: { c: '#d9cfc0', w: { living: { t: 'curtain', s: 'open' }, mbrS: { t: 'curtain', s: 'open' }, br2: { t: 'roller', s: 'open' }, br3: { t: 'roller', s: 'open' } } } }) };
 // Finishes (owner 2026-10-27 interview; saved per layout as f; presets/defaults = estimates): whole flat tiled (floor colour per room), wall paint per room + one accent wall,
 // saved swatches reusable in any room, kitchen door/countertop colour + bar handles or handleless, wall tiles per bath/kitchen/yard (colour + layout) + feature tile (shower wall / backsplash).
 // Finish zones = plan rects (first match); anything else inside the outline = living/dining/hall.
@@ -1658,9 +1658,56 @@ function doorParts() {
   if (W.kit) { const FR = '#d8d8d4', g = (x0, x1, y0, y1) => P.push({ ...fRect(x0, y0, x1, y1, 0.02, 2.08, '#c8d7df'), glass: 1 }, fRect(x0, y0, x0 + 0.03, y1, 0.02, 2.08, FR), fRect(x1 - 0.03, y0, x1, y1, 0.02, 2.08, FR), fRect(x0, y0, x1, y1, 2.05, 2.08, FR), fRect(x0, y0, x1, y1, 0.02, 0.06, FR));
     P.push(fRect(7.18, 6.36, 9.2, 6.42, 0, 0.012, '#9a9ea3')); if (W.closed) { g(7.18, 8.21, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } else { g(8.17, 9.2, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } }   // enclosed kitchen: 2 glass sliding panels (open = stacked W)
   return P; }
-const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
+// Lights + window coverings (owner 2026-10-27 "add them"; saved per layout as l / v; sizes, outputs, transmittances = estimates). Lights: per room none / ceiling lamp / downlights /
+// false ceiling (0.35 m L-box at 2.35 m) with cove LED + downlights; 3000 / 4000 / 6500 K; mode auto (on when the sun is < 2° up or the room's coverings pass < 25% daylight) / on / off.
+// Shading: point lights (≤28, no shadows) clipped to their room rect in the shader (no bleed through partitions); fittings emissive. Readings (daylight) ignore lights.
+const LT_ROOMS = { living: { n: 'Living', r: [[9.38, 1.68, 12.86, 4.89], [9.38, 4.89, 11.3, 7.46]] }, dining: { n: 'Dining + hall', r: [[6.6, 3.44, 9.38, 6.42], [4.3, 3.44, 6.6, 4.48]] }, mbrS: { n: 'Master bedroom', r: [[0.31, 0.15, 3.2, 4.48]] },
+  br2: { n: 'Bedroom 2', r: [[3.31, 0.15, 6.2, 3.33]] }, br3: { n: 'Bedroom 3', r: [[6.3, 0.15, 9.29, 3.33]] }, kitchen: { n: 'Kitchen', r: [[7.18, 6.42, 9.2, 8.7]] },
+  wc1: { r: [[1.94, 4.58, 4.22, 6.3]], fix: 1 }, wc2: { r: [[4.3, 4.58, 6.19, 6.3]], fix: 1 }, yard: { r: [[5.75, 6.42, 7.11, 8.7]], fix: 1 }, shelter: { r: [[11.58, 5.19, 12.86, 7.46]], fix: 1 } };
+const LT_T = { none: 'No light', ceil: 'Ceiling lamp', down: 'Downlights', cove: 'False ceiling + cove' }, LT_K = { 3000: [1, 0.8, 0.58], 4000: [1, 0.9, 0.76], 6500: [0.9, 0.95, 1] };
+const LT_DEF = () => ({ m: 'auto', r: { living: { t: 'ceil', k: 4000 }, dining: { t: 'ceil', k: 4000 }, mbrS: { t: 'ceil', k: 4000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'ceil', k: 4000 } } });
+// Coverings per window: none / curtains (blackout + sheer) / roller blind / venetian; state open / sheer-or-half / closed → τv, SHGC factors for the readings (interior shading; estimates)
+const CV_T = { none: 'None', curtain: 'Curtains (blackout + sheer)', roller: 'Roller blind', venetian: 'Venetian blind' }, CV_S = { open: 'Open', half: 'Sheer / half', closed: 'Closed' };
+const CV_F = { curtain: { open: [1, 1], half: [0.55, 0.65], closed: [0.03, 0.4] }, roller: { open: [1, 1], half: [0.56, 0.75], closed: [0.12, 0.5] }, venetian: { open: [1, 1], half: [0.54, 0.72], closed: [0.08, 0.45] } };
+const CV_WIN = { mbrS: 0, br2: 1, br3: 2, living: 3 }, CV_DEF = () => ({ c: '#d9cfc0', w: { living: { t: 'none', s: 'open' }, mbrS: { t: 'none', s: 'open' }, br2: { t: 'none', s: 'open' }, br3: { t: 'none', s: 'open' } } });
+const covF = id => { const w = FURN.cv.w[id], F = w && CV_F[w.t]; return F ? F[w.s] : [1, 1]; };   // [τv factor, SHGC factor]
+const ltNorm = l => { const D = LT_DEF(); if (!l || typeof l !== 'object') return D; if (['auto', 'on', 'off'].includes(l.m)) D.m = l.m; for (const r in D.r) { const q = (l.r || {})[r] || {}; if (LT_T[q.t]) D.r[r].t = q.t; if (LT_K[q.k]) D.r[r].k = +q.k; } return D; };
+const cvNorm = v => { const D = CV_DEF(); if (!v || typeof v !== 'object') return D; D.c = hexOk(v.c, D.c); for (const id in D.w) { const q = (v.w || {})[id] || {}; if (CV_T[q.t]) D.w[id].t = q.t; if (CV_S[q.s]) D.w[id].s = q.s; } return D; };
+// light list: fittings (emissive parts) + shading lights {p plan [X, Y, z], I, c, r rect}
+function ltList() {
+  const P = [], L = [], E = '#fffaf0', BOX = '#f2f0ea';
+  for (const [id, R] of Object.entries(LT_ROOMS)) { const q = R.fix ? { t: 'ceil', k: 4000 } : FURN.lt.r[id], col = LT_K[q.k];
+    for (const [x0, y0, x1, y1] of R.r) { const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = x1 - x0, d = y1 - y0, rr = [x0 - 0.02, y0 - 0.02, x1 + 0.02, y1 + 0.02], big = w * d > 3;
+      if (q.t === 'none') continue;
+      if (q.t === 'ceil') { if (!big && R.r.length > 1) continue; P.push({ ...fCyl(cx, cy, R.fix ? 0.13 : 0.2, 2.52, 2.6, E, 18), em: 1 }); L.push({ p: [cx, cy, 2.3], I: R.fix ? 0.7 : 1.25, c: col, r: rr }); continue; }
+      const ins = q.t === 'cove' && big ? 0.35 : 0, ax = w >= d, n = Math.max(1, Math.round((ax ? w : d) / 1.2)), m = Math.max(1, Math.round((ax ? d : w) / 1.4));
+      if (ins) { [[x0, y0, x1, y0 + ins], [x0, y1 - ins, x1, y1], [x0, y0 + ins, x0 + ins, y1 - ins], [x1 - ins, y0 + ins, x1, y1 - ins]].forEach(b => P.push(fRect(...b, 2.35, 2.6, BOX)));
+        [[x0 + ins, y0 + ins - 0.02, x1 - ins, y0 + ins], [x0 + ins, y1 - ins, x1 - ins, y1 - ins + 0.02], [x0 + ins - 0.02, y0 + ins, x0 + ins, y1 - ins], [x1 - ins, y0 + ins, x1 - ins + 0.02, y1 - ins]].forEach(b => P.push({ ...fRect(...b, 2.57, 2.6, E), em: 1 }));   // cove glow at the recess edge
+        for (const [a, b] of [[x0 + ins / 2, cy], [x1 - ins / 2, cy], [cx, y0 + ins / 2], [cx, y1 - ins / 2]]) P.push({ ...fCyl(a, b, 0.045, 2.335, 2.35, E, 10), em: 1 }); }
+      for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) { const u = (i + 0.5) / n, v = (j + 0.5) / m, X = ax ? x0 + ins + (w - 2 * ins) * u : x0 + ins + (w - 2 * ins) * v, Y = ax ? y0 + ins + (d - 2 * ins) * v : y0 + ins + (d - 2 * ins) * u; P.push({ ...fCyl(X, Y, 0.05, ins ? 2.335 : 2.585, ins ? 2.35 : 2.6, E, 10), em: 1 }); }
+      const I = (q.t === 'cove' ? 0.75 : 0.65) * Math.min(1.6, Math.max(0.6, w * d / 10)), z = ins ? 2.15 : 2.25;   // 2 shading lights along the long axis
+      for (const f of [0.28, 0.72]) L.push({ p: ax ? [x0 + w * f, cy, z] : [cx, y0 + d * f, z], I, c: col, r: rr }); } }
+  return { P, L: L.slice(0, 28) };
+}
+let LT_CACHE = { fv: -1, v: null }; const ltCached = () => { if (LT_CACHE.fv !== FURN.fv) LT_CACHE = { fv: FURN.fv, v: ltList() }; return LT_CACHE.v; };
+function ltState() {   // daylight share through the current room's coverings + whether the lights are on (auto: sun < 2° or coverings pass < 25%)
+  const sp = curSpot(), ids = sp && CV_WIN[sp.id] != null ? roomGroup(sp.id) : [], t = ids.length ? ids.reduce((a, id) => a + covF(id)[0], 0) / ids.length : 1, el = solarPosition(state.dateStr, state.hour).elDeg, m = FURN.lt.m;
+  const w = sp && FURN.cv.w[sp.id]; return { t, kCov: 0.3 + 0.7 * t, on: m === 'on' || (m === 'auto' && (el < 2 || t < 0.25)), sheer: w && w.t === 'curtain' && w.s === 'half' ? 0.55 : 1 }; }
+function cvParts() {   // curtains / blinds per window at the inner face (rail 0.1 m in, 2.5 m); sheer panels → translucent pass
+  const P = [], C = FURN.cv.c, D = hexMul(C, 0.86);
+  for (const [id, wi] of Object.entries(CV_WIN)) { const w = FURN.cv.w[id]; if (!w || w.t === 'none') continue; const [w0, w1, , , sl, hd] = UNIT_PLAN.wins[wi], S = UNIT_PLAN.spots[id], y = S.yin, a = w0 - 0.2, b = w1 + 0.2;
+    const pleat = (x0, x1, y0, z0, z1, c, pw = 0.12) => { const n = Math.max(1, Math.round((x1 - x0) / pw)), st = (x1 - x0) / n; for (let k = 0; k < n; k++) P.push(fRect(x0 + k * st - 0.006, y0 + (k % 2 ? 0.03 : 0), x0 + (k + 1) * st + 0.006, y0 + (k % 2 ? 0.055 : 0.025), z0, z1, k % 2 ? D : c)); };   // overlapping pleats: no light cracks
+    if (w.t === 'curtain') { P.push(fRect(a - 0.03, y + 0.09, b + 0.03, y + 0.11, 2.5, 2.53, '#b8b8b4'));
+      if (w.s === 'closed') pleat(a, b, y + 0.1, 0.02, 2.5, C); else { pleat(a, a + 0.36, y + 0.1, 0.02, 2.5, C, 0.06); pleat(b - 0.36, b, y + 0.1, 0.02, 2.5, C, 0.06); }
+      if (w.s === 'half') P.push({ ...fRect(a, y + 0.05, b, y + 0.06, 0.02, 2.5, '#ffffff'), sheer: 1 }); else pleat(a + 0.36, a + 0.5, y + 0.05, 0.02, 2.5, '#f4f2ec', 0.05); continue; }
+    const H = hd + 0.12, z = w.s === 'closed' ? sl : w.s === 'half' ? (sl + hd) / 2 : H - 0.02, x0 = w0 - 0.04, x1 = w1 + 0.04;
+    P.push(fRect(x0, y + 0.02, x1, y + 0.1, H - 0.02, H + 0.08, '#e8e8e4'));   // head rail / cassette above the window head
+    if (w.t === 'roller') { if (z < H - 0.03) P.push(fRect(x0 + 0.02, y + 0.05, x1 - 0.02, y + 0.06, z, H - 0.02, C), fRect(x0 + 0.02, y + 0.045, x1 - 0.02, y + 0.065, z - 0.03, z, D)); }
+    else { if (z < H - 0.03) for (let zz = H - 0.05; zz > z; zz -= 0.045) P.push(fRect(x0 + 0.02, y + 0.03, x1 - 0.02, y + 0.08, zz - 0.004, zz, C)); else P.push(fRect(x0 + 0.02, y + 0.03, x1 - 0.02, y + 0.08, H - 0.12, H - 0.02, C)); } }
+  return P; }
+const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), lt: LT_DEF(), cv: CV_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + FURN.fv; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(doorOpen()), ...kitParts(FURN.kit), ...doorParts()] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + FURN.fv; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(doorOpen()), ...kitParts(FURN.kit), ...doorParts(), ...ltCached().P, ...cvParts()] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
@@ -1682,26 +1729,26 @@ function furnSofaSeat() {
 function furnChanged(save = true) {
   FURN.ver++; FURN.fv++; FURN.items.forEach(it => { it._ext = null; });
   if (save) { if (FURN_BUILTIN[FURN.name]) { let k = 1, nm = 'My layout'; while (FURN.saved[nm] && FURN.name !== nm) nm = `My layout ${++k}`; FURN.name = nm; }   // editing a built-in starts a user layout
-    FURN.saved[FURN.name] = { i: FURN.items.map(furnPlain), k: { ...FURN.kit }, f: JSON.parse(JSON.stringify(FURN.fin)), w: JSON.parse(JSON.stringify(UNIT_W)) }; lsSet(FURN_LS, FURN.saved); lsSet(FURN_LS_CUR, FURN.name); furnLayoutSel(); }
+    FURN.saved[FURN.name] = { i: FURN.items.map(furnPlain), k: { ...FURN.kit }, f: JSON.parse(JSON.stringify(FURN.fin)), w: JSON.parse(JSON.stringify(UNIT_W)), l: JSON.parse(JSON.stringify(FURN.lt)), v: JSON.parse(JSON.stringify(FURN.cv)) }; lsSet(FURN_LS, FURN.saved); lsSet(FURN_LS_CUR, FURN.name); furnLayoutSel(); }
   if (state.posture === 'sofa' && !state.walk) { const S = furnSofaSeat(); if (S) state.heading = S.heading; }
 }
 const furnPlain = it => { const o = {}; for (const k of ['t', 'x', 'y', 'r', 'w', 'd', 'h', 'e', 'c', 'o', 'n']) if (it[k] !== undefined) o[k] = typeof it[k] === 'number' ? +it[k].toFixed(3) : it[k]; return o; };
 function furnLoad(name) {
   let src = FURN_BUILTIN[name] ? FURN_BUILTIN[name]() : FURN.saved[name]; if (!src) return; if (Array.isArray(src)) src = { i: src, k: { c: 'none', top: 1 } };   // phase-1 saves = item arrays
-  FURN.kit = { c: KIT_CFG[src.k && src.k.c] ? src.k.c : 'none', top: src.k && src.k.top === 0 ? 0 : 1 }; FURN.fin = finNorm(src.f); Object.assign(UNIT_W, wallNorm(src.w)); FURN.fv++; furnKitUI(); finUI(); wallUI(); FURN.name = name; FURN.items = src.i.map(it => ({ ...furnNew(it.t, 0, 0), ...it })).filter(it => FURN_CAT[it.t]); FURN.sel = -1;
+  FURN.kit = { c: KIT_CFG[src.k && src.k.c] ? src.k.c : 'none', top: src.k && src.k.top === 0 ? 0 : 1 }; FURN.fin = finNorm(src.f); Object.assign(UNIT_W, wallNorm(src.w)); FURN.lt = ltNorm(src.l); FURN.cv = cvNorm(src.v); FURN.fv++; furnKitUI(); finUI(); wallUI(); ltUI(); FURN.name = name; FURN.items = src.i.map(it => ({ ...furnNew(it.t, 0, 0), ...it })).filter(it => FURN_CAT[it.t]); FURN.sel = -1;
   lsSet(FURN_LS_CUR, name); FURN.ver++; furnLayoutSel(); furnSelUI(); if (state.posture === 'sofa' && !state.walk) { const S = furnSofaSeat(); if (S) state.heading = S.heading; } renderAll();
 }
 // Share link: #layout=<base64url(JSON {n, i: [[t,x,y,r,w,d,h,e,c,o,n]…]})>; opening it loads + saves the layout on that device
 const FURN_KEYS = ['t', 'x', 'y', 'r', 'w', 'd', 'h', 'e', 'c', 'o', 'n'];
 function furnLink() {
-  const json = JSON.stringify({ n: FURN.name, k: FURN.kit, f: FURN.fin, w: UNIT_W, i: FURN.items.map(it => { const p = furnPlain(it); return FURN_KEYS.map(k => p[k] ?? 0); }) }), b = new TextEncoder().encode(json); let s = ''; b.forEach(c => { s += String.fromCharCode(c); });
+  const json = JSON.stringify({ n: FURN.name, k: FURN.kit, f: FURN.fin, w: UNIT_W, l: FURN.lt, v: FURN.cv, i: FURN.items.map(it => { const p = furnPlain(it); return FURN_KEYS.map(k => p[k] ?? 0); }) }), b = new TextEncoder().encode(json); let s = ''; b.forEach(c => { s += String.fromCharCode(c); });
   return `${location.origin}${location.pathname}#layout=${btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
 }
 function furnFromHash() {
   const m = /[#&]layout=([A-Za-z0-9_-]+)/.exec(location.hash); if (!m) return false;
   try { const s = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), J = JSON.parse(new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0))));
     const items = (J.i || []).map(a => { const o = {}; FURN_KEYS.forEach((k, i) => { o[k] = a[i]; }); if (!o.n) delete o.n; else o.n = String(o.n).slice(0, 30); return o; }).filter(it => FURN_CAT[it.t]).map(it => ({ ...it, c: hexOk(it.c, FURN_CAT[it.t].c) }));
-    const lay = { i: items, k: J.k || { c: 'none', top: 1 }, f: finNorm(J.f), w: wallNorm(J.w) }; let nm = String(J.n || 'Shared layout').slice(0, 40); if (FURN_BUILTIN[nm] || (FURN.saved[nm] && JSON.stringify(FURN.saved[nm]) !== JSON.stringify(lay))) nm += ' (shared)';
+    const lay = { i: items, k: J.k || { c: 'none', top: 1 }, f: finNorm(J.f), w: wallNorm(J.w), l: ltNorm(J.l), v: cvNorm(J.v) }; let nm = String(J.n || 'Shared layout').slice(0, 40); if (FURN_BUILTIN[nm] || (FURN.saved[nm] && JSON.stringify(FURN.saved[nm]) !== JSON.stringify(lay))) nm += ' (shared)';
     FURN.saved[nm] = lay; lsSet(FURN_LS, FURN.saved); history.replaceState(null, '', location.pathname + location.search); furnLoad(nm); return true;
   } catch (e) { console.warn('bad layout link', e); return false; }
 }
@@ -1780,7 +1827,16 @@ function wallUI() {   // Walls & doors tab
     `<div class="text-[11px] text-amber-300 mt-2">Doors</div>` + Object.entries(DOORS).map(([id, D]) => `<div class="fe-crow"><span class="fe-cl">${D.n}</span><select data-d="${id}" class="fe-selx"${id === 'br3' && !W.br3 ? ' disabled' : ''}>${Object.entries(DOOR_T).filter(([t]) => t !== D.no).map(([t, n]) => `<option value="${t}"${W.d[id] === t ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('') +
     ck('closed', 'Show doors closed (closed doors block walking)', W.closed) + `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Structural walls (black on the HDB plan) are locked. Removing a wall merges the rooms in the daylight readings (one floor area, all their windows). Door swings and bi-fold bath/yard doors follow the HDB plan; leaves and colours are estimates.</div>`;
 }
-function feTab(t) { FE.tab = t; FURN.sel = -1; document.querySelectorAll('.fe-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $('feTabFurn').style.display = t === 'furn' ? '' : 'none'; $('feTabFin').style.display = t === 'fin' ? '' : 'none'; $('feTabWalls').style.display = t === 'walls' ? '' : 'none'; furnSelUI(); finUI(); wallUI(); furnDrawPlan(); }
+function ltUI() {   // Lights & blinds tab
+  const box = $('feTabLt'); if (!box || FE.tab !== 'lt') return; const L = FURN.lt, V = FURN.cv, sel = (att, opts, v, dis) => `<select ${att} class="fe-selx"${dis ? ' disabled' : ''}>${Object.entries(opts).map(([k, n]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+  const LS = ltState(); let h = `<div class="fe-crow" style="margin-top:6px"><span class="fe-cl text-amber-300">Lights</span>${sel('id="feLtM"', { auto: 'Auto (dark or covered)', on: 'On', off: 'Off' }, L.m)}<span class="text-[10px] ${LS.on ? 'text-amber-300' : 'text-slate-500'}" style="flex:0 0 auto">${LS.on ? 'on' : 'off'}</span></div>`;
+  h += Object.entries(LT_ROOMS).filter(([, R]) => !R.fix).map(([id, R]) => `<div class="fe-crow"><span class="fe-cl">${R.n}</span>${sel(`data-lt="${id}"`, LT_T, L.r[id].t)}${sel(`data-lk="${id}" style="flex:0 0 74px"`, { 3000: '3000 K', 4000: '4000 K', 6500: '6500 K' }, L.r[id].k, L.r[id].t === 'none')}</div>`).join('');
+  h += `<div class="text-[11px] text-amber-300 mt-2">Curtains / blinds</div>` + Object.keys(CV_WIN).map(id => `<div class="fe-crow"><span class="fe-cl">${WIN[id].room}</span>${sel(`data-cv="${id}"`, CV_T, V.w[id].t)}${sel(`data-cs="${id}" style="flex:0 0 74px"`, CV_S, V.w[id].s, V.w[id].t === 'none')}</div>`).join('');
+  h += `<div class="fe-crow"><span class="fe-cl fe-blk">Fabric colour</span>${['#d9cfc0', '#f2efe8', '#b8b2a6', '#7d8a8c', '#5a6b78', '#3d5249', '#8a6a52', '#46484c'].map(c => `<button class="fe-sw${c === V.c ? ' on' : ''}" data-cc="${c}" style="background:${c}"></button>`).join('')}<input type="color" id="feCvC" value="${V.c}"></div>`;
+  h += `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Daylight/heat readings use the coverings of the room's windows (τv × / SHGC ×: sheer 0.55/0.65, blackout 0.03/0.4, roller 0.12/0.5, venetian 0.08/0.45 closed; half ≈ halfway; estimates). Lights are visual only; auto turns them on at dusk or when the coverings are drawn.</div>`;
+  box.innerHTML = h;
+}
+function feTab(t) { FE.tab = t; FURN.sel = -1; document.querySelectorAll('.fe-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); $('feTabFurn').style.display = t === 'furn' ? '' : 'none'; $('feTabFin').style.display = t === 'fin' ? '' : 'none'; $('feTabWalls').style.display = t === 'walls' ? '' : 'none'; $('feTabLt').style.display = t === 'lt' ? '' : 'none'; furnSelUI(); finUI(); wallUI(); ltUI(); furnDrawPlan(); }
 function furnHit(X, Y) { for (let i = FURN.items.length - 1; i >= 0; i--) { const it = FURN.items[i], [lx, ly] = furnLocal(it, X, Y), [a, b, c, d] = it._ext || (it._ext = furnExt(it)), m = 0.05; if (lx > a - m && lx < c + m && ly > b - m && ly < d + m) return i; } return -1; }
 function furnPick(i) { FURN.sel = i; furnSelUI(); furnDrawPlan(); }
 function furnEdit(fn, full) { const it = FURN.items[FURN.sel]; if (!it) return; fn(it); furnChanged(); if (full) furnSelUI(); furnDrawPlan(); renderView(); }
@@ -1801,6 +1857,11 @@ function furnBindUI() {
     if (t.id === 'feRoom') FE.room = t.value; else if (t.id === 'feAcc') { if (t.value) F.acc[r] = { s: t.value, c: (F.acc[r] || {}).c || FIN_PAL.accent[0] }; else delete F.acc[r]; furnChanged(); }
     else if (t.id === 'feTileP') { F.tile[r].p = +t.value; furnChanged(); } else if (t.id === 'feFeat') { F.tile[r].f = t.checked ? FIN_PAL.accent[0] : ''; furnChanged(); } else if (t.id === 'feHandle') { F.cab.h = t.value; furnChanged(); }
     finUI(); furnDrawPlan(); renderView(); });
+  const lt = $('feTabLt'), ltSet = fn => { fn(); furnChanged(); ltUI(); furnDrawPlan(); renderAll(); };
+  lt.addEventListener('change', e => { const t = e.target, d = t.dataset; if (t.id === 'feLtM') ltSet(() => { FURN.lt.m = t.value; }); else if (d.lt) ltSet(() => { FURN.lt.r[d.lt].t = t.value; }); else if (d.lk) ltSet(() => { FURN.lt.r[d.lk].k = +t.value; });
+    else if (d.cv) ltSet(() => { FURN.cv.w[d.cv].t = t.value; }); else if (d.cs) ltSet(() => { FURN.cv.w[d.cs].s = t.value; }); else if (t.id === 'feCvC') ltUI(); });
+  lt.addEventListener('input', e => { if (e.target.id === 'feCvC') { FURN.cv.c = e.target.value; furnChanged(); renderView(); } });
+  lt.addEventListener('click', e => { const b = e.target.closest('button[data-cc]'); if (b) ltSet(() => { FURN.cv.c = b.dataset.cc; }); });
   $('feTabWalls').addEventListener('change', e => { const t = e.target; if (t.dataset.w) UNIT_W[t.dataset.w] = t.checked ? 1 : 0; else if (t.dataset.d) UNIT_W.d[t.dataset.d] = t.value; else return;
     furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
   $('feKit').addEventListener('change', e => { FURN.kit.c = e.target.value; furnChanged(); furnDrawPlan(); renderView(); }); $('feKitTop').addEventListener('change', e => { FURN.kit.top = e.target.checked ? 1 : 0; furnChanged(); furnDrawPlan(); renderView(); });
@@ -1857,7 +1918,7 @@ precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH;
-uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun;
+uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 const vec3 C_WHITE = vec3(${TRPF_PAL.white.map(c => (c / 255).toFixed(3))}), C_GREIGE = vec3(${TRPF_PAL.greige.map(c => (c / 255).toFixed(3))}), C_GREY = vec3(${TRPF_PAL.grey.map(c => (c / 255).toFixed(3))}),
   C_BROWN = vec3(${TRPF_PAL.brown.map(c => (c / 255).toFixed(3))}), C_CROWN = vec3(${TRPF_PAL.crown.map(c => (c / 255).toFixed(3))}), C_VOID = vec3(${TRPF_PAL.void.map(c => (c / 255).toFixed(3))}), C_GREEN = vec3(${TRPF_PAL.green.map(c => (c / 255).toFixed(3))});
@@ -1921,7 +1982,8 @@ void main() {
       alb = mix(alb, vec3(236.0, 236.0, 232.0) / 255.0, band(abs(x - floor(x + 0.5)), -1.0, 0.045, fx)); }
   } else if (mode > 8.5 && mode < 9.5) alb = mix(alb, vec3(240.0, 240.0, 236.0) / 255.0, band(vTex.y, 7.2, 8.0, fwidth(vTex.y)));
   vec3 c;
-  if (uUnlit > 0.5) { c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : uLitK);
+  if (uUnlit > 0.5 && mode > 10.5) c = alb * uEmis;   // light fittings (on: glowing; off: plain diffuser)
+  else if (uUnlit > 0.5) { c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : uLitK);
     if (vTex.w > 1.5) { bool wl = vTex.w > 2.5; float pt = floor(vTex.w - 3.0 + 0.5); vec2 sz = !wl ? vec2(vTex.w < 2.1 ? 0.6 : 0.3) : pt > 1.5 ? vec2(0.3, 0.075) : vec2(0.6, 0.3), q = wl ? vTex.xy : vTex.xy - vec2(0.31, 0.15);   // tile joints: floors (tex = plan X, Y; 600 / 300 mm), wall tiles (tex = along-wall m, height; 300×600 stacked / offset, 75×300 subway)
       if (wl && pt > 0.5) q.x += 0.5 * sz.x * mod(floor(q.y / sz.y), 2.0);
       vec2 f = abs(fract(q / sz + 0.5) - 0.5) * sz / max(fwidth(vTex.xy), vec2(1e-5)); c = mix(c, wl ? c * 0.7 : vec3(90.0, 84.0, 76.0) / 255.0, (wl ? 0.5 : 0.25) * uLitK * (1.0 - smoothstep(0.35, 1.0, min(f.x, f.y)))); }
@@ -1931,7 +1993,11 @@ void main() {
     if (uInSun > 0.0) {   // sun through the openings: interior shadow map (walls, frames, furniture; ±12 m) × outdoor near cascade (city + rest of the block) × Lambert
       float lam = max(0.0, dot(nrm, uSun)); if (lam > 0.0) { vec3 r = vWorld + nrm * 0.015 - uLcI, l = vec3(dot(uLr, r) / uLsI.x, dot(uLu, r) / uLsI.x, dot(uLf, r) / uLsI.y);
         float v = max(abs(l.x), abs(l.y)) < 0.99 && abs(l.z) < 0.99 ? pcfI(l) : 1.0; if (v > 0.0) v *= shadowAt(vWorld, nrm);
-        c += alb * vec3(1.0, 0.93 - 0.12 * uWarm, 0.8 - 0.3 * uWarm) * lam * v * uInSun; } } }
+        c += alb * vec3(1.0, 0.93 - 0.12 * uWarm, 0.8 - 0.3 * uWarm) * lam * v * uInSun; } }
+    if (uNL > 0 && mode < 3.5) { vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP; vec3 acc = vec3(0.0);   // room lights: point lights clipped to their room rect (plan coords), 1/(d²+0.6) + 0.25 fill
+      for (int i = 0; i < 28; i++) { if (i >= uNL) break; vec4 R = uLR[i]; float wR = clamp(min(min(pp.x - R.x, R.z - pp.x), min(pp.y - R.y, R.w - pp.y)) / 0.04 + 0.5, 0.0, 1.0); if (wR <= 0.0) continue;   // soft rect edge: faces on a shared boundary get half of each room (no speckle)
+        vec3 Ld = uLp[i].xyz - vWorld; float d2 = dot(Ld, Ld); acc += uLcol[i] * (wR * uLp[i].w * (0.25 + max(0.0, dot(nrm, Ld * inversesqrt(d2)))) / (d2 + 0.6)); }
+      c += alb * acc; } }
   else if (mode < -0.5) c = uWater;
   else { float lam = max(0.0, dot(nrm, uSun)), d = uDirect * lam * 0.85, vis = 1.0; if (d > 0.0) { vis = shadowAt(vWorld, nrm); d *= vis; } vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm);
     c = alb * (uAmb * (0.75 + 0.25 * uSkyMid) + d * tint) + lit * vec3(1.0, 0.84, 0.55) * 0.9;
@@ -2097,18 +2163,19 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
         for (const [za, zb, hex, pat] of r.bands(z0, z1)) { const col = (hex ? c255(hexRgb(hex)) : base).map(c => Math.min(1, c * k)), T = pat >= 0 ? (s, z) => [s === 0 ? sa : sb, z, 0, 3 + pat] : (s, z) => [s, z === za ? 0 : 1, 0, 1];
           A.quad(W(pa[0], pa[1], za), W(pb[0], pb[1], za), W(pb[0], pb[1], zb), W(pa[0], pa[1], zb), N, col, T(0, za), T(1, za), T(1, zb), T(0, zb)); } } }
     const t = z4; A.quad(W(x0, y0b, z1), W(x1, y0b, z1), W(x1, y1, z1), W(x0, y1, z1), up0, base, t, t, t, t); A.quad(W(x0, y0b, z0), W(x1, y0b, z0), W(x1, y1, z0), W(x0, y1, z0), dn0, base.map(c => c * 0.8), t, t, t, t); };
-  const flat = (r, h, col, tile, nn = up0) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) { const [x, y] = r[tri[k]]; A.v(W(x, y, h), nn, col, tile ? [x, y, 0, tile === true ? 2 : tile] : z4); } }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
+  const flat = (r, h, col, tile, nn = up0, tx = null) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) { const [x, y] = r[tri[k]]; A.v(W(x, y, h), nn, col, tx || (tile ? [x, y, 0, tile === true ? 2 : tile] : z4)); } }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
   const fl01 = h => c255(hexRgb(h)).map(c => c * 0.85);   // floor tiles per room (finishes): 600 mm, wet rooms 300 mm (tile code 2.2)
   flat(UNIT_PLAN.outline, 0, fl01(FURN.fin.floor.living), true); FIN_FLOORS.forEach(([id, r]) => flat(rect(r), 0.003, fl01(FURN.fin.floor[id]), id[0] === 'w' || id === 'yard' ? 2.2 : true)); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95), false, dn0);
   UNIT_PLAN.corr.floors.forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85)); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });
-  const fGlass = []; for (const it of [{ fixed: 1 }, ...FURN.items]) for (const q of it.fixed ? furnFixed() : furnParts(it)) {   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
+  const fGlass = [], fSheer = []; for (const it of [{ fixed: 1 }, ...FURN.items]) for (const q of it.fixed ? furnFixed() : furnParts(it)) {   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
     if (q.glass) { const [p0, , p2] = q.p, a = W(p0[0], p0[1], q.z0), b = W(p2[0], p2[1], q.z0), c2 = W(p2[0], p2[1], q.z1), d = W(p0[0], p0[1], q.z1); fGlass.push(...a, ...b, ...c2, ...a, ...c2, ...d); continue; }   // prism per part, face brightness as the walls (−Y 1.0, ±X 0.86, +Y 0.74), edge lines on box faces (not on round parts)
-    const col = c255(hexRgb(q.c)), P = q.p, m = P.length, T = (a, b) => (q.cy ? z4 : [a, b, 0, 1]);
+    if (q.sheer) { const [p0, , p2] = q.p; fSheer.push(...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z1)); continue; }
+    const col = c255(hexRgb(q.c)), P = q.p, m = P.length, E = q.em ? [0, 0, 11, 0] : null, T = (a, b) => (E || (q.cy ? z4 : [a, b, 0, 1]));   // em: light fitting (mode 11, emissive)
     for (let i = 0; i < m; i++) { const [ax, ay] = P[i], [bx, by] = P[(i + 1) % m], l = Math.hypot(bx - ax, by - ay) || 1, k = 0.87 + 0.13 * ((bx - ax) / l);
       A.quad(W(ax, ay, q.z0), W(bx, by, q.z0), W(bx, by, q.z1), W(ax, ay, q.z1), Nw(ax, ay, bx, by), col.map(c => Math.min(1, c * k)), T(0, 0), T(1, 0), T(1, 1), T(0, 1)); }
     const top = col.map(c => Math.min(1, c * 1.05)); if (m === 4) A.quad(W(P[0][0], P[0][1], q.z1), W(P[1][0], P[1][1], q.z1), W(P[2][0], P[2][1], q.z1), W(P[3][0], P[3][1], q.z1), up0, top, T(0, 0), T(1, 0), T(1, 1), T(0, 1));
-    else flat(P, q.z1, top);
-    if (q.z0 > 0.01) flat(P, q.z0, col.map(c => c * 0.8), false, dn0); } flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
+    else flat(P, q.z1, top, false, up0, E);
+    if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); } flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
   for (let [x0, y0b, x1, y1, z0 = 0, z1 = H, kind] of unitWalls()) {
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
     const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
@@ -2126,8 +2193,8 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
       q([P(hg, 0, o0), P(hg, Wd, o0), P(hg, Wd, o1), P(hg, 0, o1)], true); fr(Wd - Fw, Wd, o0, o1); fr(0, Wd, o0, o0 + Fw); fr(0, Wd, o1 - Fw, o1);
       if (tz.length > 1) { const Rr = hd - tz[1] - M, cs = Math.cos(HOPPER_A), sn = Math.sin(HOPPER_A), Tt = r => [r * sn, hd - r * cs], tp = (sa, sb, r0, r1) => { const [p0, z0] = Tt(r0), [p1, z1] = Tt(r1); return [P(sa, p0, z0), P(sb, p0, z0), P(sb, p1, z1), P(sa, p1, z1)]; };
         q(tp(s0, s1, 0, Rr), true); q(tp(s0, s1, Rr - Fw, Rr)); q(tp(s0, s0 + Fw, 0, Rr)); q(tp(s1 - Fw, s1, 0, Rr)); } } }
-  const gl = GPU.gl; if (GPU.inBuf) gl.deleteBuffer(GPU.inBuf); GPU.inBuf = gpuBuf(new Float32Array(A.a)); if (GPU.tintBuf) gl.deleteBuffer(GPU.tintBuf); tint.push(...fGlass); GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
-  GPU.W = W; GPU.pkey = ''; return (GPU.inN = A.n);
+  const gl = GPU.gl; if (GPU.inBuf) gl.deleteBuffer(GPU.inBuf); GPU.inBuf = gpuBuf(new Float32Array(A.a)); if (GPU.tintBuf) gl.deleteBuffer(GPU.tintBuf); tint.push(...fGlass); if (GPU.sheerBuf) gl.deleteBuffer(GPU.sheerBuf); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
+  GPU.W = W; GPU.Wm = { o: [sp.x, sp.z], u, n, p: [px, py] }; GPU.pkey = ''; return (GPU.inN = A.n);
 }
 function gpuAttrib(pr, buf, inst) {
   const gl = GPU.gl; gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
@@ -2151,7 +2218,7 @@ function gpuEnv(pr, env, unlit) {
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
-  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1f(u.uInSun, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
@@ -2209,11 +2276,16 @@ function gpuRender(cam, env, pxW, pxH) {
 function gpuRenderInterior(cam, env, kIn) {
   if (!GPU.ok) return false; const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
   gl.viewport(0, 0, GPU.cv.width, GPU.cv.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9) * kIn);
-  if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
+  const LS = ltState(), lit0 = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
+  gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, (0.12 + (lit0 - 0.12) * LS.kCov) * kIn); gl.uniform1f(M.u.uEmis, LS.on ? 1.35 : clamp(lit0 * kIn, 0.45, 0.95));
+  gl.uniform2f(M.u.uPO, ...Wm.o); gl.uniform2f(M.u.uPU, ...Wm.u); gl.uniform2f(M.u.uPN, ...Wm.n); gl.uniform2f(M.u.uPP, ...Wm.p);
+  if (LS.on) { const Ls = ltCached().L, p4 = [], r4 = [], c3 = []; for (const l of Ls) { p4.push(...GPU.W(l.p[0], l.p[1], l.p[2]), l.I); r4.push(...l.r); c3.push(...l.c); }   // room lights (shader, clipped per room)
+    gl.uniform1i(M.u.uNL, Ls.length); if (Ls.length) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } } else gl.uniform1i(M.u.uNL, 0);
+  if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
   gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
+  if (GPU.sheerN) { const k = clamp((0.12 + (lit0 - 0.12) * LS.kCov) * kIn + (LS.on ? 0.35 : 0), 0.25, 1) * 0.6; gl.uniform4f(F.u.uColor, 0.97 * k, 0.96 * k, 0.93 * k, 0.6); gpuAttrib(F, GPU.sheerBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.sheerN); }   // sheer curtains (premultiplied)
   gl.depthMask(true); return true;
 }
 // Interior sun shadow map: unit walls, frames, ceilings, furniture seen from the sun (ortho ±12 m around the unit, ±30 m deep); re-rendered when the interior or the sun changes.
