@@ -558,13 +558,15 @@ const UNIT_FN = 170.3;   // bedroom/living facade normal: plan ↔ world frame f
 const spotP = S => S.yc != null ? [S.xin - 0.3, S.yc] : [S.xc, S.yin - 0.3];        // plan point of the world spot (0.15 m outside the outer face)
 const spotEyeP = (S, d) => S.yc != null ? [S.xin + d, S.yc] : [S.xc, S.yin + d];    // default interior eye, d back from the opening
 const isExtKind = k => k === 'ext' || k === 'ac' || k === 'rack' || k === 'xglass';
-const doorOpen = () => !!state.walk || state.spot === 'corr';   // main door open while walking or viewing from the corridor
+const doorOpen = () => (!!state.walk || state.spot === 'corr') && !UNIT_W.dc.main;   // main door open while walking or viewing from the corridor, unless closed by the owner (Walls tab / 🚪)
+const hsOpen = () => (!!state.walk || state.spot === 'corr') && !UNIT_W.dc.hs;   // household shelter door, same rule
 // Wall/door toggles (owner 2026-10-27; saved per layout as w): non-structural walls only (thin lines on the HDB plan; black = structural, locked).
 // br3 = Bedroom 3 partition to living + its corridor wall (open → one room with living/dining), br23 = Bedroom 2/3 partition, kit = enclosed kitchen (glass sliding doors + bulkhead).
 // Doors per opening: none / swing / slide / fold (bi-fold); swings + hinge sides from the plan (baths/yard drawn bi-fold); drawn open unless closed (closed doors block walking).
 const DOORS = { mbr: { n: 'Master', ax: 'y', a0: 3.44, a1: 4.48, g: 4.26, hw: 0.04, hg: 1, s: 1, sl: 1, no: 'slide' }, br2: { n: 'Bedroom 2', ax: 'x', a0: 5.14, a1: 6.16, g: 3.385, hw: 0.055, hg: 1, s: -1, sl: 0 },
   br3: { n: 'Bedroom 3', ax: 'x', a0: 6.4, a1: 7.36, g: 3.385, hw: 0.055, hg: 0, s: -1, sl: 1 }, wc1: { n: 'Bath (master)', ax: 'x', a0: 2.75, a1: 3.45, g: 4.53, hw: 0.05, hg: 0, s: 1, sl: 0 },
   wc2: { n: 'Bath (common)', ax: 'x', a0: 5.35, a1: 6.0, g: 4.53, hw: 0.05, hg: 1, s: 1, sl: 0 }, yard: { n: 'Service yard', ax: 'y', a0: 7.0, a1: 7.9, g: 7.145, hw: 0.035, hg: 0, s: -1, sl: 1 } };
+const DOOR_ALL = ['main', 'hs', 'mbr', 'br2', 'br3', 'wc1', 'wc2', 'yard', 'kit'];   // closable: main door, shelter, internal doors, kitchen glass
 const DOOR_T = { none: 'No door', swing: 'Swing', slide: 'Sliding', fold: 'Bi-fold' };
 const WALL_DEF = () => ({ br3: 1, br23: 1, kit: 0, dc: {}, d: { mbr: 'swing', br2: 'swing', br3: 'swing', wc1: 'fold', wc2: 'fold', yard: 'fold' } });
 const WALL_GROUPS = { br3: ['9.29,1.69,9.38,3.44', '6.4,3.33,7.36,3.44', '7.36,3.33,9.38,3.44'], br23: ['6.2,0.16,6.3,3.44'] };
@@ -1634,7 +1636,7 @@ const finNorm = f => { const D = FIN_DEF(); if (!f || typeof f !== 'object') ret
   for (const r in D.tile) { const t = (f.tile || {})[r] || {}; D.tile[r] = { c: hexOk(t.c, D.tile[r].c), p: [0, 1, 2].includes(t.p) ? t.p : 0, f: t.f ? hexOk(t.f, '') : '' }; }
   const c = f.cab || {}; D.cab = { d: hexOk(c.d, D.cab.d), t: hexOk(c.t, D.cab.t), h: c.h === 'none' ? 'none' : 'bar' }; D.sw = (Array.isArray(f.sw) ? f.sw : []).map(v => hexOk(v, '')).filter(Boolean).slice(0, 12); return D; };
 const wallNorm = w => { const D = WALL_DEF(); if (!w || typeof w !== 'object') return D; for (const k of ['br3', 'br23', 'kit']) if (w[k] !== undefined) D[k] = w[k] ? 1 : 0;
-  for (const id of [...Object.keys(DOORS), 'kit']) if (w.closed || (w.dc && w.dc[id])) D.dc[id] = 1;   // per-door closed (old layouts: closed = all)
+  for (const id of DOOR_ALL) if (w.closed || (w.dc && w.dc[id])) D.dc[id] = 1;   // per-door closed (old layouts: closed = all)
   for (const id in D.d) { const t = (w.d || {})[id]; if (DOOR_T[t] && DOORS[id].no !== t) D.d[id] = t; } return D; };
 const finZone = (X, Y) => { for (const [id, [x0, y0, x1, y1]] of FIN_ZONES) if (X >= x0 && X <= x1 && Y >= y0 && Y <= y1) return id; return ringIn(walkRing, X, Y) ? 'living' : null; };
 const finFeature = (z, X, Y, nX, nY) => { if (z === 'wc1') return X < 2.85 ? 'f' : ''; if (z === 'wc2') return X > 5.5 ? 'f' : '';   // shower walls (glass panel X 2.85 / 5.5)
@@ -1708,7 +1710,7 @@ function cvParts() {   // curtains / blinds per window at the inner face (rail 0
   return P; }
 const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), lt: LT_DEF(), cv: CV_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + FURN.fv; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(doorOpen()), ...kitParts(FURN.kit), ...doorParts(), ...ltCached().P, ...cvParts()] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit), ...doorParts(), ...ltCached().P, ...cvParts()] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
@@ -1825,7 +1827,7 @@ function finSet(k, v) { const F = FURN.fin, r = FE.room;
 function wallUI() {   // Walls & doors tab
   const box = $('feTabWalls'); if (!box || FE.tab !== 'walls') return; const W = UNIT_W, dck = id => `<label class="text-[10px] text-slate-300" style="flex:0 0 auto;display:flex;gap:3px;align-items:center"><input type="checkbox" data-dc="${id}" class="accent-amber-400"${W.dc[id] ? ' checked' : ''}>closed</label>`, ck = (k, lab, on) => `<label class="fe-crow"><input type="checkbox" data-w="${k}" class="accent-amber-400"${on ? ' checked' : ''}><span>${lab}</span></label>`;
   box.innerHTML = `<div class="text-[11px] text-amber-300 mt-1.5">Non-structural walls</div>` + ck('br3', 'Bedroom 3 walls (to living + corridor). Off = open to living/dining', W.br3) + ck('br23', 'Bedroom 2 / Bedroom 3 partition', W.br23) + ck('kit', 'Enclosed kitchen: glass sliding doors at the dining side', W.kit) +
-    `<div class="text-[11px] text-amber-300 mt-2">Doors</div>` + Object.entries(DOORS).map(([id, D]) => `<div class="fe-crow"><span class="fe-cl">${D.n}</span><select data-d="${id}" class="fe-selx"${id === 'br3' && !W.br3 ? ' disabled' : ''}>${Object.entries(DOOR_T).filter(([t]) => t !== D.no).map(([t, n]) => `<option value="${t}"${W.d[id] === t ? ' selected' : ''}>${n}</option>`).join('')}</select>${dck(id)}</div>`).join('') +
+    `<div class="text-[11px] text-amber-300 mt-2">Doors</div><div class="fe-crow"><span class="fe-cl">Main door</span><span style="flex:1"></span>${dck('main')}</div><div class="fe-crow"><span class="fe-cl">Household shelter</span><span style="flex:1"></span>${dck('hs')}</div>` + Object.entries(DOORS).map(([id, D]) => `<div class="fe-crow"><span class="fe-cl">${D.n}</span><select data-d="${id}" class="fe-selx"${id === 'br3' && !W.br3 ? ' disabled' : ''}>${Object.entries(DOOR_T).filter(([t]) => t !== D.no).map(([t, n]) => `<option value="${t}"${W.d[id] === t ? ' selected' : ''}>${n}</option>`).join('')}</select>${dck(id)}</div>`).join('') +
     (W.kit ? `<div class="fe-crow"><span class="fe-cl">Kitchen (glass)</span><span style="flex:1"></span>${dck('kit')}</div>` : '') +
     `<div class="fe-crow"><button class="chip" data-all="1">Close all</button><button class="chip" data-all="0">Open all</button><span class="text-[9px] text-slate-500" style="flex:1">Closed doors block walking. In Walk: 🚪 or E opens/closes the door in front of you.</span></div>` + `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Structural walls (black on the HDB plan) are locked. Removing a wall merges the rooms in the daylight readings (one floor area, all their windows). Door swings and bi-fold bath/yard doors follow the HDB plan; leaves and colours are estimates.</div>`;
 }
@@ -1866,7 +1868,7 @@ function furnBindUI() {
   lt.addEventListener('click', e => { const b = e.target.closest('button[data-cc]'); if (b) ltSet(() => { FURN.cv.c = b.dataset.cc; }); });
   $('feTabWalls').addEventListener('change', e => { const t = e.target; if (t.dataset.w) UNIT_W[t.dataset.w] = t.checked ? 1 : 0; else if (t.dataset.dc) { if (t.checked) UNIT_W.dc[t.dataset.dc] = 1; else delete UNIT_W.dc[t.dataset.dc]; } else if (t.dataset.d) UNIT_W.d[t.dataset.d] = t.value; else return;
     furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
-  $('feTabWalls').addEventListener('click', e => { const a = e.target.dataset && e.target.dataset.all; if (a === undefined) return; UNIT_W.dc = {}; if (a === '1') [...Object.keys(DOORS), 'kit'].forEach(id => { UNIT_W.dc[id] = 1; }); furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
+  $('feTabWalls').addEventListener('click', e => { const a = e.target.dataset && e.target.dataset.all; if (a === undefined) return; UNIT_W.dc = {}; if (a === '1') DOOR_ALL.forEach(id => { UNIT_W.dc[id] = 1; }); furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
   $('feKit').addEventListener('change', e => { FURN.kit.c = e.target.value; furnChanged(); furnDrawPlan(); renderView(); }); $('feKitTop').addEventListener('change', e => { FURN.kit.top = e.target.checked ? 1 : 0; furnChanged(); furnDrawPlan(); renderView(); });
   $('feSave').addEventListener('click', () => { const nm = (prompt('Save layout as:', FURN_BUILTIN[FURN.name] ? 'My layout' : `${FURN.name} copy`) || '').trim().slice(0, 40); if (!nm || FURN_BUILTIN[nm]) return; FURN.name = nm; furnChanged(); });
   $('feDel').addEventListener('click', () => { if (FURN_BUILTIN[FURN.name] || !confirm(`Delete layout “${FURN.name}”?`)) return; delete FURN.saved[FURN.name]; lsSet(FURN_LS, FURN.saved); furnLoad('Bare flat'); });
@@ -2151,7 +2153,7 @@ function gpuGarden(A, P) {   // MSCP roof garden (as mscpGarden): lawn, planting
 }
 function gpuInterior(env) {   // #134 unit in world coords (plan → world via the spot), rebuilt when spot/floor/posture/door change; colours as drawInterior
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return 0;
-  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), hsOpen(), state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
   const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
   const Nw = (ax, ay, bx, by) => { const l = Math.hypot(bx - ax, by - ay) || 1, nX = (by - ay) / l, nY = -(bx - ax) / l; return [u[0] * nX - n[0] * nY, 0, u[1] * nX - n[1] * nY]; }, dn0 = [0, -1, 0];   // plan edge (CCW as the box sides) → outward world normal (interior sun term)
@@ -2499,7 +2501,7 @@ $('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const k
 // Walk: open/close the internal door nearest in front of the eye (≤1.8 m; ahead weighted over behind); saved per door in the layout
 function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a = (state.heading - 350.3) * DEG, fx = -Math.sin(a), fy = Math.cos(a); let best = null, bs = 1e9;
   const cand = Object.entries(DOORS).filter(([id]) => (UNIT_W.d[id] || 'none') !== 'none' && !(id === 'br3' && !UNIT_W.br3)).map(([id, D]) => [id, D.ax === 'x' ? (D.a0 + D.a1) / 2 : D.g, D.ax === 'x' ? D.g : (D.a0 + D.a1) / 2]);
-  if (UNIT_W.kit) cand.push(['kit', 8.2, 6.39]);
+  if (UNIT_W.kit) cand.push(['kit', 8.2, 6.39]); cand.push(['main', 10.48, 7.6], ['hs', 11.3, 6.18]);
   for (const [id, cx, cy] of cand) { const dx = cx - X, dy = cy - Y, d = Math.hypot(dx, dy); if (d > 1.8) continue; const sc = d * (1.6 - (dx * fx + dy * fy) / (d || 1)); if (sc < bs) { bs = sc; best = id; } }
   const b = $('walkDoor'); if (!best) { b.style.borderColor = '#f87171'; setTimeout(() => { b.style.borderColor = ''; }, 500); return; }
   if (UNIT_W.dc[best]) delete UNIT_W.dc[best]; else UNIT_W.dc[best] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
