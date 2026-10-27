@@ -175,9 +175,11 @@
 </div>
 <div id="furnEd" class="furn-ed" style="display:none">
 <div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
-<select id="feLayout" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
-<button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
+<select id="feLayout" style="min-width:120px" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
+<button id="feOw" class="chip text-amber-300" title="Overwrite a saved layout with the current setup (furniture, finishes, walls/doors, lights, curtains)">💾 Save to…</button><button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
 <button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
+<div id="feOwRow" class="flex items-center gap-1 mb-1.5 flex-wrap" style="display:none"><span class="text-[11px] text-slate-300">Overwrite</span><select id="feOwSel" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout to overwrite"></select><button id="feOwGo" class="chip text-amber-300">💾 Overwrite</button><button id="feOwX" class="chip">Cancel</button></div>
+<div id="feSaved" class="text-[10px] text-slate-500 mb-1"></div>
 <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
 <canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
 <div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div><div id="feTabLt" style="display:none"></div>
@@ -1749,7 +1751,7 @@ function furnSofaSeat() {
 function furnChanged(save = true) {
   FURN.ver++; FURN.fv++; FURN.items.forEach(it => { it._ext = null; });
   if (save) { if (FURN_BUILTIN[FURN.name]) { let k = 1, nm = 'My layout'; while (FURN.saved[nm] && FURN.name !== nm) nm = `My layout ${++k}`; FURN.name = nm; }   // editing a built-in starts a user layout
-    FURN.saved[FURN.name] = { i: FURN.items.map(furnPlain), k: { ...FURN.kit }, f: JSON.parse(JSON.stringify(FURN.fin)), w: JSON.parse(JSON.stringify(UNIT_W)), l: JSON.parse(JSON.stringify(FURN.lt)), v: JSON.parse(JSON.stringify(FURN.cv)) }; lsSet(FURN_LS, FURN.saved); lsSet(FURN_LS_CUR, FURN.name); furnLayoutSel(); }
+    FURN.saved[FURN.name] = { i: FURN.items.map(furnPlain), k: { ...FURN.kit }, f: JSON.parse(JSON.stringify(FURN.fin)), w: JSON.parse(JSON.stringify(UNIT_W)), l: JSON.parse(JSON.stringify(FURN.lt)), v: JSON.parse(JSON.stringify(FURN.cv)) }; lsSet(FURN_LS, FURN.saved); lsSet(FURN_LS_CUR, FURN.name); furnLayoutSel(); const t = new Date(); if ($('feSaved')) $('feSaved').textContent = `✓ Auto-saved to “${FURN.name}” ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} (this device)`; }
   if (state.posture === 'sofa' && !state.walk) { const S = furnSofaSeat(); if (S) state.heading = S.heading; }
 }
 const furnPlain = it => { const o = {}; for (const k of ['t', 'x', 'y', 'r', 'w', 'd', 'h', 'e', 'c', 'o', 'n']) if (it[k] !== undefined) o[k] = typeof it[k] === 'number' ? +it[k].toFixed(3) : it[k]; return o; };
@@ -1888,7 +1890,13 @@ function furnBindUI() {
     furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
   $('feTabWalls').addEventListener('click', e => { const a = e.target.dataset && e.target.dataset.all; if (a === undefined) return; UNIT_W.dc = {}; if (a === '1') DOOR_ALL.forEach(id => { UNIT_W.dc[id] = 1; }); furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
   $('feKit').addEventListener('change', e => { FURN.kit.c = e.target.value; furnChanged(); furnDrawPlan(); renderView(); }); $('feKitTop').addEventListener('change', e => { FURN.kit.top = e.target.checked ? 1 : 0; furnChanged(); furnDrawPlan(); renderView(); });
-  $('feSave').addEventListener('click', () => { const nm = (prompt('Save layout as:', FURN_BUILTIN[FURN.name] ? 'My layout' : `${FURN.name} copy`) || '').trim().slice(0, 40); if (!nm || FURN_BUILTIN[nm]) return; FURN.name = nm; furnChanged(); });
+  $('feSave').addEventListener('click', () => { const nm = (prompt('Save layout as:', FURN_BUILTIN[FURN.name] ? 'My layout' : `${FURN.name} copy`) || '').trim().slice(0, 40); if (!nm) return;
+    if (FURN_BUILTIN[nm]) { alert(`“${nm}” is a built-in layout and can't be changed. Pick another name.`); return; } if (FURN.saved[nm] && nm !== FURN.name && !confirm(`“${nm}” already exists. Replace it with the current setup?`)) return; FURN.name = nm; furnChanged(); });
+  // 💾 Save to…: overwrite any saved layout with the current setup (furniture, finishes, walls/doors, lights, curtains); the current layout keeps its own autosave
+  $('feOw').addEventListener('click', () => { const names = Object.keys(FURN.saved).filter(n => !FURN_BUILTIN[n]); if (!names.length) { $('feSave').click(); return; }
+    $('feOwSel').innerHTML = names.map(n => `<option${n === FURN.name ? ' selected' : ''}>${n.replace(/</g, '&lt;')}</option>`).join(''); $('feOwRow').style.display = ''; });
+  $('feOwX').addEventListener('click', () => { $('feOwRow').style.display = 'none'; });
+  $('feOwGo').addEventListener('click', () => { const nm = $('feOwSel').value; if (!nm || FURN_BUILTIN[nm]) return; if (nm !== FURN.name && !confirm(`Replace “${nm}” with the current setup?`)) return; FURN.name = nm; furnChanged(); $('feOwRow').style.display = 'none'; });
   $('feDel').addEventListener('click', () => { if (FURN_BUILTIN[FURN.name] || !confirm(`Delete layout “${FURN.name}”?`)) return; delete FURN.saved[FURN.name]; lsSet(FURN_LS, FURN.saved); furnLoad('Bare flat'); });
   $('feShare').addEventListener('click', async () => { const url = furnLink(), msg = t => { $('feMsg').textContent = t; setTimeout(() => { $('feMsg').textContent = ''; }, 3500); };
     if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `#134 layout: ${FURN.name}`, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
