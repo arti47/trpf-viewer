@@ -1565,6 +1565,14 @@ function fBunk(w, d, h, c, side) {
   for (let z = 0.35; z < 1.25; z += 0.28) P.push(fRect(xa, y1, xa + 0.04, y2, z, z + 0.03, c));   // ladder rungs
   return P;
 }
+// Raised storage platform (owner 2026-10-27): wall-to-wall box, drawer fronts on the room side, oak top; 0.91×1.9 mattresses at both ends (gap between = raised floor), unless o
+function fPlatform(w, d, h, c, bare) {
+  const P = [fRect(-w / 2 + 0.05, -d / 2, w / 2 - 0.05, d / 2 - 0.06, 0, 0.08, hexMul(c, 0.6)), fRect(-w / 2, -d / 2, w / 2, d / 2 - 0.02, 0.08, h - 0.02, c), fRect(-w / 2, -d / 2, w / 2, d / 2, h - 0.02, h, FURN_COL.oak)], n = Math.max(1, Math.round(w / 0.6)), dw = w / n;
+  for (let i = 0; i < n; i++) { const x0 = -w / 2 + i * dw; P.push(fRect(x0 + 0.004, d / 2 - 0.02, x0 + dw - 0.004, d / 2, 0.1, h - 0.04, hexMul(c, 0.97)), fRect(x0 + dw / 2 - 0.12, d / 2, x0 + dw / 2 + 0.12, d / 2 + 0.02, h - 0.1, h - 0.08, FURN_COL.metal)); }
+  if (!bare) for (const sx of [-1, 1]) { const x0 = sx < 0 ? -w / 2 + 0.02 : w / 2 - 0.93, x1 = x0 + 0.91, y0 = -d / 2 + 0.03, y1 = y0 + 1.9;
+    P.push(fRect(x0, y0, x1, y1, h, h + 0.18, FURN_COL.mattress), fRect(x0 + 0.01, y0 + 0.55, x1 - 0.01, y1 - 0.01, h + 0.18, h + 0.21, FURN_COL.linen), fRect(x0 + 0.1, y0 + 0.05, x1 - 0.1, y0 + 0.42, h + 0.18, h + 0.28, '#fbfaf6')); }
+  return P;
+}
 function fTrundle(w, d, h, c, out) {
   const P = fBed(w, d, h, c, 1);
   if (!out) P.push(fRect(-w / 2 + 0.03, -d / 2 + 0.12, w / 2 + 0.01, d / 2 - 0.06, 0.02, 0.1, hexMul(c, 0.9)));
@@ -1602,6 +1610,7 @@ const FURN_CAT = {
   bedSS: { n: 'Super single bed', g: 'Bedroom', w: 1.15, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
   bedS: { n: 'Single bed', g: 'Bedroom', w: 1.0, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
   bunk: { n: 'Bunk bed (2 singles)', g: 'Bedroom', w: 0.98, d: 1.98, h: 1.6, c: FURN_COL.white, ov: ['Ladder right', 'Ladder left'], o0: 0, b: it => fBunk(it.w, it.d, it.h, it.c, it.o ? 1 : -1) },
+  platform: { n: 'Raised platform (storage + 2 mattresses)', g: 'Bedroom', w: 2.87, d: 2.0, h: 0.4, c: FURN_COL.white, ov: ['2 mattresses', 'No mattresses'], o0: 0, b: it => fPlatform(it.w, it.d, it.h, it.c, it.o) },
   trundle: { n: 'Single bed + pull-out trundle', g: 'Bedroom', w: 0.95, d: 1.95, h: 0.9, c: '#c9c1b2', ov: ['Trundle in', 'Trundle out'], o0: 0, b: it => fTrundle(it.w, it.d, it.h, it.c, it.o) },
   robe: { n: 'Wardrobe', g: 'Bedroom', w: 1.5, d: 0.6, h: 2.0, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, Math.max(1, Math.round(it.w / 0.5))) },
   bedside: { n: 'Bedside table', g: 'Bedroom', w: 0.45, d: 0.4, h: 0.5, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, 1) },
@@ -1667,6 +1676,8 @@ const BR2_PLANS = {
     furnNew('desk', 3.92, 0.47, 0), furnNew('chair', 3.92, 1.02, 180)] },
   'Bedroom 2: L-shape': { s: 'L-shape', a: '1.35 × 1.6 m open floor in the middle', i: () => [furnNew('bedS', 3.795, 2.345, 180, BR2_SB), furnNew('bedS', 5.215, 0.645, 90, BR2_SB), furnNew('bedside', 3.545, 0.37, 0),
     furnNew('robe', 5.925, 1.645, 90, BR2_WR), furnNew('robe', 4.7, 3.045, 180, { w: 0.8, d: 0.55 })] },
+  'Bedroom 2: Storage platform': { s: 'Platform', a: 'wall-to-wall 0.4 m platform with drawers, mattress at each end; 0.97 m raised floor between them, 0.58 m floor aisle to the wardrobes', i: () => [furnNew('platform', 4.755, 1.15, 0, { d: 1.97 }),
+    furnNew('robe', 3.77, 3.045, 180, BR2_WR), furnNew('robe', 4.67, 3.045, 180, BR2_WR)] },
   'Bedroom 2: Trundle (study by day)': { s: 'Trundle', a: 'day 1.3 m to the desk; night (trundle out, chair pushed in) 0.6 m to the wardrobes', i: () => [furnNew('trundle', 3.795, 1.145, 0, { w: 0.95, d: 1.95 }), furnNew('robe', 3.77, 3.045, 180, BR2_WR), furnNew('robe', 4.67, 3.045, 180, BR2_WR),
     furnNew('desk', 5.9, 1.0, 90), furnNew('chair', 5.45, 1.0, 270)] } };
 const furnTypical = items => ({ i: items, k:{ c: 'L', top: 1 }, l: { m: 'auto', r: { living: { t: 'cove', k: 3000 }, dining: { t: 'down', k: 3000 }, mbrS: { t: 'ceil', k: 3000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'down', k: 4000 } } }, v: { c: '#d9cfc0', w: { living: { t: 'curtain', s: 'open' }, mbrS: { t: 'curtain', s: 'open' }, br2: { t: 'roller', s: 'open' }, br3: { t: 'roller', s: 'open' } } } });
