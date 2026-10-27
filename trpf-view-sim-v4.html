@@ -653,7 +653,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, live: false
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -2097,7 +2097,7 @@ precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH;
-uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis;
+uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 const vec3 C_WHITE = vec3(${TRPF_PAL.white.map(c => (c / 255).toFixed(3))}), C_GREIGE = vec3(${TRPF_PAL.greige.map(c => (c / 255).toFixed(3))}), C_GREY = vec3(${TRPF_PAL.grey.map(c => (c / 255).toFixed(3))}),
   C_BROWN = vec3(${TRPF_PAL.brown.map(c => (c / 255).toFixed(3))}), C_CROWN = vec3(${TRPF_PAL.crown.map(c => (c / 255).toFixed(3))}), C_VOID = vec3(${TRPF_PAL.void.map(c => (c / 255).toFixed(3))}), C_GREEN = vec3(${TRPF_PAL.green.map(c => (c / 255).toFixed(3))});
@@ -2107,6 +2107,25 @@ float pcf(sampler2DShadow sm, vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.5 / 
   s += texture(sm, q + vec3(-t, -t, 0.0)); s += texture(sm, q + vec3(t, -t, 0.0)); s += texture(sm, q + vec3(-t, t, 0.0)); s += texture(sm, q + vec3(t, t, 0.0)); return s * 0.25; }
 float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.6 / 2048.0, s = 0.0; q.z -= 0.0002;
   s += texture(uSmI, q + vec3(-t, -t, 0.0)); s += texture(uSmI, q + vec3(t, -t, 0.0)); s += texture(uSmI, q + vec3(-t, t, 0.0)); s += texture(uSmI, q + vec3(t, t, 0.0)); return s * 0.25; }
+float ffEdge(vec3 a, vec3 b, vec3 n) { vec3 c = cross(a, b); float l = length(c); return l < 1e-6 ? 0.0 : acos(clamp(dot(a, b), -1.0, 1.0)) * dot(n, c / l); }
+float ffRect(vec3 p, vec3 n, vec3 o, vec3 a, vec3 b) {   // form factor point → rectangle (Lambert, contour integral); horizon clipping ignored, clamped ≥ 0
+  vec3 v0 = normalize(o - p), v1 = normalize(o + a - p), v2 = normalize(o + a + b - p), v3 = normalize(o + b - p);
+  return max(0.0, (ffEdge(v0, v1, n) + ffEdge(v1, v2, n) + ffEdge(v2, v3, n) + ffEdge(v3, v0, n)) / 6.2831853); }
+float linZ(float d) { return 2.0 * uNF.x * uNF.y / (uNF.y + uNF.x - (d * 2.0 - 1.0) * (uNF.y - uNF.x)); }
+vec3 viewPos(vec2 px, float z) { return vec3((2.0 * px.x / uRes.x - 1.0) / uP.x * z, (2.0 * px.y / uRes.y - 1.0) / uP.y * z, z); }
+float ssao(vec3 nw) {   // interior screen-space AO from the depth prepass: 12 spiral taps (per-pixel rotation), tangent-plane test (no self-occlusion on flat faces), 0.6 m reach
+  float zc = linZ(gl_FragCoord.z); vec3 P = viewPos(gl_FragCoord.xy, zc), n = vec3(dot(uR, nw), dot(uU, nw), dot(uF, nw)); if (dot(n, P) > 0.0) n = -n;
+  float rpx = clamp(0.35 * uP.x * uRes.x * 0.5 / zc, 3.0, 80.0), a0 = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2831853, occ = 0.0;
+  for (int i = 0; i < 12; i++) { float t = (float(i) + 0.5) / 12.0, a = a0 + float(i) * 2.399963; vec2 q = gl_FragCoord.xy + vec2(cos(a), sin(a)) * rpx * sqrt(t);
+    vec3 v = viewPos(q, linZ(texture(uDep, q / uRes).r)) - P; float d = length(v); if (d > 1e-4) occ += max(0.0, dot(n, v / d) - 0.15) * (1.0 - smoothstep(0.25, 0.6, d)); }
+  return clamp(1.0 - 1.15 * occ / 12.0, 0.45, 1.0); }
+float winRefl(vec3 p, vec3 r, vec2 pp) {   // floor sheen: reflected view ray vs this room's window rects, edge blur grows with distance (rough floor)
+  float w = 0.0; for (int i = 0; i < 8; i++) { if (i >= uNW) break; vec4 R = uWR[i]; if (pp.x < R.x || pp.x > R.z || pp.y < R.y || pp.y > R.w) continue;
+    vec3 a = uWa[i], b = uWb[i], nW = cross(a, b); float dn = dot(r, nW); if (abs(dn) < 1e-6) continue; float t = dot(uWo[i] - p, nW) / dn; if (t <= 0.0) continue;
+    vec3 q = p + r * t - uWo[i]; float la = length(a), lb = length(b), s = dot(q, a) / la, u = dot(q, b) / lb, bl = 0.03 + 0.08 * t;
+    w = max(w, smoothstep(-bl, bl, min(min(s, la - s), min(u, lb - u)))); }
+  return w; }
+vec3 filmic(vec3 c) { return mix(c, 0.8 + 0.2 * (1.0 - exp(-(c - 0.8) / 0.2)), step(0.8, c)); }   // soft highlight shoulder above 0.8 (no hard clip)
 float shadowAt(vec3 p, vec3 n) {
   if (uShadow < 0.5) return 1.0;
   vec3 r = p + n * 0.5 - uLc0, l = vec3(dot(uLr, r) / uLs.x, dot(uLu, r) / uLs.x, dot(uLf, r) / uLs.y);
@@ -2162,7 +2181,14 @@ void main() {
   } else if (mode > 8.5 && mode < 9.5) alb = mix(alb, vec3(240.0, 240.0, 236.0) / 255.0, band(vTex.y, 7.2, 8.0, fwidth(vTex.y)));
   vec3 c;
   if (uUnlit > 0.5 && mode > 10.5) c = alb * uEmis;   // light fittings (on: glowing; off: plain diffuser)
-  else if (uUnlit > 0.5) { c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : uLitK);
+  else if (uUnlit > 0.5) { float kD = uLitK;
+    if (uNW > 0 && mode < 3.5) { vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP; float F = 0.0;   // daylight through the windows of this room: form factor of each glazed opening (sky-lit), clipped to its room rect; rest = bounce
+      for (int i = 0; i < 8; i++) { if (i >= uNW) break; vec4 R = uWR[i]; float wR = clamp(min(min(pp.x - R.x, R.z - pp.x), min(pp.y - R.y, R.w - pp.y)) / 0.04 + 0.5, 0.0, 1.0); if (wR > 0.0) F += wR * ffRect(vWorld + nrm * 0.01, nrm, uWo[i], uWa[i], uWb[i]); }
+      kD += uWD * (3.5 * min(F, 0.5) - 0.3); }
+    c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : kD);
+    if (uAO > 0.5 && mode < 3.5) c *= ssao(nrm);
+    if (uNW > 0 && mode < 3.5 && vTex.w > 1.5 && vTex.w < 2.5 && nrm.y > 0.7) { vec3 v = normalize(vWorld - uEye); vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP;   // floor sheen: Fresnel (F0 0.04) window/sky reflection
+      float F = 0.04 + 0.96 * pow(1.0 - clamp(-v.y, 0.0, 1.0), 5.0); c += mix(uFog, uSkyMid, 0.6) * min(1.0, uWD * 1.4) * F * 0.8 * winRefl(vWorld + vec3(0.0, 0.002, 0.0), reflect(v, vec3(0.0, 1.0, 0.0)), pp); }
     if (vTex.w > 1.5) { bool wl = vTex.w > 2.5; float pt = floor(vTex.w - 3.0 + 0.5); vec2 sz = !wl ? vec2(vTex.w < 2.1 ? 0.6 : 0.3) : pt > 1.5 ? vec2(0.3, 0.075) : vec2(0.6, 0.3), q = wl ? vTex.xy : vTex.xy - vec2(0.31, 0.15);   // tile joints: floors (tex = plan X, Y; 600 / 300 mm), wall tiles (tex = along-wall m, height; 300×600 stacked / offset, 75×300 subway)
       if (wl && pt > 0.5) q.x += 0.5 * sz.x * mod(floor(q.y / sz.y), 2.0);
       vec2 f = abs(fract(q / sz + 0.5) - 0.5) * sz / max(fwidth(vTex.xy), vec2(1e-5)); c = mix(c, wl ? c * 0.7 : vec3(90.0, 84.0, 76.0) / 255.0, (wl ? 0.5 : 0.25) * uLitK * (1.0 - smoothstep(0.35, 1.0, min(f.x, f.y)))); }
@@ -2186,7 +2212,7 @@ void main() {
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y)); }   // contact shading at wall feet (aoBase)
   if (uUnlit < 0.5) c = mix(uFog, c, exp(-uBeta * vDist));
   if (uMirror > 0.5) { c = mix(c, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(clamp(c, 0.0, 1.0) * a, a); return; }   // reflection in water
-  o = vec4(clamp(c, 0.0, 1.0) * uAlpha, uAlpha);
+  o = vec4(clamp(filmic(c), 0.0, 1.0) * uAlpha, uAlpha);
 }`;
 const GL_VS = GL_HDR + `in vec3 aPos, aNor, aCol; in vec4 aTex; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist; uniform float uMirror;
 void main() { float d; gl_Position = project(uMirror > 0.5 ? aPos * vec3(1.0, -1.0, 1.0) : aPos, d); vDist = d; vNor = aNor; vCol = aCol; vTex = aTex; vWorld = aPos; }`;
@@ -2220,6 +2246,7 @@ precision highp float; uniform vec3 uLr, uLu, uLf, uLc; uniform vec2 uLs; vec4 l
 `;
 const GL_SH_VS = GL_SH_HDR + `in vec3 aPos; void main() { gl_Position = lproj(aPos); }`;
 const GL_SHT_VS = GL_SH_HDR + GL_TREE_POS + `in vec3 aPos; in float aPart; in vec4 aInst; void main() { gl_Position = lproj(treePos(aPos, aPart, aInst)); }`;
+const GL_DEP_VS = GL_HDR + `in vec3 aPos; void main() { float d; gl_Position = project(aPos, d); }`;   // interior depth prepass (SSAO)
 const GL_SH_FS = `#version 300 es
 precision mediump float; void main() {}`;
 // Ear clipping for simple polygons (pts [[x,z]...], any winding) → triangle index triples; fan fallback.
@@ -2282,6 +2309,7 @@ function gpuInit() {
       GPU.lanes = gpuBuf(new Float32Array(L)); GPU.laneN = L.length / 7; }
     GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return { tx, fb }; });
+    GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
     GPU.smI = GPU.sm.pop();   // 3rd map: interior sun shadows (unit walls/frames/furniture, ±12 m)
     // static: land use rings (stencil fans), far land, roads, trees, fullscreen quad
     const lu = [], luR = []; for (const L of LU) { const rs = []; for (const r of L.rings) { rs.push([lu.length / 3, r.length / 2]); for (let i = 0; i < r.length; i += 2) lu.push(r[i], 0, r[i + 1]); } luR.push({ L, rs }); }
@@ -2385,7 +2413,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
 function gpuAttrib(pr, buf, inst) {
   const gl = GPU.gl; gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   const on = (loc, n, stride, off) => { if (loc < 0) return; gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, stride, off); };
-  if (pr === GPU.sh) on(pr.a.aPos, 3, 52, 0);
+  if (pr === GPU.sh || pr === GPU.dep) on(pr.a.aPos, 3, 52, 0);
   else if (pr === GPU.sht) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
   else if (pr === GPU.main) { on(pr.a.aPos, 3, 52, 0); on(pr.a.aNor, 3, 52, 12); on(pr.a.aCol, 3, 52, 24); on(pr.a.aTex, 4, 52, 36); }
   else if (pr === GPU.tree) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
@@ -2404,7 +2432,7 @@ function gpuEnv(pr, env, unlit) {
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
-  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1i(u.uDep, 4); gl.uniform1f(u.uAO, 0); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
@@ -2469,13 +2497,38 @@ function gpuRenderInterior(cam, env, kIn) {
   for (const l of Ls) { p4.push(...GPU.W(l.p[0], l.p[1], l.p[2]), l.I); r4.push(...l.r); c3.push(...l.c); }   // room lights (shader, clipped per room)
   if (HV && HV.light) { p4.push(...HV.light, 0.35 * (1.15 - lit0)); r4.push(-99, -99, 99, 99); c3.push(0.3, 1, 0.4); }   // saber glow on the room
   const nl = p4.length / 4; gl.uniform1i(M.u.uNL, nl); if (nl) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } if (HV) HV.nl = nl;
+  { const WLt = gpuWinLights(), dayW = clamp((env.sun.elDeg + 4) / 10, 0, 1), D = (lit0 - 0.12) * LS.kCov * kIn * dayW; gl.uniform1i(M.u.uNW, D > 0.005 ? WLt.n : 0); gl.uniform1f(M.u.uWD, D);
+    if (D > 0.005) { gl.uniform3fv(M.u['uWo[0]'], WLt.o); gl.uniform3fv(M.u['uWa[0]'], WLt.a); gl.uniform3fv(M.u['uWb[0]'], WLt.b); gl.uniform4fv(M.u['uWR[0]'], WLt.r); } }
   if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
-  gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
+  const ao = gpuDepth(cam, n); gpuCam(M, cam, 0.02, 400); gl.uniform1f(M.u.uAO, ao ? 1 : 0); if (ao) { gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, 0.02, 400); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
+  gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n); gl.uniform1f(M.u.uAO, 0);
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
   if (GPU.sheerN) { const k = clamp((0.12 + (lit0 - 0.12) * LS.kCov) * kIn + (LS.on ? 0.35 : 0), 0.25, 1) * 0.6; gl.uniform4f(F.u.uColor, 0.97 * k, 0.96 * k, 0.93 * k, 0.6); gpuAttrib(F, GPU.sheerBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.sheerN); }   // sheer curtains (premultiplied)
   if (GPU.frostN) { const k = clamp((0.12 + (lit0 - 0.12) * LS.kCov) * kIn + (LS.on ? 0.35 : 0), 0.25, 1); gl.uniform4f(F.u.uColor, 0.86 * k, 0.9 * k, 0.92 * k, 0.85); gpuAttrib(F, GPU.frostBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.frostN); }   // frosted (acid-etched) kitchen glass: light passes, view blurred → near-opaque pale tint
   gl.depthMask(true); if (HV) gpuHand(HV); GPU.hv = HV; return true;
+}
+// Interior depth prepass for SSAO (same camera/near/far as the room pass) into a depth texture; leaves the default framebuffer bound with depth cleared.
+function gpuDepth(cam, n) {
+  const gl = GPU.gl, w = GPU.cv.width, h = GPU.cv.height, pr = GPU.dep; if (!pr || !state.ao) return false;
+  if (GPU.depWH !== w + 'x' + h) { GPU.depWH = w + 'x' + h; gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, GPU.depTx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.viewport(0, 0, w, h); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gpuCam(pr, cam, 0.02, 400); gpuAttrib(pr, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.enable(gl.BLEND); gl.viewport(0, 0, w, h); return true;
+}
+// Window daylight sources (cached per interior): each glazed opening as a world rectangle (o, a along, b up; winding so the room side is positive) × each room rect it lights.
+function gpuWinLights() {
+  if (GPU.wkey === GPU.ikey && GPU.wl) return GPU.wl; GPU.wkey = GPU.ikey; const W = GPU.W, o = [], a = [], b = [], r = [], sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]], nz = v => { const l = Math.hypot(...v) || 1; return v.map(c => c / l); };
+  const ff = (p, n, O, A, B) => { const v = [O, [O[0] + A[0], O[1] + A[1], O[2] + A[2]], [O[0] + A[0] + B[0], O[1] + A[1] + B[1], O[2] + A[2] + B[2]], [O[0] + B[0], O[1] + B[1], O[2] + B[2]]].map(q => nz(sub(q, p))); let s = 0;
+    for (let i = 0; i < 4; i++) { const p0 = v[i], p1 = v[(i + 1) % 4], c = [p0[1] * p1[2] - p0[2] * p1[1], p0[2] * p1[0] - p0[0] * p1[2], p0[0] * p1[1] - p0[1] * p1[0]], l = Math.hypot(...c); if (l > 1e-9) s += Math.acos(clamp(p0[0] * p1[0] + p0[1] * p1[1] + p0[2] * p1[2], -1, 1)) * (n[0] * c[0] + n[1] * c[1] + n[2] * c[2]) / l; } return s; };
+  for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { if (!UNIT_PLAN.sashes[wi].length) continue;   // open corridor end: not a room window
+    const P = (s2, h) => (ax === 'y' ? W(g, s2, h) : W(s2, g, h)), mid = ax === 'y' ? [g, (w0 + w1) / 2] : [(w0 + w1) / 2, g];
+    const hit = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => mid[0] > x0 - 0.4 && mid[0] < x1 + 0.4 && mid[1] > y0 - 0.4 && mid[1] < y1 + 0.4); if (!hit) continue;
+    let O = P(w0, sl), A = sub(P(w1, sl), O), B = sub(P(w0, hd), O); const [rx0, ry0, rx1, ry1] = hit[1], c = W((rx0 + rx1) / 2, (ry0 + ry1) / 2, 1.2), n = nz(sub([O[0] + A[0] / 2, O[1] + B[1] / 2, O[2] + A[2] / 2], c));
+    if (ff(c, n, O, A, B) < 0) { O = [O[0] + A[0], O[1] + A[1], O[2] + A[2]]; A = A.map(v => -v); }
+    for (const [id, rr] of UNIT_ROOMS) if (id === hit[0] && o.length / 3 < 8) { o.push(...O); a.push(...A); b.push(...B); r.push(...rr); } }
+  return (GPU.wl = { o, a, b, r, n: o.length / 3 });
 }
 // Interior sun shadow map: unit walls, frames, ceilings, furniture seen from the sun (ortho ±12 m around the unit, ±30 m deep); re-rendered when the interior or the sun changes.
 function gpuShadowInterior() {
