@@ -489,7 +489,7 @@ const UNIT_PLAN = (() => {
     [5.6, 6.3, 7.18, 6.42], [5.6, 6.42, 5.75, 6.6], [5.6, 6.6, 5.75, 8.6, 0, YARD.sill], [5.6, 6.6, 5.75, 8.6, YARD.head, H], [5.6, 8.6, 5.75, 8.7], [7.11, 6.42, 7.18, 7.0], [7.11, 7.0, 7.18, 7.9, 2.1, H], [7.11, 7.9, 7.18, 8.7],   // service yard
     [9.2, 6.1, 9.51, 8.99], [5.6, 8.7, 9.51, 8.99],                                                       // kitchen (open to dining)
     [9.51, 7.46, 9.86, 7.74], [9.86, 7.46, 11.1, 7.74, 2.1, H], [9.86, 7.56, 11.1, 7.64, 0, 2.1, 'mainDoor'], [9.88, 6.26, 9.93, 7.46, 0, 2.1, 'doorOpen'], [11.1, 7.46, 11.3, 7.74],   // main door (closed / open leaf swung in against the kitchen side, walk + corridor)
-    [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.4, 5.79, 11.48, 6.57, 0, 2.0, 'steel'], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter
+    [11.3, 4.89, 13.12, 5.19], [11.3, 5.19, 11.58, 5.79], [11.3, 5.79, 11.58, 6.57, 2.0, H], [11.3, 6.57, 11.58, 7.46], [11.3, 7.46, 13.12, 7.74]);   // household shelter (steel door = HS_FIX parts)
   // service yard opening (E wall, faces ≈80°): owner-planned casement (2026-10-26) on the 1.0 m parapet up to the 2.4 m beam, 3 side-hung sashes, clear glass (closed);
   // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 1 System-4 condenser 1.0×0.38×0.95 m (owner 2026-10-26).
   wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
@@ -1545,6 +1545,17 @@ const fShower = (gx, ya, yb, [tx, ty], [rx, ry, hx, hy]) => [{ ...fRect(gx - 0.0
   fRect(tx - 0.07, ty - 0.07, tx + 0.07, ty + 0.07, 0.004, 0.007, '#5f6468'), fCyl(rx, ry, 0.012, 1.0, 2.0, CHROME, 8), fRect(Math.min(rx, hx) - 0.01, Math.min(ry, hy) - 0.01, Math.max(rx, hx) + 0.01, Math.max(ry, hy) + 0.01, 1.97, 1.99, CHROME), fCyl(hx, hy, 0.1, 1.95, 1.97, CHROME, 14), fRect(rx - 0.08, ry - 0.08, rx + 0.08, ry + 0.08, 0.95, 1.08, CHROME)];
 const BATH_FIX = [...fWC(4.22, 5.65, 90), ...fBasin(4.22, 5.15, 90), ...fShower(2.85, 5.1, 6.3, [2.35, 5.95], [2.35, 6.28, 2.35, 6.1]),   // bath/WC1 (en-suite): WC + basin on the partition, shower at the W end
   ...fWC(5.05, 6.3, 180), ...fBasin(4.3, 5.15, 270), ...fShower(5.5, 5.3, 6.3, [5.85, 5.95], [6.17, 5.85, 6.0, 5.85])];                                   // bath/WC2: basin on the partition, WC on the back wall, shower at the E end
+// Household shelter (owner 2026-10-27; 4-Room Type 1 plan: door in the E wall X 11.3, Y 5.79–6.57, hinged at the S jamb, opens outward into the flat; sizes/colours estimates):
+// steel frame + 50 mm leaf (closed, or swung 90° against the S side while walking/corridor view like the main door), 3 hinges, 2 locking levers, HS label plate; 2 vent sleeves high on the inner W wall.
+const HS_FIX = open => { const st = '#bfc2be', fr = '#a3a6a2', dk = '#4b4e51', P = [fRect(11.26, 5.79, 11.33, 5.85, 0, 2.0, fr), fRect(11.26, 6.51, 11.33, 6.57, 0, 2.0, fr), fRect(11.26, 5.79, 11.33, 6.57, 1.94, 2.0, fr),
+    fRect(12.845, 5.55, 12.86, 5.75, 2.25, 2.45, '#9a9d99'), fRect(12.845, 6.75, 12.86, 6.95, 2.25, 2.45, '#9a9d99')];
+  if (!open) { P.push(fRect(11.285, 5.85, 11.335, 6.51, 0.01, 1.94, st)); for (const z of [0.3, 1.0, 1.7]) P.push(fRect(11.265, 5.84, 11.285, 5.87, z - 0.07, z + 0.07, fr));
+    for (const z of [0.55, 1.45]) P.push(fRect(11.255, 6.39, 11.285, 6.45, z - 0.03, z + 0.03, dk), fRect(11.235, 6.22, 11.255, 6.44, z - 0.012, z + 0.012, dk));
+    P.push(fRect(11.282, 6.0, 11.285, 6.36, 1.6, 1.74, '#b3261e'), fRect(11.279, 6.015, 11.282, 6.345, 1.612, 1.728, '#f2f1ec')); }
+  else { P.push(fRect(10.625, 5.80, 11.285, 5.85, 0.01, 1.94, st)); for (const z of [0.3, 1.0, 1.7]) P.push(fRect(11.25, 5.78, 11.285, 5.80, z - 0.07, z + 0.07, fr));
+    for (const z of [0.55, 1.45]) P.push(fRect(10.665, 5.77, 10.725, 5.80, z - 0.03, z + 0.03, dk), fRect(10.67, 5.75, 10.89, 5.77, z - 0.012, z + 0.012, dk));
+    P.push(fRect(10.765, 5.797, 11.125, 5.80, 1.6, 1.74, '#b3261e'), fRect(10.78, 5.794, 11.11, 5.797, 1.612, 1.728, '#f2f1ec')); }
+  return P; };
 // Kitchen (plan X 7.18–9.2, Y 6.42–8.7; open to dining at Y 6.42; yard door in the E wall Y 7.0–7.9 → no galley/U): runs on the back wall (N, Y 8.7) and/or side wall (W, X 9.2), 0.6 m deep, 0.86 m high
 const KIT_CFG = { none: { n: 'No counter', r: [] }, single: { n: 'Single run (back wall)', r: [['N', 7.18, 9.2]], sink: ['N', 7.85], hob: ['N', 8.65] }, side: { n: 'Single run (side wall)', r: [['W', 7.15, 8.7]], sink: ['W', 8.15], hob: ['W', 7.55] },
   L: { n: 'L-shape (back + side wall)', r: [['N', 7.18, 9.2], ['W', 7.15, 8.1]], sink: ['N', 7.85], hob: ['W', 7.6] } };
@@ -1562,7 +1573,7 @@ function kitParts(kit) {
 const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => ({ i: FURN_SAMPLE(), k: { c: 'L', top: 1 } }) };
 const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...kitParts(FURN.kit)] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen(); if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(doorOpen()), ...kitParts(FURN.kit)] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
