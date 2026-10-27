@@ -194,7 +194,8 @@
         <div id="hint" class="hint" style="display:none"><div class="hint-card">
           <div class="text-[15px] font-bold text-white mb-2">The view from #134, 27th floor</div>
           <div>👆 <b>Drag</b> the view to look around (left/right turns, up/down tilts).</div>
-          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat.</div>
+          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat: ▲▼◀▶ or W/A/S/D, ✋ hand, 🚪 doors.</div>
+          <div>🛋 <b>Furnish</b> (Home panel) edits furniture, finishes, walls, doors and lights; 🚪 Room → Bedroom 2 has ideas for 2 beds.</div>
           <div>🕐 <b>Slide the time</b> at the bottom, and tap the date to change the day.</div>
           <div>☰ <b>Panels</b> (<span class="hint-where"></span>): View, Time, Future buildings, Sun &amp; light, Maps, Home.</div>
           <button id="hintOk" class="chip mt-3 w-full" style="font-size:13px;padding:7px">Got it</button>
@@ -343,10 +344,6 @@ TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the 
 <div class="pnl-b">
 <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior (walls, furniture)</label>
 <div class="flex gap-2 flex-wrap"><button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open windows</button><button id="furnBtn" class="chip text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link">🛋 Furnish</button></div>
-<div class="text-[11px] text-slate-300 mt-1">Bedroom 2 ideas: 2 single beds + 2 wardrobes <span class="text-slate-500">(tap to try, walks you in with the 0.5× lens)</span></div>
-<div id="br2Ideas" class="flex gap-1 flex-wrap"></div>
-<div id="br2Note" class="text-[10px] text-slate-500 leading-snug"></div>
-<div class="text-[10px] text-slate-500 leading-snug">🚶 Walk (on the view) lets you move through the flat: ▲▼◀▶ or W/A/S/D, ✋ hand, 🚪 doors. 🛋 Furnish edits furniture, finishes, walls, doors and lights.</div>
 
 </div></section>
     </aside>
@@ -1993,14 +1990,12 @@ function furnOpen(on) {
   if (on && (!state.showBalcony || !curSpot())) { state.showBalcony = true; $('balconyToggle').checked = true; if (!curSpot()) { const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z }); } }
   furnLayoutSel(); furnSelUI(); requestAnimationFrame(() => { resizeCanvases(); furnDrawPlan(); });
 }
+// Bedroom 2 idea picked (Furnish → 🚪 Room): walk in at the BR2 door looking across the room (heading = UNIT_FN + plan bearing), 0.5× lens
+function br2WalkIn() { const sp = UNIT_SPOTS.find(q => q.id === 'br2'); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes('br2')) setPosture('stand');
+  setWalk(true); state.walk = { X: 5.65, Y: 3.0 }; state.heading = Math.round(UNIT_FN - 32); state.pitchDeg = -18; state.focalLength = 13; renderAll(); }
 function furnBindUI() {
-  // Bedroom 2 ideas (Home panel): load the built-in layout, then walk in at the BR2 door looking SW across the room (heading = UNIT_FN + plan bearing)
-  Object.entries(BR2_PLANS).forEach(([n, B]) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = B.s; b.title = `${n}: ${B.a}`;
-    b.addEventListener('click', () => { if ($('feRvRoom')) $('feRvRoom').value = 'br2'; rvApply('br2', n.replace(/^Bedroom 2: /, '')); const sp = UNIT_SPOTS.find(q => q.id === 'br2'); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes('br2')) setPosture('stand');
-      setWalk(true); state.walk = { X: 5.65, Y: 3.0 }; state.heading = Math.round(UNIT_FN - 32); state.pitchDeg = -18; state.focalLength = 13; if (!matchMedia(PHONE_MQ).matches && !FURN.open) furnOpen(true); $('br2Note').textContent = `${B.s}: ${B.a}.`; document.querySelectorAll('#br2Ideas .chip').forEach(c => c.classList.toggle('on', c === b)); renderAll(); });
-    $('br2Ideas').appendChild(b); });
   $('feRvRoom').innerHTML = Object.entries(RV_ROOMS).map(([k, n]) => `<option value="${k}"${k === 'br2' ? ' selected' : ''}>${n}</option>`).join(''); rvUI();
-  $('feRvRoom').addEventListener('change', () => { FURN.rvCur = null; rvUI(); }); $('feRvVar').addEventListener('change', e => { if (e.target.value) rvApply($('feRvRoom').value, e.target.value); });
+  $('feRvRoom').addEventListener('change', () => { FURN.rvCur = null; rvUI(); }); $('feRvVar').addEventListener('change', e => { if (!e.target.value) return; const room = $('feRvRoom').value; rvApply(room, e.target.value); if (room === 'br2') br2WalkIn(); });
   $('feRvSave').addEventListener('click', () => rvSave($('feRvRoom').value)); $('feRvDel').addEventListener('click', () => rvDel($('feRvRoom').value, $('feRvVar').value));
   $('furnBtn').addEventListener('click', () => furnOpen(!FURN.open));$('feClose').addEventListener('click', () => furnOpen(false));
   $('feLayout').addEventListener('change', e => furnLoad(e.target.value));
