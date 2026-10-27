@@ -52,6 +52,17 @@
     @media (max-width: 1024px) { .view-max.app-shell { height: 100%; overflow: hidden; } .view-max .app-workspace { flex: 1 1 auto; min-height: 0; } .view-max .canvas-pane-bottom { height: auto; flex: 1 1 auto; } }
     /* Phone (≤640 px): 3D view unobstructed — tools behind ☰, small minimap/pad, one-row room bar, compact header */
     .phone-only { display: none; }
+    /* Furnish editor: docked right of the 3D view (desktop), full screen on phones */
+    .furn-ed { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 20; overflow-y: auto; background: rgba(15,23,42,0.97); border-left: 1px solid #334155; padding: 8px; }
+    .furnishing > .absolute.top-2, .furnishing #roomHud { right: 352px !important; }
+    .furn-ed .fe-f { display: flex; flex-direction: column; font-size: 9px; color: #94a3b8; gap: 1px; }
+    .furn-ed .fe-f.fe-inl { flex-direction: row; align-items: center; gap: 3px; }
+    .furn-ed input[type=number], .furn-ed .fe-name { background: #0b1220; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0; font-size: 11px; padding: 2px 4px; width: 100%; min-width: 0; }
+    .furn-ed .fe-inl input { width: 52px; }
+    .furn-ed .fe-name { flex: 1; }
+    .fe-sw { width: 20px; height: 20px; border-radius: 4px; border: 1px solid #475569; }
+    .fe-sw.on { outline: 2px solid #fbbf24; outline-offset: 1px; }
+    #feCol { width: 26px; height: 22px; padding: 0; border: none; background: none; }
     @media (max-width: 640px) {
       .phone-only { display: inline-block; }
       .app-header { padding: 5px 10px; gap: 5px; }
@@ -71,6 +82,9 @@
       #walkMap { width: 120px !important; height: 88px !important; top: 40px !important; opacity: 0.85; }
       #walkPad { grid-template-columns: repeat(3, 34px) !important; grid-template-rows: repeat(2, 34px) !important; bottom: 10px !important; opacity: 0.8; }
       .walking #roomHud, .walking #dragHint { display: none !important; }
+      .furn-ed { position: fixed; inset: 0; width: auto; z-index: 60; border-left: none; background: #0f172a; padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+      .furn-ed .fe-desk { display: none; }
+      .furnishing > .absolute.top-2, .furnishing #roomHud { right: 12px !important; }
     }
   </style>
   <script>
@@ -170,6 +184,7 @@
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
             <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
             <button id="walkBtn" class="chip keep text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
+            <button id="furnBtn" class="chip keep text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link">🛋 Furnish</button>
             <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
             <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
             <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
@@ -183,6 +198,17 @@
         <div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
           <span></span><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><span></span>
           <button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
+        </div>
+        <div id="furnEd" class="furn-ed" style="display:none">
+          <div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
+            <select id="feLayout" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
+            <button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
+            <button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
+          <canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
+          <div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div>
+          <div id="feSel" class="panel mt-1.5"></div>
+          <div id="feMsg" class="text-[10px] text-emerald-300 mt-1 min-h-[12px]"></div>
+          <div class="text-[9px] text-slate-500 leading-snug">IKEA-style sizes (editable). Visual only: daylight/heat readings ignore furniture; the sun in the 3D room is lit and shadowed by it. Edits save on this device; 🔗 Share carries the layout to another device.</div>
         </div>
         <div id="dragHint" class="absolute bottom-2.5 left-3 pointer-events-none bg-slate-900/85 px-2.5 py-1 rounded border border-slate-800 text-[10px] text-slate-300 z-10">Drag L/R = turn • Drag U/D = tilt</div>
       </div>
@@ -280,7 +306,7 @@
         <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Light & heat in room</span>
             <select id="glassSelect" class="bg-slate-800 text-slate-200 text-[10px] rounded px-1 py-0.5 border border-slate-700"><option value="clear">Clear 6mm</option><option value="light" selected>Light tint (BTO std)</option><option value="tinted">Tinted grey</option><option value="lowe">Solar-control low-E</option></select></div>
           <div id="roomLight" class="text-[10px] mono text-slate-300 leading-relaxed"></div>
-          <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Sun patch drawn on floor/back wall in Room interior view. Reveals/ledges not modelled.</div></div>
+          <div class="text-[9px] text-slate-500 leading-snug mt-1">Clear-sky model (real Singapore skies often cloudier). VSC = sky visible from window centre (CIE overcast); ADF = average daylight factor (BRE). Readings: reveals/ledges/furniture not modelled. The Room interior view draws the sun per pixel through the openings (window recess, frames and furniture cast shadows), so its patch can be smaller than the reading.</div></div>
         <div class="panel mb-2.5"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-semibold text-amber-300">Daylight over the day</span>
             <span class="text-[9px] text-slate-400">vs <input type="date" id="cmpDate" class="bg-slate-900 text-slate-200 text-[10px] rounded px-1 py-0 border border-slate-700 mono"></span></div>
           <canvas id="lightChart" style="display:block;width:100%;height:140px;touch-action:none"></canvas>
@@ -1383,7 +1409,7 @@ function generateTrees() {
 const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]], ['corr', [9.51, 7.6, 13.26, 10.64]]];
 const walkRing = UNIT_PLAN.outline.flat();
 const inCorr = (X, Y) => { const [x0, y0, x1, y1] = UNIT_PLAN.corr.walk; return X >= x0 && X <= x1 && Y >= y0 && Y <= y1; };   // corridor: walk bounded by the owner's stop line
-const walkFree = (X, Y, r = 0.2) => (ringIn(walkRing, X, Y) || inCorr(X, Y)) && !unitWalls().some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r);
+const walkFree = (X, Y, r = 0.2, esc = false) => (ringIn(walkRing, X, Y) || inCorr(X, Y)) && !unitWalls().some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || !furnBlocks(X, Y, r));   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
   if (!state.walk) return; state.walk.X = X; state.walk.Y = Y;
   const rm = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
@@ -1391,8 +1417,8 @@ function walkSet(X, Y) {
 }
 function walkStep(k) {
   const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
-  const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk;
-  if (walkFree(X + dX, Y + dY)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY)) walkSet(X, Y + dY);   // slide along walls
+  const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk, esc = furnBlocks(X, Y);
+  if (walkFree(X + dX, Y + dY, 0.2, esc)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y, 0.2, esc)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY, 0.2, esc)) walkSet(X, Y + dY);   // slide along walls
   const sp0 = sp.id; if (state.spot !== sp0) renderAll(); else { renderView(); drawWalkMap(); }
 }
 function setWalk(on) {
@@ -1407,6 +1433,7 @@ function drawWalkMap() {
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
   { const [a, b] = P(UNIT_PLAN.corr.walk[0], UNIT_PLAN.corr.walk[1]), [c, d] = P(UNIT_PLAN.corr.walk[2], UNIT_PLAN.corr.walk[3]); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, c - a, d - b); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, b); g.lineTo(c, d); g.stroke(); }   // corridor + stop line
   for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  FURN.items.forEach(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return; g.beginPath(); const [a, b, c, d] = it._ext || (it._ext = furnExt(it)), cs = Math.cos(it.r * DEG), sn = Math.sin(it.r * DEG); [[a, b], [c, b], [c, d], [a, d]].forEach(([lx, ly], i) => { const [x, y] = P(it.x + cs * lx - sn * ly, it.y + sn * lx + cs * ly); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(251,191,36,0.35)'; g.fill(); });   // furniture footprints
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
   const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
   g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '9px Inter, sans-serif'; g.fillStyle = '#94a3b8'; g.fillText('S ▲ windows', 4, 10);
@@ -1415,7 +1442,7 @@ function drawWalkMap() {
 // Spot ≈ window centre 0.15 m outside the outer face (outer face = yin − 0.15). Window metrics/masks keep using the spot.
 function roomEyeWorld() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
-  const [ex, ey] = state.walk ? [state.walk.X, state.walk.Y] : spotEyeP(S, Math.max(0.1, state.standDist)), [px, py] = spotP(S), nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - py, s = ex - px;
+  const ss = !state.walk && state.posture === 'sofa' && furnSofaSeat(), [ex, ey] = state.walk ? [state.walk.X, state.walk.Y] : ss ? [ss.X, ss.Y] : spotEyeP(S, Math.max(0.1, state.standDist)), [px, py] = spotP(S), nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], back = ey - py, s = ex - px;
   return [sp.x + u[0] * s - n[0] * back, sp.z + u[1] * s - n[1] * back];
 }
 // Room interior on: Blk 32A raster boxes whose centre lies in #134's own plan footprint are skipped in the 3D view (the traced interior + ext walls replace them;
@@ -1424,6 +1451,214 @@ function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
   return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
+}
+/* ===================== FURNITURE (layout editor) ===================== */
+// Loose furniture in #134 (owner 2026-10-27; visual only, readings stay furniture-free): items in plan metres (X along facade 0 = E → W, Y into the flat), IKEA-style default sizes
+// (editable), shaped models built from a few prisms. Item { t type, x, y centre, r rotation ° (0 = front faces +Y), w, d, h size m, e height off floor m, c colour, o variant, n name }.
+// Local frame: lx ∈ ±w/2, ly ∈ ±d/2 (−d/2 = back, +d/2 = front); plan = centre + R(r)·local. Parts { p: local polygon (CCW as walls), z0, z1, c, cy: round }.
+const FURN_COL = { leg: '#3a3633', oak: '#c8a77a', walnut: '#6b4a32', white: '#eeeeea', black: '#2a2a2c', metal: '#9a9ea3', screen: '#141618', shade: '#f2ead8', mattress: '#f4f1ea', linen: '#dfe3e6' };
+const FURN_SW = ['#8a8f98', '#c9c1b2', '#3f4a5c', '#6f7d6a', '#a3684c', '#eeeeea', '#2a2a2c', '#c8a77a', '#6b4a32', '#d9c9a8'];   // colour swatches
+const hexMul = (h, k) => '#' + hexRgb(h).map(v => Math.round(clamp(v * k, 0, 255)).toString(16).padStart(2, '0')).join('');
+const fRect = (x0, y0, x1, y1, z0, z1, c) => ({ p: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z0, z1, c });
+const fCyl = (cx, cy, r, z0, z1, c, n = 16) => ({ p: Array.from({ length: n }, (_, i) => [cx + r * Math.cos((i * 2 * Math.PI) / n), cy + r * Math.sin((i * 2 * Math.PI) / n)]), z0, z1, c, cy: 1 });
+const fRot = (P, a, ox = 0, oy = 0) => { const c = Math.cos(a * DEG), s = Math.sin(a * DEG); P.forEach(q => { q.p = q.p.map(([x, y]) => [ox + c * x - s * y, oy + s * x + c * y]); }); return P; };
+function fSofa(w, d, h, c, seats, chaise) {   // chaise: 0 none, ±1 = chaise at the +x / −x end reaching the front (no arm there)
+  const a = 0.15, bk = 0.2, sz = 0.42, m2 = hexMul(c, 0.9), yb = -d / 2, yf = chaise ? yb + Math.min(d, 0.95) : d / 2, P = [];
+  P.push(fRect(-w / 2 + 0.05, yb + 0.05, w / 2 - 0.05, yf - 0.05, 0, 0.1, FURN_COL.leg), fRect(-w / 2, yb, w / 2, yf, 0.1, 0.3, c), fRect(-w / 2, yb, w / 2, yb + bk, 0.3, h, c));
+  if (chaise !== -1) P.push(fRect(-w / 2, yb + bk, -w / 2 + a, yf, 0.3, 0.62, c)); if (chaise !== 1) P.push(fRect(w / 2 - a, yb + bk, w / 2, yf, 0.3, 0.62, c));
+  const L = chaise === -1 ? -w / 2 : -w / 2 + a, R = chaise === 1 ? w / 2 : w / 2 - a, sw = (R - L) / seats;
+  for (let i = 0; i < seats; i++) { const x0 = L + i * sw + 0.006, x1 = L + (i + 1) * sw - 0.006; P.push(fRect(x0, yb + bk, x1, yf, 0.3, sz, m2), fRect(x0, yb + bk, x1, yb + bk + 0.16, sz, h - 0.04, m2)); }
+  if (chaise) { const x0 = chaise > 0 ? w / 2 - 0.9 : -w / 2, x1 = x0 + 0.9; P.push(fRect(x0 + 0.05, yf - 0.06, x1 - 0.05, d / 2 - 0.05, 0, 0.1, FURN_COL.leg), fRect(x0, yf, x1, d / 2, 0.1, 0.3, c), fRect(x0 + 0.006, yf, x1 - 0.006, d / 2, 0.3, sz, m2)); }
+  return P;
+}
+function fChair(c, cx = 0, cy = 0, f = 0, w = 0.45, d = 0.5, h = 0.85) {   // f: facing ° (0 = +y)
+  const l = 0.035, sh = 0.45, P = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, y]) => { const a = x < 0 ? -w / 2 : w / 2 - l, b = y < 0 ? -d / 2 : d / 2 - l; return fRect(a, b, a + l, b + l, 0, sh - 0.04, hexMul(c, 0.8)); });
+  P.push(fRect(-w / 2, -d / 2, w / 2, d / 2, sh - 0.04, sh, c), fRect(-w / 2, -d / 2, w / 2, -d / 2 + 0.04, sh, h, c)); return fRot(P, f, cx, cy);
+}
+function fTable(w, d, h, c, round, chairs) {
+  const P = [], top = h - 0.03;
+  if (round) { const r = w / 2; P.push(fCyl(0, 0, r, top, h, c, 28), fCyl(0, 0, 0.05, 0.03, top, hexMul(c, 0.8), 10), fCyl(0, 0, 0.25, 0, 0.03, hexMul(c, 0.8), 14)); if (chairs) for (let k = 0; k < 4; k++) { const t = -90 + k * 90; P.push(...fChair(c, (r + 0.1) * Math.cos(t * DEG), (r + 0.1) * Math.sin(t * DEG), t + 90)); } return P; }
+  P.push(fRect(-w / 2, -d / 2, w / 2, d / 2, top, h, c)); for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const a = x < 0 ? -w / 2 + 0.05 : w / 2 - 0.1, b = y < 0 ? -d / 2 + 0.05 : d / 2 - 0.1; P.push(fRect(a, b, a + 0.05, b + 0.05, 0, top, hexMul(c, 0.85))); }
+  if (chairs) { const n = w >= 1.6 ? 3 : 2; for (let i = 0; i < n; i++) { const x = -w / 2 + ((i + 0.5) * w) / n; P.push(...fChair(c, x, -d / 2 - 0.1, 0), ...fChair(c, x, d / 2 + 0.1, 180)); } }
+  return P;
+}
+function fBed(w, d, h, c, pillows) {
+  const P = [fRect(-w / 2 + 0.05, -d / 2 + 0.1, w / 2 - 0.05, d / 2 - 0.05, 0, 0.1, FURN_COL.leg), fRect(-w / 2, -d / 2 + 0.06, w / 2, d / 2, 0.1, 0.3, c), fRect(-w / 2, -d / 2, w / 2, -d / 2 + 0.06, 0.1, h, c),
+    fRect(-w / 2 + 0.04, -d / 2 + 0.08, w / 2 - 0.04, d / 2 - 0.04, 0.3, 0.52, FURN_COL.mattress), fRect(-w / 2 + 0.02, -d / 2 + 0.6, w / 2 - 0.02, d / 2 - 0.02, 0.52, 0.57, FURN_COL.linen)], pw = (w - 0.2) / pillows;
+  for (let i = 0; i < pillows; i++) P.push(fRect(-w / 2 + 0.1 + i * pw + 0.02, -d / 2 + 0.12, -w / 2 + 0.1 + (i + 1) * pw - 0.02, -d / 2 + 0.48, 0.52, 0.64, '#fbfaf6'));
+  return P;
+}
+function fCabinet(w, d, h, c, doors, plinth = 0.05) {   // body + door fronts (edge lines read as door joints) + handles
+  const P = [fRect(-w / 2, -d / 2, w / 2, d / 2, plinth, h, c)], dw = w / doors; if (plinth) P.push(fRect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, d / 2 - 0.03, 0, plinth, hexMul(c, 0.6)));
+  for (let i = 0; i < doors; i++) { const x0 = -w / 2 + i * dw, hx = i % 2 ? x0 + 0.06 : x0 + dw - 0.08; P.push(fRect(x0 + 0.004, d / 2, x0 + dw - 0.004, d / 2 + 0.012, plinth + 0.01, h - 0.01, hexMul(c, 0.97)), fRect(hx, d / 2 + 0.012, hx + 0.02, d / 2 + 0.03, plinth + (h - plinth) * 0.45, plinth + (h - plinth) * 0.6, FURN_COL.metal)); }
+  return P;
+}
+// Catalogue (IKEA-style defaults, estimates): g group, w/d/h m, e default height off floor, c colour, ov variant labels [off, on] + o0 default.
+const FURN_CAT = {
+  sofa3: { n: '3-seater sofa', g: 'Living', w: 2.1, d: 0.9, h: 0.8, c: '#8a8f98', b: it => fSofa(it.w, it.d, it.h, it.c, 3, 0), seat: it => [0, 0.05] },
+  sofa2: { n: '2-seater sofa', g: 'Living', w: 1.6, d: 0.9, h: 0.8, c: '#8a8f98', b: it => fSofa(it.w, it.d, it.h, it.c, 2, 0), seat: it => [0, 0.05] },
+  sofaL: { n: 'L-sofa with chaise', g: 'Living', w: 2.4, d: 1.55, h: 0.8, c: '#8a8f98', ov: ['Chaise right', 'Chaise left'], o0: 0, b: it => fSofa(it.w, it.d, it.h, it.c, 3, it.o ? -1 : 1), seat: it => [it.o ? 0.3 : -0.3, -it.d / 2 + 0.55] },
+  arm: { n: 'Armchair', g: 'Living', w: 0.85, d: 0.85, h: 0.8, c: '#c9c1b2', b: it => fSofa(it.w, it.d, it.h, it.c, 1, 0), seat: it => [0, 0.05] },
+  coffee: { n: 'Coffee table', g: 'Living', w: 1.2, d: 0.6, h: 0.45, c: FURN_COL.oak, b: it => fTable(it.w, it.d, it.h, it.c, false, false) },
+  side: { n: 'Side table (round)', g: 'Living', w: 0.5, d: 0.5, h: 0.55, c: FURN_COL.oak, b: it => fTable(it.w, it.d, it.h, it.c, true, false) },
+  tvcon: { n: 'TV console', g: 'Living', w: 1.8, d: 0.4, h: 0.45, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, 3, 0.1) },
+  tv55: { n: 'TV 55″ (wall)', g: 'Living', w: 1.23, d: 0.06, h: 0.72, e: 0.85, c: FURN_COL.black, b: it => [fRect(-it.w / 2, -it.d / 2, it.w / 2, it.d / 2, 0, it.h, it.c), fRect(-it.w / 2 + 0.012, it.d / 2, it.w / 2 - 0.012, it.d / 2 + 0.003, 0.012, it.h - 0.012, FURN_COL.screen)] },
+  tv65: { n: 'TV 65″ (wall)', g: 'Living', w: 1.45, d: 0.06, h: 0.84, e: 0.8, c: FURN_COL.black, b: it => FURN_CAT.tv55.b(it) },
+  lamp: { n: 'Floor lamp', g: 'Living', w: 0.4, d: 0.4, h: 1.6, c: FURN_COL.shade, b: it => [fCyl(0, 0, 0.15, 0, 0.03, FURN_COL.metal), fCyl(0, 0, 0.015, 0.03, it.h - 0.3, FURN_COL.metal, 8), fCyl(0, 0, Math.min(it.w, it.d) / 2, it.h - 0.32, it.h, it.c)] },
+  rug: { n: 'Rug', g: 'Living', w: 2.0, d: 1.4, h: 0.01, c: '#7d6a5a', b: it => [fRect(-it.w / 2, -it.d / 2, it.w / 2, it.d / 2, 0, it.h, it.c)] },
+  shoe: { n: 'Shoe cabinet', g: 'Living', w: 0.8, d: 0.35, h: 1.0, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, 2) },
+  shelf: { n: 'Bookshelf', g: 'Living', w: 0.8, d: 0.3, h: 2.0, c: FURN_COL.white, b: ({ w, d, h, c }) => { const t = 0.02, P = [fRect(-w / 2, -d / 2, w / 2, -d / 2 + t, 0, h, hexMul(c, 0.93)), fRect(-w / 2, -d / 2, -w / 2 + t, d / 2, 0, h, c), fRect(w / 2 - t, -d / 2, w / 2, d / 2, 0, h, c)]; for (let i = 0; i <= 5; i++) { const z = i === 0 ? 0.05 : (h - t) * i / 5; P.push(fRect(-w / 2 + t, -d / 2 + t, w / 2 - t, d / 2, z - (i ? 0 : 0.05), z + t, c)); } return P; } },
+  fcu: { n: 'Aircon fan coil (wall)', g: 'Living', w: 0.9, d: 0.25, h: 0.3, e: 2.2, c: FURN_COL.white, b: ({ w, d, h, c }) => [fRect(-w / 2, -d / 2, w / 2, d / 2, 0, h, c), fRect(-w / 2 + 0.03, d / 2 - 0.1, w / 2 - 0.03, d / 2 + 0.003, 0.0, 0.05, '#b9bdc0')] },
+  fan: { n: 'Ceiling fan', g: 'Living', w: 1.3, d: 1.3, h: 0.35, e: 2.25, c: FURN_COL.white, b: ({ w, h, c }) => { const P = [fCyl(0, 0, 0.1, 0.08, 0.2, c, 14), fCyl(0, 0, 0.015, 0.2, h, c, 8)]; for (let k = 0; k < 3; k++) P.push(...fRot([fRect(0.09, -0.065, w / 2, 0.065, 0.13, 0.145, c)], k * 120)); return P; } },
+  din4: { n: 'Dining table 4-seater', g: 'Dining', w: 1.2, d: 0.8, h: 0.75, c: FURN_COL.oak, ov: ['No chairs', 'With chairs'], o0: 1, b: it => fTable(it.w, it.d, it.h, it.c, false, it.o) },
+  din6: { n: 'Dining table 6-seater', g: 'Dining', w: 1.8, d: 0.9, h: 0.75, c: FURN_COL.oak, ov: ['No chairs', 'With chairs'], o0: 1, b: it => fTable(it.w, it.d, it.h, it.c, false, it.o) },
+  dinR: { n: 'Round dining table', g: 'Dining', w: 1.1, d: 1.1, h: 0.75, c: FURN_COL.oak, ov: ['No chairs', 'With chairs'], o0: 1, b: it => fTable(it.w, it.d, it.h, it.c, true, it.o) },
+  chair: { n: 'Chair', g: 'Dining', w: 0.45, d: 0.5, h: 0.85, c: FURN_COL.oak, b: it => fChair(it.c, 0, 0, 0, it.w, it.d, it.h) },
+  bedQ: { n: 'Queen bed', g: 'Bedroom', w: 1.6, d: 2.05, h: 1.0, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 2) },
+  bedSS: { n: 'Super single bed', g: 'Bedroom', w: 1.15, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
+  bedS: { n: 'Single bed', g: 'Bedroom', w: 1.0, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
+  robe: { n: 'Wardrobe', g: 'Bedroom', w: 1.5, d: 0.6, h: 2.0, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, Math.max(1, Math.round(it.w / 0.5))) },
+  bedside: { n: 'Bedside table', g: 'Bedroom', w: 0.45, d: 0.4, h: 0.5, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, 1) },
+  desk: { n: 'Desk', g: 'Bedroom', w: 1.2, d: 0.6, h: 0.75, c: FURN_COL.white, b: ({ w, d, h, c }) => [fRect(-w / 2, -d / 2, w / 2, d / 2, h - 0.03, h, c), fRect(-w / 2, -d / 2 + 0.03, -w / 2 + 0.03, d / 2 - 0.03, 0, h - 0.03, c), fRect(w / 2 - 0.03, -d / 2 + 0.03, w / 2, d / 2 - 0.03, 0, h - 0.03, c), fRect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, -d / 2 + 0.05, 0.35, h - 0.03, c)] },
+  box: { n: 'Custom box', g: 'Other', w: 0.6, d: 0.6, h: 0.8, c: '#9aa3ad', b: it => [fRect(-it.w / 2, -it.d / 2, it.w / 2, it.d / 2, 0, it.h, it.c)] }
+};
+const furnNew = (t, x, y, r = 0, extra = {}) => { const C = FURN_CAT[t]; return { t, x, y, r, w: C.w, d: C.d, h: C.h, e: C.e || 0, c: C.c, o: C.o0 || 0, ...extra }; };
+// Sample "Typical 4-Room" (estimate): living = sofa on the W wall facing a TV on the Bedroom 3 wall, dining table in the L by the kitchen, beds + wardrobes in the bedrooms.
+const FURN_SAMPLE = () => [
+  furnNew('rug', 11.25, 2.8, 90), furnNew('sofa3', 12.39, 2.8, 90), furnNew('coffee', 11.05, 2.8, 90), furnNew('tvcon', 9.6, 2.8, 270, { w: 1.5 }), furnNew('tv55', 9.42, 2.8, 270),
+  furnNew('lamp', 12.6, 4.25), furnNew('fcu', 12.735, 2.8, 90), furnNew('fan', 11.1, 3.0), furnNew('shoe', 11.125, 7.0, 90), furnNew('din4', 8.0, 4.85),
+  furnNew('bedQ', 1.335, 2.4, 270), furnNew('bedside', 0.53, 1.375, 270), furnNew('bedside', 0.53, 3.425, 270), furnNew('robe', 1.1, 4.18, 180), furnNew('fcu', 0.435, 2.4, 270),
+  furnNew('bedSS', 4.335, 1.95, 270), furnNew('robe', 3.85, 3.03, 180, { w: 1.0 }), furnNew('desk', 5.9, 0.75, 90), furnNew('chair', 5.3, 0.75, 270),
+  furnNew('bedSS', 8.265, 1.95, 90), furnNew('robe', 8.7, 3.03, 180, { w: 1.0 }), furnNew('desk', 6.6, 0.75, 270), furnNew('chair', 7.2, 0.75, 90)];
+const FURN_BUILTIN = { 'Bare flat': () => [], 'Typical 4-Room': FURN_SAMPLE };
+const FURN = { name: 'Bare flat', items: [], ver: 0, sel: -1, open: false, saved: {} };
+const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
+const furnParts = it => { const C = FURN_CAT[it.t]; if (!C) return []; const P = C.b(it), c = Math.cos(it.r * DEG), s = Math.sin(it.r * DEG), e = it.e || 0;
+  return P.map(q => ({ ...q, z0: q.z0 + e, z1: q.z1 + e, p: q.p.map(([lx, ly]) => [it.x + c * lx - s * ly, it.y + s * lx + c * ly]) })); };
+const furnLocal = (it, X, Y) => { const dx = X - it.x, dy = Y - it.y, c = Math.cos(it.r * DEG), s = Math.sin(it.r * DEG); return [c * dx + s * dy, -s * dx + c * dy]; };
+const furnExt = it => { const C = FURN_CAT[it.t]; let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const q of C.b(it)) for (const [x, y] of q.p) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };   // local bbox incl. chairs
+// Walk: furniture standing below 1.2 m blocks the 0.2 m body (rugs and wall-mounted items above 1.2 m don't)
+function furnBlocks(X, Y, r = 0.2) {
+  return FURN.items.some(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return false; const [lx, ly] = furnLocal(it, X, Y), [a, b, c, d] = it._ext || (it._ext = furnExt(it)); return lx > a - r && lx < c + r && ly > b - r && ly < d + r; });
+}
+// Sofa posture with Room interior: eye on the first sofa placed in the living/dining area (seat centre, facing its front) instead of 3.5 m back from the window
+function furnSofaSeat() {
+  const it = FURN.items.find(q => FURN_CAT[q.t] && FURN_CAT[q.t].seat && UNIT_ROOMS.some(([id, [x0, y0, x1, y1]]) => id === 'living' && q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1)); if (!it) return null;
+  const [lx, ly] = FURN_CAT[it.t].seat(it), c = Math.cos(it.r * DEG), s = Math.sin(it.r * DEG), nb = UNIT_FN * DEG, dX = -s, dY = c;
+  return { X: it.x + c * lx - s * ly, Y: it.y + s * lx + c * ly, heading: norm360(Math.atan2(Math.cos(nb) * dX - Math.sin(nb) * dY, -Math.sin(nb) * dX - Math.cos(nb) * dY) / DEG) };
+}
+function furnChanged(save = true) {
+  FURN.ver++; FURN.items.forEach(it => { it._ext = null; });
+  if (save) { if (FURN_BUILTIN[FURN.name]) { let k = 1, nm = 'My layout'; while (FURN.saved[nm] && FURN.name !== nm) nm = `My layout ${++k}`; FURN.name = nm; }   // editing a built-in starts a user layout
+    FURN.saved[FURN.name] = FURN.items.map(furnPlain); lsSet(FURN_LS, FURN.saved); lsSet(FURN_LS_CUR, FURN.name); furnLayoutSel(); }
+  if (state.posture === 'sofa' && !state.walk) { const S = furnSofaSeat(); if (S) state.heading = S.heading; }
+}
+const furnPlain = it => { const o = {}; for (const k of ['t', 'x', 'y', 'r', 'w', 'd', 'h', 'e', 'c', 'o', 'n']) if (it[k] !== undefined) o[k] = typeof it[k] === 'number' ? +it[k].toFixed(3) : it[k]; return o; };
+function furnLoad(name) {
+  const src = FURN_BUILTIN[name] ? FURN_BUILTIN[name]() : FURN.saved[name]; if (!src) return; FURN.name = name; FURN.items = src.map(it => ({ ...furnNew(it.t, 0, 0), ...it })).filter(it => FURN_CAT[it.t]); FURN.sel = -1;
+  lsSet(FURN_LS_CUR, name); FURN.ver++; furnLayoutSel(); furnSelUI(); if (state.posture === 'sofa' && !state.walk) { const S = furnSofaSeat(); if (S) state.heading = S.heading; } renderAll();
+}
+// Share link: #layout=<base64url(JSON {n, i: [[t,x,y,r,w,d,h,e,c,o,n]…]})>; opening it loads + saves the layout on that device
+const FURN_KEYS = ['t', 'x', 'y', 'r', 'w', 'd', 'h', 'e', 'c', 'o', 'n'];
+function furnLink() {
+  const json = JSON.stringify({ n: FURN.name, i: FURN.items.map(it => { const p = furnPlain(it); return FURN_KEYS.map(k => p[k] ?? 0); }) }), b = new TextEncoder().encode(json); let s = ''; b.forEach(c => { s += String.fromCharCode(c); });
+  return `${location.origin}${location.pathname}#layout=${btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+}
+function furnFromHash() {
+  const m = /[#&]layout=([A-Za-z0-9_-]+)/.exec(location.hash); if (!m) return false;
+  try { const s = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), J = JSON.parse(new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0))));
+    const items = (J.i || []).map(a => { const o = {}; FURN_KEYS.forEach((k, i) => { o[k] = a[i]; }); if (!o.n) delete o.n; return o; }).filter(it => FURN_CAT[it.t]);
+    let nm = String(J.n || 'Shared layout').slice(0, 40); if (FURN_BUILTIN[nm] || (FURN.saved[nm] && JSON.stringify(FURN.saved[nm]) !== JSON.stringify(items))) nm += ' (shared)';
+    FURN.saved[nm] = items; lsSet(FURN_LS, FURN.saved); history.replaceState(null, '', location.pathname + location.search); furnLoad(nm); return true;
+  } catch (e) { console.warn('bad layout link', e); return false; }
+}
+function furnInit() {
+  FURN.saved = lsGet(FURN_LS) || {}; const cur = lsGet(FURN_LS_CUR); furnCatUI();
+  if (!furnFromHash()) { if (cur && (FURN_BUILTIN[cur] || FURN.saved[cur])) furnLoad(cur); else furnLayoutSel(); }
+  window.addEventListener('hashchange', furnFromHash);   // link opened in an already-open tab
+}
+/* ---- editor UI: top-down plan (drag = move, tap = select), add from catalogue, size/height/colour/rotation per item; desktop docked right of the 3D view, phone full-screen ---- */
+const FE = { s: 26, ox: -0.3, oy: -0.4, drag: null };
+function furnLayoutSel() {
+  const sel = $('feLayout'); if (!sel) return; const names = [...Object.keys(FURN_BUILTIN), ...Object.keys(FURN.saved).filter(n => !FURN_BUILTIN[n])];
+  sel.innerHTML = names.map(n => `<option${n === FURN.name ? ' selected' : ''}>${n.replace(/</g, '&lt;')}</option>`).join(''); $('feDel').disabled = !!FURN_BUILTIN[FURN.name];
+}
+function furnCatUI() {
+  const g = {}; Object.entries(FURN_CAT).forEach(([k, C]) => { (g[C.g] = g[C.g] || []).push(`<option value="${k}">${C.n} · ${Math.round(C.w * 100)}×${Math.round(C.d * 100)}</option>`); });
+  $('feCat').innerHTML = Object.entries(g).map(([n, o]) => `<optgroup label="${n}">${o.join('')}</optgroup>`).join('');
+}
+function furnRoomCentre(t) {   // add at the centre of the room the eye is in (dining items → dining L)
+  if (FURN_CAT[t].g === 'Dining') return [8.0, 4.85];
+  const [X, Y] = state.walk ? [state.walk.X, state.walk.Y] : [11.1, 3.0], rm = UNIT_ROOMS.find(([id, [x0, y0, x1, y1]]) => id !== 'corr' && X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
+  if (!rm || rm[0] === 'living') return [11.1, 3.0]; const [x0, y0, x1, y1] = rm[1]; return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+function furnSelUI() {
+  const box = $('feSel'), it = FURN.items[FURN.sel]; if (!box) return;
+  if (!it) { box.innerHTML = `<div class="text-[10px] text-slate-400">${FURN.items.length ? 'Tap an item to select it, drag to move.' : 'Empty layout: add items below or pick “Typical 4-Room”.'} Arrows nudge 5 cm (Shift 1 cm), R rotates, Del deletes.</div>`; return; }
+  const C = FURN_CAT[it.t], cm = v => Math.round(v * 100), num = (k, v, lab, mn, mx) => `<label class="fe-f">${lab}<input type="number" data-k="${k}" value="${v}" min="${mn}" max="${mx}" step="1"></label>`;
+  box.innerHTML = `<div class="flex items-center gap-1 mb-1"><input id="feName" class="fe-name" value="${(it.n || C.n).replace(/"/g, '&quot;')}" title="Name"><button class="chip" data-a="dup" title="Duplicate">⧉</button><button class="chip text-rose-300" data-a="del" title="Delete">🗑</button></div>
+    <div class="grid grid-cols-4 gap-1">${num('w', cm(it.w), 'W cm', 1, 600)}${num('d', cm(it.d), 'D cm', 1, 600)}${num('h', cm(it.h), 'H cm', 1, 260)}${num('e', cm(it.e || 0), 'Off floor', 0, 259)}</div>
+    <div class="flex items-center gap-1 mt-1 flex-wrap"><button class="chip" data-a="r-90">⟲ 90°</button><button class="chip" data-a="r-15">⟲ 15°</button><button class="chip" data-a="r15">⟳ 15°</button><button class="chip" data-a="r90">⟳ 90°</button>
+    <label class="fe-f fe-inl">°<input type="number" data-k="r" value="${Math.round(norm360(it.r))}" min="0" max="359" step="1"></label>${C.ov ? `<button class="chip" data-a="opt">${C.ov[it.o ? 1 : 0]} ⇄</button>` : ''}</div>
+    <div class="flex items-center gap-1 mt-1 flex-wrap">${FURN_SW.map(c => `<button class="fe-sw${c === it.c ? ' on' : ''}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('')}<input type="color" id="feCol" value="${it.c}" title="Any colour"></div>
+    <div class="text-[9px] text-slate-500 mt-1">X ${it.x.toFixed(2)} m · Y ${it.y.toFixed(2)} m from the master-bedroom facade corner</div>`;
+}
+function furnDrawPlan() {
+  const cv = $('fePlan'); if (!cv || !FURN.open) return; const cw = cv.clientWidth || 320, dpr = window.devicePixelRatio || 1; FE.s = cw / 13.7; const ch = Math.round(9.6 * FE.s);
+  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); cv.style.height = `${ch}px`; }
+  const g = cv.getContext('2d'), P = (X, Y) => [(X - FE.ox) * FE.s, (Y - FE.oy) * FE.s]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#0b1220'; g.fillRect(0, 0, cw, ch);
+  g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = '#1e293b'; g.fill();
+  UNIT_PLAN.floors.forEach(([[x0, y0, x1, y1], f]) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = f === 'wood' ? 'rgba(170,134,98,0.22)' : f === 'wet' ? 'rgba(152,158,162,0.18)' : 'rgba(184,180,172,0.14)'; g.fillRect(a, b, c - a, d - b); });
+  g.font = '10px Inter, sans-serif'; g.fillStyle = '#64748b'; g.textAlign = 'center';
+  [['Master', 1.75, 0.7], ['Bedroom 2', 4.75, 0.7], ['Bedroom 3', 7.8, 0.7], ['Living', 11.1, 2.15], ['Dining', 8.0, 3.85], ['Kitchen', 8.2, 7.6], ['Yard', 6.4, 7.6], ['Bath', 3.1, 5.4], ['WC', 5.25, 5.4], ['Shelter', 12.2, 6.3]].forEach(([t, X, Y]) => { const [x, y] = P(X, Y); g.fillText(t, x, y); });
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'doorOpen') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  FURN.items.forEach((it, i) => { const parts = furnParts(it).sort((p, q) => p.z1 - q.z1), on = i === FURN.sel, wall = (it.e || 0) >= 1.2;
+    for (const q of parts) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = wall ? 0.45 : 0.9; g.fillStyle = q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = on ? '#fbbf24' : 'rgba(15,23,42,0.55)'; g.lineWidth = on ? 1.4 : 0.6; g.stroke(); }
+    const [x, y] = P(it.x, it.y), f = [-Math.sin(it.r * DEG), Math.cos(it.r * DEG)]; if (on) { g.strokeStyle = '#fbbf24'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + f[0] * 12, y + f[1] * 12); g.stroke(); } });
+  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (S && state.showBalcony) {   // current eye + view direction
+    const ss = state.posture === 'sofa' && !state.walk && furnSofaSeat(), [X, Y] = state.walk ? [state.walk.X, state.walk.Y] : ss ? [ss.X, ss.Y] : spotEyeP(S, Math.max(0.1, state.standDist)), [x, y] = P(X, Y), nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h);
+    const dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), a0 = Math.atan2(dY, dX), fov = Math.atan(SENSOR_W / 2 / state.focalLength);
+    g.beginPath(); g.moveTo(x, y); g.arc(x, y, 26, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.22)'; g.fill(); g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); }
+  g.fillStyle = '#94a3b8'; g.textAlign = 'left'; g.fillText('S ▲ windows', 4, 11); const [m0] = P(0, 0), [m1] = P(1, 0); g.fillRect(cw - 12 - (m1 - m0), ch - 8, m1 - m0, 2); g.textAlign = 'right'; g.fillText('1 m', cw - 12, ch - 12);
+}
+function furnHit(X, Y) { for (let i = FURN.items.length - 1; i >= 0; i--) { const it = FURN.items[i], [lx, ly] = furnLocal(it, X, Y), [a, b, c, d] = it._ext || (it._ext = furnExt(it)), m = 0.05; if (lx > a - m && lx < c + m && ly > b - m && ly < d + m) return i; } return -1; }
+function furnPick(i) { FURN.sel = i; furnSelUI(); furnDrawPlan(); }
+function furnEdit(fn, full) { const it = FURN.items[FURN.sel]; if (!it) return; fn(it); furnChanged(); if (full) furnSelUI(); furnDrawPlan(); renderView(); }
+function furnOpen(on) {
+  FURN.open = on; const ed = $('furnEd'); ed.style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('furnishing', on); pressChip('furnBtn', on);
+  if (on && (!state.showBalcony || !curSpot())) { state.showBalcony = true; $('balconyToggle').checked = true; if (!curSpot()) { const sp = UNIT_SPOTS.find(q => q.id === 'living'); Object.assign(state, { spot: 'living', vx: sp.x, vz: sp.z }); } }
+  furnLayoutSel(); furnSelUI(); requestAnimationFrame(() => { resizeCanvases(); furnDrawPlan(); });
+}
+function furnBindUI() {
+  $('furnBtn').addEventListener('click', () => furnOpen(!FURN.open)); $('feClose').addEventListener('click', () => furnOpen(false));
+  $('feLayout').addEventListener('change', e => furnLoad(e.target.value));
+  $('feSave').addEventListener('click', () => { const nm = (prompt('Save layout as:', FURN_BUILTIN[FURN.name] ? 'My layout' : `${FURN.name} copy`) || '').trim().slice(0, 40); if (!nm || FURN_BUILTIN[nm]) return; FURN.name = nm; furnChanged(); });
+  $('feDel').addEventListener('click', () => { if (FURN_BUILTIN[FURN.name] || !confirm(`Delete layout “${FURN.name}”?`)) return; delete FURN.saved[FURN.name]; lsSet(FURN_LS, FURN.saved); furnLoad('Bare flat'); });
+  $('feShare').addEventListener('click', async () => { const url = furnLink(), msg = t => { $('feMsg').textContent = t; setTimeout(() => { $('feMsg').textContent = ''; }, 3500); };
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `#134 layout: ${FURN.name}`, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(url); msg('Link copied: open it on another device to load this layout.'); } catch (e) { prompt('Copy this link:', url); } });
+  $('feAdd').addEventListener('click', () => { const t = $('feCat').value, [x, y] = furnRoomCentre(t); FURN.items.push(furnNew(t, x, y)); FURN.sel = FURN.items.length - 1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); });
+  const box = $('feSel');
+  box.addEventListener('input', e => { const k = e.target.dataset.k; if (k) { const v = parseFloat(e.target.value); if (!isFinite(v)) return; furnEdit(it => { it[k] = k === 'r' ? v : Math.max(k === 'e' ? 0 : 0.01, v / 100); }); }
+    else if (e.target.id === 'feCol') furnEdit(it => { it.c = e.target.value; }); else if (e.target.id === 'feName') furnEdit(it => { it.n = e.target.value.slice(0, 30); }); });
+  box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const a = b.dataset.a;
+    if (b.dataset.c) furnEdit(it => { it.c = b.dataset.c; }, true);
+    else if (a === 'del') { FURN.items.splice(FURN.sel, 1); FURN.sel = -1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); }
+    else if (a === 'dup') { const it = FURN.items[FURN.sel]; FURN.items.push({ ...furnPlain(it), x: it.x + 0.3, y: it.y + 0.3 }); FURN.sel = FURN.items.length - 1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); }
+    else if (a === 'opt') furnEdit(it => { it.o = it.o ? 0 : 1; }, true);
+    else if (a && a[0] === 'r') furnEdit(it => { it.r = norm360(it.r + parseFloat(a.slice(1))); }, true); });
+  const cv = $('fePlan'), XY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / FE.s + FE.ox, (e.clientY - r.top) / FE.s + FE.oy]; };
+  cv.addEventListener('pointerdown', e => { const [X, Y] = XY(e), i = furnHit(X, Y); furnPick(i); if (i >= 0) { const it = FURN.items[i]; FE.drag = { dx: it.x - X, dy: it.y - Y, moved: false }; cv.setPointerCapture(e.pointerId); } });
+  cv.addEventListener('pointermove', e => { if (!FE.drag) return; const [X, Y] = XY(e), it = FURN.items[FURN.sel], sn = v => Math.round(v * 20) / 20;
+    it.x = clamp(sn(X + FE.drag.dx), -0.5, 14); it.y = clamp(sn(Y + FE.drag.dy), -0.5, 9.5); FE.drag.moved = true; FURN.ver++; it._ext = null; furnDrawPlan(); renderView(); });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (FE.drag && FE.drag.moved) { furnChanged(); furnSelUI(); } FE.drag = null; }));
+  window.addEventListener('keydown', e => { if (!FURN.open || FURN.sel < 0 || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return; const st = e.shiftKey ? 0.01 : 0.05;
+    const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+    if (mv) { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => { it.x += mv[0]; it.y += mv[1]; }, true); }
+    else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => { it.r = norm360(it.r + (e.shiftKey ? -90 : 90)); }, true); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); FURN.items.splice(FURN.sel, 1); FURN.sel = -1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); } }, true);
 }
 let lastMath = null;
 // Night landmarks (visual only): Supertree Grove (Gardens by the Bay South, 12 trees 25–50m, Garden Rhapsody 19:45/20:45 ~15min → colour cycle),
@@ -1452,6 +1687,7 @@ precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH;
+uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 const vec3 C_WHITE = vec3(${TRPF_PAL.white.map(c => (c / 255).toFixed(3))}), C_GREIGE = vec3(${TRPF_PAL.greige.map(c => (c / 255).toFixed(3))}), C_GREY = vec3(${TRPF_PAL.grey.map(c => (c / 255).toFixed(3))}),
   C_BROWN = vec3(${TRPF_PAL.brown.map(c => (c / 255).toFixed(3))}), C_CROWN = vec3(${TRPF_PAL.crown.map(c => (c / 255).toFixed(3))}), C_VOID = vec3(${TRPF_PAL.void.map(c => (c / 255).toFixed(3))}), C_GREEN = vec3(${TRPF_PAL.green.map(c => (c / 255).toFixed(3))});
@@ -1459,6 +1695,8 @@ float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.545
 float band(float x, float a, float b, float w) { w = max(w, 1e-4); return clamp(smoothstep(a - w, a + w, x) - smoothstep(b - w, b + w, x), 0.0, 1.0); }
 float pcf(sampler2DShadow sm, vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.5 / 2048.0, s = 0.0; q.z -= 0.0005;
   s += texture(sm, q + vec3(-t, -t, 0.0)); s += texture(sm, q + vec3(t, -t, 0.0)); s += texture(sm, q + vec3(-t, t, 0.0)); s += texture(sm, q + vec3(t, t, 0.0)); return s * 0.25; }
+float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.6 / 2048.0, s = 0.0; q.z -= 0.0002;
+  s += texture(uSmI, q + vec3(-t, -t, 0.0)); s += texture(uSmI, q + vec3(t, -t, 0.0)); s += texture(uSmI, q + vec3(-t, t, 0.0)); s += texture(uSmI, q + vec3(t, t, 0.0)); return s * 0.25; }
 float shadowAt(vec3 p, vec3 n) {
   if (uShadow < 0.5) return 1.0;
   vec3 r = p + n * 0.5 - uLc0, l = vec3(dot(uLr, r) / uLs.x, dot(uLu, r) / uLs.x, dot(uLf, r) / uLs.y);
@@ -1518,7 +1756,11 @@ void main() {
       c = mix(c, vec3(90.0, 84.0, 76.0) / 255.0, 0.25 * uLitK * (1.0 - smoothstep(0.35, 1.0, min(f.x, f.y)))); }
     else if (vTex.w > 0.5 && mode < 3.5) {   // interior wall faces (tex = face u,v 0..1): contact shading at floor/ceiling junctions + 1 px edge lines (as drawInterior)
       float h = vWorld.y - uSlab; c = mix(c, vec3(0.08, 0.06, 0.05), 0.1 * (1.0 - smoothstep(0.0, 0.3, h)) + 0.08 * smoothstep(uRoomH - 0.25, uRoomH, h));
-      vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.45 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); } }
+      vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.45 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); }
+    if (uInSun > 0.0) {   // sun through the openings: interior shadow map (walls, frames, furniture; ±12 m) × outdoor near cascade (city + rest of the block) × Lambert
+      float lam = max(0.0, dot(nrm, uSun)); if (lam > 0.0) { vec3 r = vWorld + nrm * 0.015 - uLcI, l = vec3(dot(uLr, r) / uLsI.x, dot(uLu, r) / uLsI.x, dot(uLf, r) / uLsI.y);
+        float v = max(abs(l.x), abs(l.y)) < 0.99 && abs(l.z) < 0.99 ? pcfI(l) : 1.0; if (v > 0.0) v *= shadowAt(vWorld, nrm);
+        c += alb * vec3(1.0, 0.93 - 0.12 * uWarm, 0.8 - 0.3 * uWarm) * lam * v * uInSun; } } }
   else if (mode < -0.5) c = uWater;
   else { float lam = max(0.0, dot(nrm, uSun)), d = uDirect * lam * 0.85, vis = 1.0; if (d > 0.0) { vis = shadowAt(vWorld, nrm); d *= vis; } vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm);
     c = alb * (uAmb * (0.75 + 0.25 * uSkyMid) + d * tint) + lit * vec3(1.0, 0.84, 0.55) * 0.9;
@@ -1622,8 +1864,9 @@ function gpuInit() {
       for (const R of ROADS) { if (R.c > 2) continue; const p = R.pts, hw = R.w / 2 * 0.9; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], Lg = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / Lg * hw, pz = (bx - ax) / Lg * hw;
         L.push(ax - px, 0.08, az - pz, ...c, bx - px, 0.08, bz - pz, ...c, ax + px, 0.08, az + pz, ...c, bx + px, 0.08, bz + pz, ...c); } }
       GPU.lanes = gpuBuf(new Float32Array(L)); GPU.laneN = L.length / 7; }
-    GPU.sm = [0, 1].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return { tx, fb }; });
+    GPU.smI = GPU.sm.pop();   // 3rd map: interior sun shadows (unit walls/frames/furniture, ±12 m)
     // static: land use rings (stencil fans), far land, roads, trees, fullscreen quad
     const lu = [], luR = []; for (const L of LU) { const rs = []; for (const r of L.rings) { rs.push([lu.length / 3, r.length / 2]); for (let i = 0; i < r.length; i += 2) lu.push(r[i], 0, r[i + 1]); } luR.push({ L, rs }); }
     GPU.lu = gpuBuf(new Float32Array(lu)); GPU.luR = luR; GPU.quad = gpuBuf(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]));
@@ -1668,16 +1911,24 @@ function gpuGarden(A, P) {   // MSCP roof garden (as mscpGarden): lawn, planting
 }
 function gpuInterior(env) {   // #134 unit in world coords (plan → world via the spot), rebuilt when spot/floor/posture/door change; colours as drawInterior
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return 0;
-  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), state.winOpen].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
   const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
+  const Nw = (ax, ay, bx, by) => { const l = Math.hypot(bx - ax, by - ay) || 1, nX = (by - ay) / l, nY = -(bx - ax) / l; return [u[0] * nX - n[0] * nY, 0, u[1] * nX - n[1] * nY]; }, dn0 = [0, -1, 0];   // plan edge (CCW as the box sides) → outward world normal (interior sun term)
   const zG = -(VOID_DECK_HEIGHT + (state.obsFloor - 1) * FLOOR_HEIGHT), zR = BLK_TOP + TRPF_CROWN + zG;
   const box = ([x0, y0b, x1, y1], z0, z1, col, ext) => { const t = ext === 5 ? [0, 0, 5, 0] : ext ? X4 : z4, f = k => col.map(c => Math.min(1, c * k)), sd = [[x0, y0b, x1, y0b, 1], [x1, y0b, x1, y1, 0.86], [x1, y1, x0, y1, 0.74], [x0, y1, x0, y0b, 0.86]], T = (a, b) => ext ? t : [a, b, 0, 1];   // room walls: face u,v → edge lines + junction shading in the shader
-    for (const [ax, ay, bx, by, k] of sd) A.quad(W(ax, ay, z0), W(bx, by, z0), W(bx, by, z1), W(ax, ay, z1), up0, f(k), T(0, 0), T(1, 0), T(1, 1), T(0, 1));
-    A.quad(W(x0, y0b, z1), W(x1, y0b, z1), W(x1, y1, z1), W(x0, y1, z1), up0, f(1.05), t, t, t, t); A.quad(W(x0, y0b, z0), W(x1, y0b, z0), W(x1, y1, z0), W(x0, y1, z0), up0, f(0.8), t, t, t, t); }, up0 = [0, 1, 0];
-  const flat = (r, h, col, tile) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) { const [x, y] = r[tri[k]]; A.v(W(x, y, h), up0, col, tile ? [x, y, 0, 2] : z4); } }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
-  flat(UNIT_PLAN.outline, 0, c255(UNIT_FLOOR.tile).map(c => c * 0.85), true); UNIT_PLAN.floors.forEach(([r, f]) => flat(rect(r), 0.003, c255(UNIT_FLOOR[f]).map(c => c * 0.85))); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95));
-  UNIT_PLAN.corr.floors.forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85)); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9)); }); flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
+    for (const [ax, ay, bx, by, k] of sd) A.quad(W(ax, ay, z0), W(bx, by, z0), W(bx, by, z1), W(ax, ay, z1), Nw(ax, ay, bx, by), f(k), T(0, 0), T(1, 0), T(1, 1), T(0, 1));
+    A.quad(W(x0, y0b, z1), W(x1, y0b, z1), W(x1, y1, z1), W(x0, y1, z1), up0, f(1.05), t, t, t, t); A.quad(W(x0, y0b, z0), W(x1, y0b, z0), W(x1, y1, z0), W(x0, y1, z0), dn0, f(0.8), t, t, t, t); }, up0 = [0, 1, 0];
+  const flat = (r, h, col, tile, nn = up0) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) { const [x, y] = r[tri[k]]; A.v(W(x, y, h), nn, col, tile ? [x, y, 0, 2] : z4); } }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
+  flat(UNIT_PLAN.outline, 0, c255(UNIT_FLOOR.tile).map(c => c * 0.85), true); UNIT_PLAN.floors.forEach(([r, f]) => flat(rect(r), 0.003, c255(UNIT_FLOOR[f]).map(c => c * 0.85))); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95), false, dn0);
+  UNIT_PLAN.corr.floors.forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85)); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });
+  for (const it of FURN.items) for (const q of furnParts(it)) {   // furniture: prism per part, face brightness as the walls (−Y 1.0, ±X 0.86, +Y 0.74), edge lines on box faces (not on round parts)
+    const col = c255(hexRgb(q.c)), P = q.p, m = P.length, T = (a, b) => (q.cy ? z4 : [a, b, 0, 1]);
+    for (let i = 0; i < m; i++) { const [ax, ay] = P[i], [bx, by] = P[(i + 1) % m], l = Math.hypot(bx - ax, by - ay) || 1, k = 0.87 + 0.13 * ((bx - ax) / l);
+      A.quad(W(ax, ay, q.z0), W(bx, by, q.z0), W(bx, by, q.z1), W(ax, ay, q.z1), Nw(ax, ay, bx, by), col.map(c => Math.min(1, c * k)), T(0, 0), T(1, 0), T(1, 1), T(0, 1)); }
+    const top = col.map(c => Math.min(1, c * 1.05)); if (m === 4) A.quad(W(P[0][0], P[0][1], q.z1), W(P[1][0], P[1][1], q.z1), W(P[2][0], P[2][1], q.z1), W(P[3][0], P[3][1], q.z1), up0, top, T(0, 0), T(1, 0), T(1, 1), T(0, 1));
+    else flat(P, q.z1, top);
+    if (q.z0 > 0.01) flat(P, q.z0, col.map(c => c * 0.8), false, dn0); } flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
   for (let [x0, y0b, x1, y1, z0 = 0, z1 = H, kind] of unitWalls()) {
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
     const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
@@ -1720,7 +1971,7 @@ function gpuEnv(pr, env, unlit) {
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
-  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1f(u.uInSun, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
@@ -1776,20 +2027,24 @@ function gpuRender(cam, env, pxW, pxH) {
 }
 // #134 interior (second render into the same canvas, transparent elsewhere): drawn over the composited outside scene + rain + pins, as drawInterior.
 function gpuRenderInterior(cam, env, kIn) {
-  if (!GPU.ok) return false; const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat;
+  if (!GPU.ok) return false; const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
   gl.viewport(0, 0, GPU.cv.width, GPU.cv.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9) * kIn); gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
+  gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9) * kIn);
+  if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
+  gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
-  const np = gpuPatch(curSpot()), a = 0.5 * clamp(GPU.patchEl / 6, 0, 1) * env.W.sun;   // sun patch (additive, occluded by walls)
-  if (np && a > 0) { gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1, -4); gl.blendFunc(gl.ONE, gl.ONE); gl.uniform4f(F.u.uColor, 1, 0.886, 0.667, a); gpuAttrib(F, GPU.patchBuf); gl.drawArrays(gl.TRIANGLES, 0, np); gl.disable(gl.POLYGON_OFFSET_FILL); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); }
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
   gl.depthMask(true); return true;
 }
-function gpuPatch(sp) {   // roomLight sun patch → world triangles (floor +6 mm, back wall pulled 5 mm into the room), cached per room/floor/date/time/world/interior
-  const S = sp && UNIT_PLAN.spots[sp.id], key = [sp && sp.id, state.obsFloor, state.dateStr, state.hour, WORLD_VER, GPU.ikey].join('|'); if (!S) return 0; if (GPU.pkey === key) return GPU.patchN; GPU.pkey = key;
-  const L = sp.viewOnly ? null : roomLight(sp), T = [], W = GPU.W, clipZ = (pg, zm) => { const o = []; for (let i = 0; i < pg.length; i++) { const a = pg[i], b = pg[(i + 1) % pg.length]; if (a[2] <= zm) o.push(a); if ((a[2] <= zm) !== (b[2] <= zm)) { const t = (zm - a[2]) / (b[2] - a[2]); o.push(a.map((v, j) => v + t * (b[j] - v))); } } return o; };
-  if (L) L.patches.forEach(pg => { const q = clipZ(pg, S.depth); if (q.length < 3) return; const P = q.map(([uu, yy, zz]) => W(S.xc + uu, S.yin + Math.min(zz, S.depth - 0.005), yy < 0.001 ? 0.006 : yy)); for (let i = 1; i + 1 < P.length; i++) T.push(...P[0], ...P[i], ...P[i + 1]); });
-  GPU.patchEl = L ? L.sun.elDeg : 0; GPU.patchN = T.length / 3; const gl = GPU.gl; if (GPU.patchBuf) gl.deleteBuffer(GPU.patchBuf); GPU.patchBuf = gpuBuf(new Float32Array(T.length ? T : [0])); return GPU.patchN;
+// Interior sun shadow map: unit walls, frames, ceilings, furniture seen from the sun (ortho ±12 m around the unit, ±30 m deep); re-rendered when the interior or the sun changes.
+function gpuShadowInterior() {
+  const L = GPU.L; if (!L || !GPU.inN) return false; const key = GPU.ikey + '|' + L.f.map(v => v.toFixed(4)).join(','); if (GPU.iskey === key) return true; GPU.iskey = key;
+  const gl = GPU.gl, pr = GPU.sh, c = GPU.W(6.5, 4.5, 1.3); GPU.LI = { c, s: [12, 30] };
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.5, 2);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.smI.fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...L.r); gl.uniform3f(pr.u.uLu, ...L.u); gl.uniform3f(pr.u.uLf, ...L.f); gl.uniform2f(pr.u.uLs, 12, 30); gpuAttrib(pr, GPU.inBuf);
+  for (const [a, b] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = 0.008; gl.uniform3f(pr.u.uLc, ...c.map((v, i) => v + (L.r[i] * a + L.u[i] * b) * k)); gl.drawArrays(gl.TRIANGLES, 0, GPU.inN); }   // casters dilated ±8 mm: closes pinholes where wall boxes only touch (light dots on walls)
+  gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return true;
 }
 function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr.length ? arr : [0]), gl.DYNAMIC_DRAW); return b; }
 // Per-frame moving / night items: ships (prisms) + wakes, cars (drawCars/deckCars via CAR_SINK), Flyer ring + capsules, night landmarks. Uploads dynamic buffers; returns counts.
@@ -1888,7 +2143,7 @@ function renderAll() { if (renderPending) return; renderPending = true; requestA
 // Interactive redraw (drag/tilt/walk): only the 3D view each frame; metrics, panels and charts once input pauses (250 ms).
 let viewPending = false, idleT = 0;
 function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawPerspective(lastMath); }); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
+function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -1932,7 +2187,7 @@ spotSel.addEventListener('change', e => { if (state.walk) setWalk(false); const 
 const roomBar = $('roomBar');
 UNIT_SPOTS.forEach(sp => { const b = document.createElement('button'); b.className = 'chip room-btn'; b.dataset.id = sp.id; b.textContent = `${sp.room} • ${sp.normal.toFixed(0)}°`;
   b.addEventListener('click', () => { if (state.walk) setWalk(false); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; state.heading = sp.heading0 ?? Math.round(sp.normal * 2) / 2; state.pitchDeg = -1.5; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) setPosture('stand'); renderAll(); }); roomBar.appendChild(b); });
-function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; renderAll(); }
+function setPosture(k) { const P0 = POSTURES[k]; if (P0.only && state.spot && !P0.only.includes(state.spot)) return; state.posture = k; state.eyeOffset = P0.eye; state.standDist = P0.d; const ss = k === 'sofa' && state.showBalcony && !state.walk && furnSofaSeat(); if (ss) state.heading = ss.heading; renderAll(); }   // sofa: look where the placed sofa faces
 { const sep = document.createElement('span'); sep.className = 'text-slate-600 mx-1'; sep.textContent = '|'; roomBar.appendChild(sep);
   Object.entries(POSTURES).forEach(([k, P0]) => { const b = document.createElement('button'); b.className = 'chip posture-btn'; b.dataset.k = k; b.textContent = `${P0.label} ${P0.eye}m`; b.addEventListener('click', () => setPosture(k)); roomBar.appendChild(b); }); }
 // Home: back to #134 living window, 27F, standing, facing 220°, tilt −1.5° (scenario/world untouched).
@@ -1999,14 +2254,15 @@ function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixel
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;
   sizeCanvas(profileCanvas, pp.clientWidth > 20 ? pp.clientWidth : 820, pp.clientHeight > 20 ? pp.clientHeight : 260);
-  sizeCanvas(perspectiveCanvas, vp.clientWidth > 20 ? vp.clientWidth : 820, vp.clientHeight > 20 ? vp.clientHeight : 380);
+  const fe = FURN.open && !matchMedia('(max-width: 640px)').matches ? 341 : 0;   // desktop editor docked on the right: 3D view uses the rest
+  perspectiveCanvas.style.width = fe ? `calc(100% - ${fe}px)` : ''; sizeCanvas(perspectiveCanvas, vp.clientWidth > 20 ? vp.clientWidth - fe : 820, vp.clientHeight > 20 ? vp.clientHeight : 380);
   const pw = planCanvas.clientWidth > 20 ? planCanvas.clientWidth : 390, ph = state.planMode === 'site' ? (pw * 1009) / 1284 : (pw * (AREA.z1 - AREA.z0)) / (AREA.x1 - AREA.x0);
   planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); sizeCanvas(sunChart, sunChart.clientWidth > 20 ? sunChart.clientWidth : 390, 150); sizeCanvas(lightChart, lightChart.clientWidth > 20 ? lightChart.clientWidth : 390, 140); renderNow();
 }
 let initialized = false;
 function initApp() {
   if (initialized) return; initialized = true;
-  buildGroupRows(); generateTowers(); rebuildIndex(); generateTrees(); resizeCanvases();
+  buildGroupRows(); generateTowers(); rebuildIndex(); generateTrees(); furnBindUI(); furnInit(); resizeCanvases();
   let pending = false; const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; resizeCanvases(); }); } };
   if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(schedule); [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement].forEach(el => ro.observe(el)); } else window.addEventListener('resize', schedule);
 }
