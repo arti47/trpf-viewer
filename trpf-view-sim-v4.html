@@ -217,7 +217,7 @@
 <div class="panel"><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-300">Lens</span><span id="focalVal" class="mono text-sky-400 font-semibold"></span></div>
 <input type="range" id="focalSlider" min="13" max="85" step="1" value="26" aria-label="Focal length">
 <div class="flex items-center gap-2 mt-1"><button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button><span id="lensBadge" class="text-[10px] mono text-sky-300"></span></div></div>
-<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Landmark pins</label><button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷 Save image</button><button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button></div>
+<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Landmark pins</label><button id="shotBtn" class="chip" title="Photo: re-render this view at 2× with soft shadows and save / share it as PNG">📷 Photo 2×</button><button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button></div>
 <details class="more" data-more="view"><summary></summary><div class="more-b">
 <div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-ray new towers</label><button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button></div>
 <div class="panel flex items-center gap-2 flex-wrap"><label class="flex items-center gap-1 text-[10px] text-slate-300"><input type="checkbox" id="facadeToggle" checked class="accent-emerald-500">Window limits</label>
@@ -2097,16 +2097,18 @@ precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH;
-uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
+uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun, uHQ; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 const vec3 C_WHITE = vec3(${TRPF_PAL.white.map(c => (c / 255).toFixed(3))}), C_GREIGE = vec3(${TRPF_PAL.greige.map(c => (c / 255).toFixed(3))}), C_GREY = vec3(${TRPF_PAL.grey.map(c => (c / 255).toFixed(3))}),
   C_BROWN = vec3(${TRPF_PAL.brown.map(c => (c / 255).toFixed(3))}), C_CROWN = vec3(${TRPF_PAL.crown.map(c => (c / 255).toFixed(3))}), C_VOID = vec3(${TRPF_PAL.void.map(c => (c / 255).toFixed(3))}), C_GREEN = vec3(${TRPF_PAL.green.map(c => (c / 255).toFixed(3))});
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 float band(float x, float a, float b, float w) { w = max(w, 1e-4); return clamp(smoothstep(a - w, a + w, x) - smoothstep(b - w, b + w, x), 0.0, 1.0); }
-float pcf(sampler2DShadow sm, vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.5 / 2048.0, s = 0.0; q.z -= 0.0005;
-  s += texture(sm, q + vec3(-t, -t, 0.0)); s += texture(sm, q + vec3(t, -t, 0.0)); s += texture(sm, q + vec3(-t, t, 0.0)); s += texture(sm, q + vec3(t, t, 0.0)); return s * 0.25; }
-float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; float t = 0.6 / 2048.0, s = 0.0; q.z -= 0.0002;
-  s += texture(uSmI, q + vec3(-t, -t, 0.0)); s += texture(uSmI, q + vec3(t, -t, 0.0)); s += texture(uSmI, q + vec3(-t, t, 0.0)); s += texture(uSmI, q + vec3(t, t, 0.0)); return s * 0.25; }
+float pcfK(sampler2DShadow sm, vec3 q, float t) {   // 4 taps; photo mode (uHQ): 16 rotated-grid taps over ±3 texels (softer penumbra)
+  if (uHQ < 0.5) return 0.25 * (texture(sm, q + vec3(-t, -t, 0.0)) + texture(sm, q + vec3(t, -t, 0.0)) + texture(sm, q + vec3(-t, t, 0.0)) + texture(sm, q + vec3(t, t, 0.0)));
+  float a = hash(mod(gl_FragCoord.xy, 61.0)) * 6.2831853, s = 0.0; mat2 R = mat2(cos(a), sin(a), -sin(a), cos(a));
+  for (int i = 0; i < 16; i++) { vec2 g = (vec2(float(i % 4), float(i / 4)) - 1.5) * 2.0 / 2048.0; s += texture(sm, q + vec3(R * g, 0.0)); } return s / 16.0; }
+float pcf(sampler2DShadow sm, vec3 l) { vec3 q = l * 0.5 + 0.5; q.z -= 0.0005; return pcfK(sm, q, 0.5 / 2048.0); }
+float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; q.z -= 0.0002; return pcfK(uSmI, q, 0.6 / 2048.0); }
 float ffEdge(vec3 a, vec3 b, vec3 n) { vec3 c = cross(a, b); float l = length(c); return l < 1e-6 ? 0.0 : acos(clamp(dot(a, b), -1.0, 1.0)) * dot(n, c / l); }
 float ffRect(vec3 p, vec3 n, vec3 o, vec3 a, vec3 b) {   // form factor point → rectangle (Lambert, contour integral); horizon clipping ignored, clamped ≥ 0
   vec3 v0 = normalize(o - p), v1 = normalize(o + a - p), v2 = normalize(o + a + b - p), v3 = normalize(o + b - p);
@@ -2427,7 +2429,7 @@ function gpuCam(pr, cam, near, far) {
 function gpuEnv(pr, env, unlit) {
   const gl = GPU.gl, u = pr.u, s = env.sunVec, k = c => c.map(v => v / 255), water = k(fogMix(mix(env.sky.sea, [20, 110, 150], 0.3), 800, env));
   gl.uniform3f(u.uSun, s[0], s[1], s[2]); gl.uniform3f(u.uSkyMid, ...k(env.sky.mid)); gl.uniform3f(u.uFog, ...k(env.sky.hor)); gl.uniform3f(u.uWater, ...water);
-  gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); gl.uniform1f(u.uUnlit, unlit ? 1 : 0);
+  gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); gl.uniform1f(u.uUnlit, unlit ? 1 : 0); gl.uniform1f(u.uHQ, GPU.hq ? 1 : 0);
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9); gl.uniform1f(u.uLitK, lit); gl.uniform1f(u.uExtK, clamp(0.35 + env.ambient * 1.3, 0.15, 1)); gl.uniform1f(u.uAlpha, 1);
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
@@ -2636,10 +2638,10 @@ function gpuEdges(cam, env) {   // new-tower outlines in their group colour (as 
   const gl = GPU.gl, F = GPU.flat; let i = 0;
   for (const P of GPU.newList) { const c = hexRgb(P.group.color), d = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), T = transmittance(d, env), m = mix(env.sky.hor, c, T); gl.uniform4f(F.u.uColor, m[0] / 255, m[1] / 255, m[2] / 255, 1); gl.drawArrays(gl.LINES, i, P.n * 4); i += P.n * 4; }
 }
-function drawPerspective(m) {
-  const w = perspectiveCanvas._w, h = perspectiveCanvas._h, ctx = vCtx, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
+function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
+  const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
-  const gpu = gpuRender(cam, env, perspectiveCanvas.width, perspectiveCanvas.height); if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); drawRain(ctx, cam, env); }
+  const gpu = gpuRender(cam, env, cv.width, cv.height); if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); drawRain(ctx, cam, env); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   if (state.showLabels) {
     const pins = LANDMARKS.filter(l => l.id !== 'sea').map(l => ({ name: l.name, x: l.x, y: l.h + 4, z: l.z, color: l.color }));
@@ -2788,10 +2790,12 @@ $('lensBtn').addEventListener('click', () => { const i = LENS.indexOf(state.foca
 const pressChip = (id, on) => { $(id).setAttribute('aria-pressed', String(on)); $(id).style.borderColor = on ? '#34d399' : ''; };
 $('expoBtn').addEventListener('click', () => { state.exposure = !state.exposure; pressChip('expoBtn', state.exposure); renderAll(); });
 $('liveBtn').addEventListener('click', () => { state.live = !state.live; pressChip('liveBtn', state.live); $('liveBtn').textContent = state.live ? '⏸ Live' : '▶ Live'; LIVE.last = 0; if (state.live) requestAnimationFrame(liveTick); else renderAll(); });
-$('shotBtn').addEventListener('click', () => {
-  const c = perspectiveCanvas, o = document.createElement('canvas'); o.width = c.width; o.height = c.height; const g = o.getContext('2d'), k = c.width / (c._w || c.width); g.drawImage(c, 0, 0);
+$('shotBtn').addEventListener('click', () => {   // 📷 Photo mode: re-render the view offscreen at 2× (long side ≤4096, GL limits) with soft shadows (uHQ); on-screen view untouched
+  const c = perspectiveCanvas, gl = GPU.gl, lim = gl ? Math.min(4096, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE), ...gl.getParameter(gl.MAX_VIEWPORT_DIMS)) : 0, sc = lim ? Math.min(2, lim / Math.max(c.width, c.height)) : 1;
+  const o = document.createElement('canvas'); o.width = Math.round(c.width * Math.max(1, sc)); o.height = Math.round(c.height * Math.max(1, sc)); o._w = c._w; o._h = c._h; const g = o.getContext('2d'), k = o.width / (c._w || o.width);
+  if (lastMath) { g.setTransform(k, 0, 0, o.height / c._h, 0, 0); GPU.hq = true; try { drawPerspective(lastMath, o, g); } finally { GPU.hq = false; } g.setTransform(1, 0, 0, 1, 0, 0); } else g.drawImage(c, 0, 0);
   const sp = curSpot(), hh = Math.floor(state.hour), mm = Math.round((state.hour - hh) * 60), txt = `TRPF 32A #134 · ${state.obsFloor}F · ${sp ? sp.room || sp.id : 'free'} · ${state.dateStr} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${WEATHER[state.weather].label} · ${LENS_LABEL[state.focalLength] || state.focalLength + 'mm'} · ${$('scenarioPreset').selectedOptions[0]?.textContent || ''}`;
-  g.font = `${Math.round(11 * k)}px Inter, sans-serif`; const tw = g.measureText(txt).width; g.fillStyle = 'rgba(15,23,42,0.75)'; g.fillRect(6 * k, o.height - 24 * k, tw + 12 * k, 18 * k); g.fillStyle = '#f8fafc'; g.fillText(txt, 12 * k, o.height - 11 * k);
+  g.font = `${Math.round(11 * k)}px Inter, sans-serif`; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; const tw = g.measureText(txt).width; g.fillStyle = 'rgba(15,23,42,0.75)'; g.fillRect(6 * k, o.height - 24 * k, tw + 12 * k, 18 * k); g.fillStyle = '#f8fafc'; g.fillText(txt, 12 * k, o.height - 11 * k);
   o.toBlob(b => { const name = `trpf-134-${state.dateStr}-${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}.png`, file = new File([b], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } }, 'image/png');
 });
