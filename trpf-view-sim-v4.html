@@ -50,6 +50,28 @@
     .view-max .app-workspace { overflow: hidden; }
     .view-max .canvas-pane-bottom { flex: 1 1 auto; min-height: 0; height: auto; }
     @media (max-width: 1024px) { .view-max.app-shell { height: 100%; overflow: hidden; } .view-max .app-workspace { flex: 1 1 auto; min-height: 0; } .view-max .canvas-pane-bottom { height: auto; flex: 1 1 auto; } }
+    /* Phone (≤640 px): 3D view unobstructed — tools behind ☰, small minimap/pad, one-row room bar, compact header */
+    .phone-only { display: none; }
+    @media (max-width: 640px) {
+      .phone-only { display: inline-block; }
+      .app-header { padding: 5px 10px; gap: 5px; }
+      .app-header h1 { display: none; }
+      #scenarioPreset { max-width: 100%; font-size: 11px; padding: 2px 4px; }
+      .view-max .app-header { display: none; }
+      .middle-ribbon { padding: 4px 10px; gap: 4px 10px; }
+      .middle-ribbon > div { min-width: 140px !important; }
+      #roomBar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
+      #roomBar::-webkit-scrollbar { display: none; }
+      #roomBar > * { flex-shrink: 0; }
+      #roomBar > span:first-child { display: none; }
+      .chip { font-size: 11px; padding: 3px 7px; }
+      #viewTitle { display: none; }
+      #viewTools { gap: 4px 6px; padding: 3px; }
+      #viewTools:not(.open) > :not(.keep) { display: none; }
+      #walkMap { width: 120px !important; height: 88px !important; top: 40px !important; opacity: 0.85; }
+      #walkPad { grid-template-columns: repeat(3, 34px) !important; grid-template-rows: repeat(2, 34px) !important; bottom: 10px !important; opacity: 0.8; }
+      .walking #roomHud, .walking #dragHint { display: none !important; }
+    }
   </style>
   <script>
     // No page zoom: pinch (iOS gesture*, multi-touch), double-tap (touch-action pan-x pan-y), ctrl/cmd+wheel, ctrl/cmd +/-/0. Canvas drag handlers unaffected.
@@ -136,22 +158,23 @@
       </div>
       <div class="canvas-pane-bottom">
         <div class="absolute top-2 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
-          <div class="bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700/80 text-[11px] font-semibold text-slate-200 flex items-center gap-2">
+          <div id="viewTitle" class="bg-slate-900/90 px-2.5 py-1 rounded-md border border-slate-700/80 text-[11px] font-semibold text-slate-200 flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-sky-400"></span><span>3D window view</span>
             <span id="lensBadge" class="text-[10px] mono bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded border border-slate-700"></span>
           </div>
-          <div class="pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[11px] flex flex-wrap items-center gap-2">
+          <div id="viewTools" class="ml-auto pointer-events-auto bg-slate-900/90 px-2 py-1 rounded-md border border-slate-700/80 text-[11px] flex flex-wrap items-center gap-2">
+            <button id="viewMenuBtn" class="chip phone-only keep" aria-expanded="false" title="View options">☰</button>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-Ray new</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Pins</label>
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
             <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
-            <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
+            <button id="walkBtn" class="chip keep text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
             <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
             <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
             <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
             <button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷</button>
-            <button id="expandBtn" class="chip text-emerald-300" aria-pressed="false">⤢ Expand</button>
+            <button id="expandBtn" class="chip keep text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
         </div>
         <canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
@@ -1375,7 +1398,7 @@ function walkStep(k) {
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
   if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
-  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; renderAll();
+  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').style.borderColor = on ? '#34d399' : ''; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
 const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
 function drawWalkMap() {
@@ -1927,6 +1950,8 @@ document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', 
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
 $('hudToggle').addEventListener('change', () => drawRoomHud());
+$('viewMenuBtn').addEventListener('click', () => { const o = $('viewTools').classList.toggle('open'); $('viewMenuBtn').setAttribute('aria-expanded', String(o)); $('viewMenuBtn').textContent = o ? '✕' : '☰'; });
+if (matchMedia('(max-width: 640px)').matches) $('hudToggle').checked = false;   // phone: readings off by default (☰ → Readings)
 $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
 function setExpanded(on) {
   const shell = document.querySelector('.app-shell'); shell.classList.toggle('view-max', on);
@@ -1953,7 +1978,7 @@ $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen
 document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop = () => { clearInterval(t); t = null; };
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); });
-$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const { x, y } = localXY($('walkMap'), e), X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
+$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const k = 190 / ($('walkMap').getBoundingClientRect().width || 190), { x: x0, y: y0 } = localXY($('walkMap'), e), x = x0 * k, y = y0 * k, X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
   if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
