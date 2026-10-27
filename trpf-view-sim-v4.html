@@ -71,7 +71,7 @@
     .fe-crow input[type=color] { width: 24px; height: 22px; padding: 0; border: none; background: none; }
     .fe-sep { width: 1px; height: 16px; background: #475569; margin: 0 2px; }
     #feCol { width: 26px; height: 22px; padding: 0; border: none; background: none; }
-    @media (max-width: 640px) {
+    @media (max-width: 640px), (max-height: 500px) {
       .phone-only { display: inline-block; }
       .app-header { padding: 5px 10px; gap: 5px; }
       .app-header h1 { display: none; }
@@ -93,6 +93,19 @@
       .furn-ed { position: fixed; inset: 0; width: auto; z-index: 60; border-left: none; background: #0f172a; padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
       .furn-ed .fe-desk { display: none; }
       .furnishing > .absolute.top-2, .furnishing #roomHud { right: 12px !important; }
+    }
+    /* Phone landscape (short screen): 3D pane fills the screen, ribbon = one scrollable row, overlays tighter */
+    @media (max-height: 500px) {
+      .canvas-pane-bottom { height: calc(100svh - 4px); min-height: 220px; }
+      .canvas-pane-top { height: 200px; }
+      .middle-ribbon { flex-wrap: wrap; padding: 3px 8px; gap: 2px 8px; }
+      .middle-ribbon > div:not(#roomBar) { flex: 1 1 0 !important; min-width: 0 !important; gap: 4px; }
+      .middle-ribbon > div:not(#roomBar) input[type="range"] { min-width: 40px; }
+      .middle-ribbon > div:not(#roomBar) > span { font-size: 10px; width: auto !important; }
+      #inlineDate { display: none; }
+      .canvas-pane-bottom > .absolute.top-2 { top: 4px; }
+      #walkMap { top: 34px !important; width: 104px !important; height: 77px !important; }
+      #walkPad { bottom: 6px !important; }
     }
   </style>
   <script>
@@ -2521,9 +2534,10 @@ $('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m
 document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', () => { const t = b.dataset.time; state.hour = t === 'day' ? 13 : t === 'night' ? 21 : Math.round((findSunsetHour() - 0.2) * 4) / 4; renderAll(); }));
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
+const PHONE_MQ = '(max-width: 640px), (max-height: 500px)';   // phone portrait or landscape (same as the CSS phone block)
 $('hudToggle').addEventListener('change', () => drawRoomHud());
 $('viewMenuBtn').addEventListener('click', () => { const o = $('viewTools').classList.toggle('open'); $('viewMenuBtn').setAttribute('aria-expanded', String(o)); $('viewMenuBtn').textContent = o ? '✕' : '☰'; });
-if (matchMedia('(max-width: 640px)').matches) $('hudToggle').checked = false;   // phone: readings off by default (☰ → Readings)
+if (matchMedia(PHONE_MQ).matches) $('hudToggle').checked = false;   // phone: readings off by default (☰ → Readings)
 $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
 function setExpanded(on) {
   const shell = document.querySelector('.app-shell'); shell.classList.toggle('view-max', on);
@@ -2583,7 +2597,7 @@ function sizeCanvas(cv, cssW, cssH) { const dpr = Math.min(2, window.devicePixel
 function resizeCanvases() {
   const pp = profileCanvas.parentElement, vp = perspectiveCanvas.parentElement;
   sizeCanvas(profileCanvas, pp.clientWidth > 20 ? pp.clientWidth : 820, pp.clientHeight > 20 ? pp.clientHeight : 260);
-  const fe = FURN.open && !matchMedia('(max-width: 640px)').matches ? 341 : 0;   // desktop editor docked on the right: 3D view uses the rest
+  const fe = FURN.open && !matchMedia(PHONE_MQ).matches ? 341 : 0;   // desktop editor docked on the right: 3D view uses the rest
   perspectiveCanvas.style.width = fe ? `calc(100% - ${fe}px)` : ''; sizeCanvas(perspectiveCanvas, vp.clientWidth > 20 ? vp.clientWidth - fe : 820, vp.clientHeight > 20 ? vp.clientHeight : 380);
   const pw = planCanvas.clientWidth > 20 ? planCanvas.clientWidth : 390, ph = state.planMode === 'site' ? (pw * 1009) / 1284 : (pw * (AREA.z1 - AREA.z0)) / (AREA.x1 - AREA.x0);
   planCanvas.style.height = `${ph}px`; sizeCanvas(planCanvas, pw, ph); sizeCanvas(sunChart, sunChart.clientWidth > 20 ? sunChart.clientWidth : 390, 150); sizeCanvas(lightChart, lightChart.clientWidth > 20 ? lightChart.clientWidth : 390, 140); renderNow();
