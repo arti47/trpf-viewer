@@ -342,6 +342,9 @@ TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the 
 <div class="pnl-b">
 <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior (walls, furniture)</label>
 <div class="flex gap-2 flex-wrap"><button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open windows</button><button id="furnBtn" class="chip text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link">🛋 Furnish</button></div>
+<div class="text-[11px] text-slate-300 mt-1">Bedroom 2 ideas: 2 single beds + 2 wardrobes <span class="text-slate-500">(tap to try, walks you in with the 0.5× lens)</span></div>
+<div id="br2Ideas" class="flex gap-1 flex-wrap"></div>
+<div id="br2Note" class="text-[10px] text-slate-500 leading-snug"></div>
 <div class="text-[10px] text-slate-500 leading-snug">🚶 Walk (on the view) lets you move through the flat: ▲▼◀▶ or W/A/S/D, ✋ hand, 🚪 doors. 🛋 Furnish edits furniture, finishes, walls, doors and lights.</div>
 
 </div></section>
@@ -1550,6 +1553,25 @@ function fBed(w, d, h, c, pillows) {
   for (let i = 0; i < pillows; i++) P.push(fRect(-w / 2 + 0.1 + i * pw + 0.02, -d / 2 + 0.12, -w / 2 + 0.1 + (i + 1) * pw - 0.02, -d / 2 + 0.48, 0.52, 0.64, '#fbfaf6'));
   return P;
 }
+// Bedroom 2 ideas (2026-10-27): bunk = 2 single mattresses (lower top 0.47, upper top 1.37; ladder at the foot end on side ±1, local x), trundle = single bed + pull-out second single (out = beside it on +x)
+function fBunk(w, d, h, c, side) {
+  const m = (z, P) => P.push(fRect(-w / 2 + 0.04, -d / 2 + 0.05, w / 2 - 0.04, d / 2 - 0.05, z, z + 0.15, FURN_COL.mattress), fRect(-w / 2 + 0.05, -d / 2 + 0.55, w / 2 - 0.05, d / 2 - 0.06, z + 0.15, z + 0.18, FURN_COL.linen), fRect(-w / 2 + 0.12, -d / 2 + 0.08, w / 2 - 0.12, -d / 2 + 0.42, z + 0.15, z + 0.25, '#fbfaf6'));
+  const P = [], t = 0.06, y1 = d / 2 - 0.5, y2 = d / 2 - 0.1, xa = side > 0 ? w / 2 : -w / 2 - 0.04, gap = [y1 - 0.03, y2 + 0.03];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) P.push(fRect(sx > 0 ? w / 2 - t : -w / 2, sy > 0 ? d / 2 - t : -d / 2, sx > 0 ? w / 2 : -w / 2 + t, sy > 0 ? d / 2 : -d / 2 + t, 0, h, c));   // corner posts
+  for (const z of [0.2, 1.1]) { P.push(fRect(-w / 2 + t, -d / 2 + t, w / 2 - t, d / 2 - t, z, z + 0.12, hexMul(c, 0.92))); m(z + 0.12, P); }   // slat frames + mattresses
+  P.push(fRect(-w / 2 + t, -d / 2, w / 2 - t, -d / 2 + 0.03, 0.32, 0.8, c), fRect(-w / 2 + t, d / 2 - 0.03, w / 2 - t, d / 2, 0.32, 0.6, c), fRect(-w / 2 + t, -d / 2, w / 2 - t, -d / 2 + 0.03, 1.22, h - 0.02, c), fRect(-w / 2 + t, d / 2 - 0.03, w / 2 - t, d / 2, 1.22, h - 0.02, c));   // head/foot boards
+  for (const sx of [-1, 1]) { const x0 = sx > 0 ? w / 2 - 0.03 : -w / 2, x1 = x0 + 0.03; if (sx === side) P.push(fRect(x0, -d / 2 + t, x1, gap[0], 1.22, h - 0.02, c)); else P.push(fRect(x0, -d / 2 + t, x1, d / 2 - t, 1.22, h - 0.02, c)); }   // upper guard rails (gap at the ladder)
+  for (const y of [y1, y2]) P.push(fRect(xa, y - 0.02, xa + 0.04, y + 0.02, 0, h - 0.05, c));
+  for (let z = 0.35; z < 1.25; z += 0.28) P.push(fRect(xa, y1, xa + 0.04, y2, z, z + 0.03, c));   // ladder rungs
+  return P;
+}
+function fTrundle(w, d, h, c, out) {
+  const P = fBed(w, d, h, c, 1);
+  if (!out) P.push(fRect(-w / 2 + 0.03, -d / 2 + 0.12, w / 2 + 0.01, d / 2 - 0.06, 0.02, 0.1, hexMul(c, 0.9)));
+  else { const x0 = w / 2 + 0.02, x1 = x0 + w - 0.04; P.push(fRect(x0, -d / 2 + 0.1, x1, d / 2 - 0.04, 0.03, 0.18, hexMul(c, 0.9)), fRect(x0 + 0.03, -d / 2 + 0.13, x1 - 0.03, d / 2 - 0.07, 0.18, 0.33, FURN_COL.mattress),
+    fRect(x0 + 0.02, -d / 2 + 0.6, x1 - 0.02, d / 2 - 0.06, 0.33, 0.36, FURN_COL.linen), fRect(x0 + 0.1, -d / 2 + 0.16, x1 - 0.1, -d / 2 + 0.5, 0.33, 0.43, '#fbfaf6')); }
+  return P;
+}
 function fCabinet(w, d, h, c, doors, plinth = 0.05) {   // body + door fronts (edge lines read as door joints) + handles
   const P = [fRect(-w / 2, -d / 2, w / 2, d / 2, plinth, h, c)], dw = w / doors; if (plinth) P.push(fRect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, d / 2 - 0.03, 0, plinth, hexMul(c, 0.6)));
   for (let i = 0; i < doors; i++) { const x0 = -w / 2 + i * dw, hx = i % 2 ? x0 + 0.06 : x0 + dw - 0.08; P.push(fRect(x0 + 0.004, d / 2, x0 + dw - 0.004, d / 2 + 0.012, plinth + 0.01, h - 0.01, hexMul(c, 0.97)), fRect(hx, d / 2 + 0.012, hx + 0.02, d / 2 + 0.03, plinth + (h - plinth) * 0.45, plinth + (h - plinth) * 0.6, FURN_COL.metal)); }
@@ -1579,6 +1601,8 @@ const FURN_CAT = {
   bedQ: { n: 'Queen bed', g: 'Bedroom', w: 1.6, d: 2.05, h: 1.0, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 2) },
   bedSS: { n: 'Super single bed', g: 'Bedroom', w: 1.15, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
   bedS: { n: 'Single bed', g: 'Bedroom', w: 1.0, d: 2.05, h: 0.9, c: '#c9c1b2', b: it => fBed(it.w, it.d, it.h, it.c, 1) },
+  bunk: { n: 'Bunk bed (2 singles)', g: 'Bedroom', w: 0.98, d: 1.98, h: 1.6, c: FURN_COL.white, ov: ['Ladder right', 'Ladder left'], o0: 0, b: it => fBunk(it.w, it.d, it.h, it.c, it.o ? 1 : -1) },
+  trundle: { n: 'Single bed + pull-out trundle', g: 'Bedroom', w: 0.95, d: 1.95, h: 0.9, c: '#c9c1b2', ov: ['Trundle in', 'Trundle out'], o0: 0, b: it => fTrundle(it.w, it.d, it.h, it.c, it.o) },
   robe: { n: 'Wardrobe', g: 'Bedroom', w: 1.5, d: 0.6, h: 2.0, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, Math.max(1, Math.round(it.w / 0.5))) },
   bedside: { n: 'Bedside table', g: 'Bedroom', w: 0.45, d: 0.4, h: 0.5, c: FURN_COL.white, b: it => fCabinet(it.w, it.d, it.h, it.c, 1) },
   desk: { n: 'Desk', g: 'Bedroom', w: 1.2, d: 0.6, h: 0.75, c: FURN_COL.white, b: ({ w, d, h, c }) => [fRect(-w / 2, -d / 2, w / 2, d / 2, h - 0.03, h, c), fRect(-w / 2, -d / 2 + 0.03, -w / 2 + 0.03, d / 2 - 0.03, 0, h - 0.03, c), fRect(w / 2 - 0.03, -d / 2 + 0.03, w / 2, d / 2 - 0.03, 0, h - 0.03, c), fRect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, -d / 2 + 0.05, 0.35, h - 0.03, c)] },
@@ -1632,7 +1656,23 @@ function kitParts(kit) {
     if (kit.top) at(C.hob, 0.6, 0, 0.5, 1.45, 1.55, '#5a5e63'); else { at(C.hob, 0.6, 0, 0.5, 1.55, 1.7, '#8f9499'); at(C.hob, 0.25, 0, 0.25, 1.7, 2.6, '#8f9499'); } }
   return P;
 }
-const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => ({ i: FURN_SAMPLE(), k: { c: 'L', top: 1 }, l: { m: 'auto', r: { living: { t: 'cove', k: 3000 }, dining: { t: 'down', k: 3000 }, mbrS: { t: 'ceil', k: 3000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'down', k: 4000 } } }, v: { c: '#d9cfc0', w: { living: { t: 'curtain', s: 'open' }, mbrS: { t: 'curtain', s: 'open' }, br2: { t: 'roller', s: 'open' }, br3: { t: 'roller', s: 'open' } } } }) };
+// Bedroom 2 with two single beds + two wardrobes (owner 2026-10-27): room clear X 3.31–6.2 × Y 0.16–3.33 (2.89 × 3.17 m), window S wall X 3.62–5.58 (sill 0.55),
+// door N wall X 5.14–6.16 hinged at X 6.16 (BR3 side), leaf swings to Y ≈2.33 along the BR3 partition X 6.2 → keep that corner clear. Single bed = 0.91×1.9 m mattress (SG 3 ft) in a 0.95×1.95 m frame,
+// "cabinet" read as a 2-door wardrobe 0.9 (0.8) × 0.55 × 2.0 m (sliding doors suit the narrow aisles); sizes estimates. Rest of the flat = Typical 4-Room. a = clear widths shown on the chips.
+const BR2_SB = { w: 0.95, d: 1.95 }, BR2_WR = { w: 0.9, d: 0.55 };
+const BR2_PLANS = {
+  'Bedroom 2: Twin beds': { s: 'Twin', a: 'beds 0.97 m apart, 0.6 m between bed ends and wardrobes', i: () => [furnNew('bedS', 3.795, 1.145, 0, BR2_SB), furnNew('bedS', 5.715, 1.145, 0, BR2_SB), furnNew('bedside', 4.755, 0.37, 0),
+    furnNew('robe', 3.77, 3.045, 180, BR2_WR), furnNew('robe', 4.67, 3.045, 180, BR2_WR)] },
+  'Bedroom 2: Bunk + desk': { s: 'Bunk', a: '1.28 m aisle between bunk and wardrobes, desk under the window', i: () => [furnNew('bunk', 3.81, 2.345, 180, { d: 1.95 }), furnNew('robe', 5.925, 0.67, 90, BR2_WR), furnNew('robe', 5.925, 1.57, 90, BR2_WR),
+    furnNew('desk', 3.92, 0.47, 0), furnNew('chair', 3.92, 1.02, 180)] },
+  'Bedroom 2: L-shape': { s: 'L-shape', a: '1.35 × 1.6 m open floor in the middle', i: () => [furnNew('bedS', 3.795, 2.345, 180, BR2_SB), furnNew('bedS', 5.215, 0.645, 90, BR2_SB), furnNew('bedside', 3.545, 0.37, 0),
+    furnNew('robe', 5.925, 1.645, 90, BR2_WR), furnNew('robe', 4.7, 3.045, 180, { w: 0.8, d: 0.55 })] },
+  'Bedroom 2: Trundle (study by day)': { s: 'Trundle', a: 'day 1.3 m to the desk; night (trundle out, chair pushed in) 0.6 m to the wardrobes', i: () => [furnNew('trundle', 3.795, 1.145, 0, { w: 0.95, d: 1.95 }), furnNew('robe', 3.77, 3.045, 180, BR2_WR), furnNew('robe', 4.67, 3.045, 180, BR2_WR),
+    furnNew('desk', 5.9, 1.0, 90), furnNew('chair', 5.45, 1.0, 270)] } };
+const furnTypical = items => ({ i: items, k:{ c: 'L', top: 1 }, l: { m: 'auto', r: { living: { t: 'cove', k: 3000 }, dining: { t: 'down', k: 3000 }, mbrS: { t: 'ceil', k: 3000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'down', k: 4000 } } }, v: { c: '#d9cfc0', w: { living: { t: 'curtain', s: 'open' }, mbrS: { t: 'curtain', s: 'open' }, br2: { t: 'roller', s: 'open' }, br3: { t: 'roller', s: 'open' } } } });
+const inBR2 = it => it.x > 3.31 && it.x < 6.2 && it.y < 3.33;
+const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => furnTypical(FURN_SAMPLE()),
+  ...Object.fromEntries(Object.entries(BR2_PLANS).map(([n, B]) => [n, () => furnTypical([...FURN_SAMPLE().filter(it => !inBR2(it)), ...B.i()])])) };
 // Finishes (owner 2026-10-27 interview; saved per layout as f; presets/defaults = estimates): whole flat tiled (floor colour per room), wall paint per room + one accent wall,
 // saved swatches reusable in any room, kitchen door/countertop colour + bar handles or handleless, wall tiles per bath/kitchen/yard (colour + layout) + feature tile (shower wall / backsplash).
 // Finish zones = plan rects (first match); anything else inside the outline = living/dining/hall.
@@ -1871,7 +1911,12 @@ function furnOpen(on) {
   furnLayoutSel(); furnSelUI(); requestAnimationFrame(() => { resizeCanvases(); furnDrawPlan(); });
 }
 function furnBindUI() {
-  $('furnBtn').addEventListener('click', () => furnOpen(!FURN.open)); $('feClose').addEventListener('click', () => furnOpen(false));
+  // Bedroom 2 ideas (Home panel): load the built-in layout, then walk in at the BR2 door looking SW across the room (heading = UNIT_FN + plan bearing)
+  Object.entries(BR2_PLANS).forEach(([n, B]) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = B.s; b.title = `${n}: ${B.a}`;
+    b.addEventListener('click', () => { furnLoad(n); const sp = UNIT_SPOTS.find(q => q.id === 'br2'); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes('br2')) setPosture('stand');
+      setWalk(true); state.walk = { X: 5.65, Y: 3.0 }; state.heading = Math.round(UNIT_FN - 32); state.pitchDeg = -18; state.focalLength = 13; if (!matchMedia(PHONE_MQ).matches && !FURN.open) furnOpen(true); $('br2Note').textContent = `${B.s}: ${B.a}.`; document.querySelectorAll('#br2Ideas .chip').forEach(c => c.classList.toggle('on', c === b)); renderAll(); });
+    $('br2Ideas').appendChild(b); });
+  $('furnBtn').addEventListener('click', () => furnOpen(!FURN.open));$('feClose').addEventListener('click', () => furnOpen(false));
   $('feLayout').addEventListener('change', e => furnLoad(e.target.value));
   document.querySelectorAll('.fe-tab').forEach(b => b.addEventListener('click', () => feTab(b.dataset.tab)));
   const fin = $('feTabFin');
