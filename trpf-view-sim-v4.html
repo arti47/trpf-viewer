@@ -147,6 +147,7 @@
             <label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="hudToggle" checked class="accent-sky-400">Readings</label>
             <button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)">🪟 Open</button>
             <button id="walkBtn" class="chip text-emerald-300" aria-pressed="false" title="Walk around the flat (arrows / WASD, or the pad)">🚶 Walk</button>
+            <button id="gpuBtn" class="chip" aria-pressed="false" title="GPU view (WebGL2): smooth drag/walk; step 1 — some visuals still 2D-only">⚡ GPU</button>
             <button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button>
             <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
             <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
@@ -560,7 +561,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, live: false
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, live: false, gpu: false
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -1745,7 +1746,7 @@ function walkStep(k) {
   const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk;
   if (walkFree(X + dX, Y + dY)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY)) walkSet(X, Y + dY);   // slide along walls
-  renderAll();
+  const sp0 = sp.id; if (state.spot !== sp0) renderAll(); else { renderView(); drawWalkMap(); }
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
@@ -1807,9 +1808,190 @@ function nightLandmarks(cam, env, items) {
           const g = ctx.createLinearGradient(b.x, b.y, e.x, e.y), c = k % 3 ? '120,255,170' : '230,240,255'; g.addColorStop(0, `rgba(${c},${0.55 * T})`); g.addColorStop(1, `rgba(${c},0)`); ctx.strokeStyle = g; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }
       ctx.restore(); } }); }
 }
+/* ===================== GPU VIEW (WebGL2, no library; step 1, owner 2026-10-27) ===================== */
+// City prisms (procedural windows, Lambert sun + sky ambient as shade(), Koschmieder haze per pixel, earth curvature in the vertex shader), ground (far land,
+// MP2025 land use via stencil even-odd fill, roads), instanced trees, own-unit 32A boxes skipped like ownUnitTest, #134 interior (unit walls, floors, frames)
+// in a second depth pass (depth cleared → room always in front, as the 2D painter). Sky/clouds/sun/sea band = 2D drawSkyAndSea underneath; overlays on top.
+// Not yet on GPU (2D only): facade styles (TRPF/condo), night landmarks/street lights, water fx, traffic/ships, cast shadows, sun patch, open sashes.
+const GPU = { ok: null };
+const GL_HDR = `#version 300 es
+precision highp float;
+uniform vec3 uEye, uR, uU, uF; uniform vec4 uP; uniform float uReff;
+vec4 project(vec3 p, out float dist) { vec3 r = p - uEye; r.y -= dot(r.xz, r.xz) / (2.0 * uReff); dist = length(r); vec3 c = vec3(dot(uR, r), dot(uU, r), dot(uF, r)); return vec4(c.x * uP.x, c.y * uP.y, uP.z * c.z + uP.w, c.z); }
+`;
+const GL_FS = `#version 300 es
+precision highp float;
+in vec3 vNor, vCol; in vec4 vTex; in float vDist; out vec4 o;
+uniform vec3 uSun, uSkyMid, uFog, uWater; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main() {
+  vec3 alb = vCol; float mode = vTex.z, lit = 0.0;
+  if (mode > 0.5 && mode < 3.5) {   // procedural windows: bays 3.6 m × storeys; faded to their mean when a cell is < ~3 px (no moire)
+    vec2 g = vTex.xy, fw = fwidth(g), f = fract(g), aa = fw * 0.75 + 1e-4; float det = 1.0 - smoothstep(0.2, 0.5, max(fw.x, fw.y));
+    float wx = mode > 2.5 ? 0.92 : 0.6, wy = mode > 2.5 ? 0.86 : 0.5, x0 = 0.5 - wx * 0.5, x1 = 0.5 + wx * 0.5, y0 = 0.28, y1 = 0.28 + wy;
+    float m = smoothstep(x0 - aa.x, x0 + aa.x, f.x) * (1.0 - smoothstep(x1 - aa.x, x1 + aa.x, f.x)) * smoothstep(y0 - aa.y, y0 + aa.y, f.y) * (1.0 - smoothstep(y1 - aa.y, y1 + aa.y, f.y));
+    float k = mix(wx * wy, m, det) * step(0.0, g.y), on = step(hash(floor(g) + vTex.w), mode > 2.5 ? 0.5 : 0.3);
+    alb = mix(alb, mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det);
+  }
+  vec3 c;
+  if (uUnlit > 0.5) c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : uLitK);
+  else if (mode < -0.5) c = uWater;
+  else { float d = uDirect * max(0.0, dot(normalize(vNor), uSun)) * 0.85; vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm);
+    c = alb * (uAmb * (0.75 + 0.25 * uSkyMid) + d * tint) + lit * vec3(1.0, 0.84, 0.55) * 0.9; }
+  if (uUnlit < 0.5) c = mix(uFog, c, exp(-uBeta * vDist));
+  o = vec4(clamp(c, 0.0, 1.0) * uAlpha, uAlpha);
+}`;
+const GL_VS = GL_HDR + `in vec3 aPos, aNor, aCol; in vec4 aTex; out vec3 vNor, vCol; out vec4 vTex; out float vDist;
+void main() { float d; gl_Position = project(aPos, d); vDist = d; vNor = aNor; vCol = aCol; vTex = aTex; }`;
+// trees: unit canopy (icosahedron, radius 1) + trunk (aPart 1), per instance (x, z, h, g)
+const GL_TREE_VS = GL_HDR + `in vec3 aPos; in float aPart; in vec4 aInst; out vec3 vNor, vCol; out vec4 vTex; out float vDist;
+void main() { float h = aInst.z, g = aInst.w; vec3 p; if (aPart > 0.5) { p = vec3(aInst.x + aPos.x * max(0.15, h * 0.03), aPos.y * h * 0.62, aInst.y + aPos.z * max(0.15, h * 0.03)); vCol = vec3(0.3, 0.22, 0.15); vNor = vec3(aPos.x, 0.0, aPos.z); }
+  else { p = vec3(aInst.x + aPos.x * h * 0.38, h * 0.62 + aPos.y * h * 0.33, aInst.y + aPos.z * h * 0.38); vCol = vec3(46.0 + g * 30.0, 110.0 + g * 40.0, 52.0 + g * 20.0) / 255.0; vNor = normalize(aPos + vec3(0.0, 0.6, 0.0)); }
+  float d; gl_Position = project(p, d); vDist = d; vTex = vec4(0.0); }`;
+const GL_FLAT_VS = GL_HDR + `in vec3 aPos; uniform float uClip; void main() { float d; gl_Position = uClip > 0.5 ? vec4(aPos.xy, 0.0, 1.0) : project(aPos, d); }`;
+const GL_FLAT_FS = `#version 300 es
+precision highp float; uniform vec4 uColor; out vec4 o; void main() { o = vec4(uColor.rgb * uColor.a, uColor.a); }`;
+// Ear clipping for simple polygons (pts [[x,z]...], any winding) → triangle index triples; fan fallback.
+function earClip(pts) {
+  const n = pts.length; if (n < 3) return []; let A = 0; for (let i = 0, j = n - 1; i < n; j = i++) A += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+  const idx = [...Array(n).keys()]; if (A < 0) idx.reverse(); const out = [], cr = (a, b, c) => (pts[b][0] - pts[a][0]) * (pts[c][1] - pts[a][1]) - (pts[b][1] - pts[a][1]) * (pts[c][0] - pts[a][0]);
+  const inT = (p, a, b, c) => cr(a, b, p) >= 0 && cr(b, c, p) >= 0 && cr(c, a, p) >= 0;
+  let guard = 0; while (idx.length > 3 && guard++ < 5000) { let cut = false;
+    for (let i = 0; i < idx.length; i++) { const a = idx[(i + idx.length - 1) % idx.length], b = idx[i], c = idx[(i + 1) % idx.length]; if (cr(a, b, c) <= 1e-9) continue;
+      if (idx.some(p => p !== a && p !== b && p !== c && inT(p, a, b, c))) continue; out.push(a, b, c); idx.splice(i, 1); cut = true; break; }
+    if (!cut) break; }
+  if (idx.length === 3) out.push(...idx); else for (let i = 1; i + 1 < idx.length; i++) out.push(idx[0], idx[i], idx[i + 1]);
+  return out;
+}
+// Vertex writer: 13 floats (pos 3, normal 3, colour 3, tex 4)
+const glArr = () => ({ a: [], v(p, n, c, t) { this.a.push(p[0], p[1], p[2], n[0], n[1], n[2], c[0], c[1], c[2], t[0], t[1], t[2], t[3]); },
+  quad(p0, p1, p2, p3, n, c, t0, t1, t2, t3) { this.v(p0, n, c, t0); this.v(p1, n, c, t1); this.v(p2, n, c, t2); this.v(p0, n, c, t0); this.v(p2, n, c, t2); this.v(p3, n, c, t3); }, get n() { return this.a.length / 13; } });
+function glPrism(A, P) {
+  const al = (P.style ? (P.style === 'club' ? [150, 175, 190] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
+  const top = (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170]).map(c => c / 255);
+  const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.kind === 'road' || P.tank || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
+  const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh;
+  for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = P.xs[j], z0 = P.zs[j], x1 = P.xs[i], z1 = P.zs[i], ex = x1 - x0, ez = z1 - z0, L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], u1 = L / 3.6;
+    A.quad([x0, b, z0], [x1, b, z1], [x1, t, z1], [x0, t, z0], n, al, [0, vb, mode, seed], [u1, vb, mode, seed], [u1, vt, mode, seed], [0, vt, mode, seed]); }
+  const pts = []; for (let i = 0; i < P.n; i++) pts.push([P.xs[i], P.zs[i]]); const tri = earClip(pts), z4 = [0, 0, 0, 0];
+  for (let k = 0; k < tri.length; k += 3) { for (const q of [tri[k], tri[k + 1], tri[k + 2]]) A.v([pts[q][0], t, pts[q][1]], [0, 1, 0], top, z4); if (b > 0) for (const q of [tri[k], tri[k + 2], tri[k + 1]]) A.v([pts[q][0], b, pts[q][1]], [0, -1, 0], top, z4); }
+}
+function gpuInit() {
+  if (GPU.ok !== null) return GPU.ok;
+  try {
+    const cv = document.createElement('canvas'), gl = cv.getContext('webgl2', { antialias: true, alpha: true, premultipliedAlpha: true, stencil: true, depth: true });
+    if (!gl) return (GPU.ok = false);
+    const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+    const prog = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+      const u = {}, nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < nu; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); } const a = {}; for (const k of ['aPos', 'aNor', 'aCol', 'aTex', 'aPart', 'aInst']) a[k] = gl.getAttribLocation(p, k); return { p, u, a }; };
+    Object.assign(GPU, { cv, gl, main: prog(GL_VS, GL_FS), tree: prog(GL_TREE_VS, GL_FS), flat: prog(GL_FLAT_VS, GL_FLAT_FS), ver: -1, ikey: '' });
+    // static: land use rings (stencil fans), far land, roads, trees, fullscreen quad
+    const lu = [], luR = []; for (const L of LU) { const rs = []; for (const r of L.rings) { rs.push([lu.length / 3, r.length / 2]); for (let i = 0; i < r.length; i += 2) lu.push(r[i], 0, r[i + 1]); } luR.push({ L, rs }); }
+    GPU.lu = gpuBuf(new Float32Array(lu)); GPU.luR = luR; GPU.quad = gpuBuf(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]));
+    const G = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], fl = [150, 150, 148].map(c => c / 255);
+    [[-12000, -5200, -3300, 9000], [-12000, 12000, 1800, 12000], [2600, 12000, -1200, 1800]].forEach(([x0, x1, z0, z1]) => { const nx = 12, nz = 12; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const a = x0 + (x1 - x0) * i / nx, b = x0 + (x1 - x0) * (i + 1) / nx, c = z0 + (z1 - z0) * j / nz, d = z0 + (z1 - z0) * (j + 1) / nz; G.quad([a, 0, c], [b, 0, c], [b, 0, d], [a, 0, d], up, fl, z4, z4, z4, z4); } });
+    GPU.farN = G.n; const asph = [70, 72, 78].map(c => c / 255);
+    for (const R of ROADS) { const p = R.pts, hw = R.w / 2; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / L * hw, pz = (bx - ax) / L * hw;
+      G.quad([ax - px, 0, az - pz], [bx - px, 0, bz - pz], [bx + px, 0, bz + pz], [ax + px, 0, az + pz], up, asph, z4, z4, z4, z4); } }
+    GPU.groundN = G.n; GPU.ground = gpuBuf(new Float32Array(G.a));
+    const ti = new Float32Array(TREES.n * 4); for (let i = 0; i < TREES.n; i++) ti.set([TREES.x[i], TREES.z[i], TREES.h[i], TREES.g[i]], i * 4); GPU.treeInst = gpuBuf(ti);
+    const t = (1 + Math.sqrt(5)) / 2, V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(v => { const l = Math.hypot(...v); return v.map(c => c / l); });
+    const F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]], tv = [];
+    F.forEach(f => f.forEach(k => tv.push(...V[k], 0))); const T4 = [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1]];
+    for (let k = 0; k < 4; k++) { const a = T4[k], b = T4[(k + 1) % 4]; tv.push(a[0], 0, a[2], 1, b[0], 0, b[2], 1, b[0], 1, b[2], 1, a[0], 0, a[2], 1, b[0], 1, b[2], 1, a[0], 1, a[2], 1); }
+    GPU.treeGeo = gpuBuf(new Float32Array(tv)); GPU.treeN = tv.length / 4;
+    return (GPU.ok = true);
+  } catch (e) { console.warn('GPU view unavailable:', e); return (GPU.ok = false); }
+}
+function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
+function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
+  if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, A = glArr(), own = [], E = [];
+  for (const P of ALL) if (P.kind !== 'new' && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P); GPU.opN = A.n;
+  for (const P of ALL) if (P.name === 'Blk 32A' && !P.tank && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }
+  const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
+  GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
+  GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6;
+}
+function gpuInterior(env) {   // #134 unit in world coords (plan → world via the spot), rebuilt when spot/floor/posture/door change; colours as drawInterior
+  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return 0;
+  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen()].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
+  const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
+  const zG = -(VOID_DECK_HEIGHT + (state.obsFloor - 1) * FLOOR_HEIGHT), zR = BLK_TOP + TRPF_CROWN + zG;
+  const box = ([x0, y0b, x1, y1], z0, z1, col, ext) => { const t = ext === 5 ? [0, 0, 5, 0] : ext ? X4 : z4, f = k => col.map(c => Math.min(1, c * k)), sd = [[x0, y0b, x1, y0b, 1], [x1, y0b, x1, y1, 0.86], [x1, y1, x0, y1, 0.74], [x0, y1, x0, y0b, 0.86]];
+    for (const [ax, ay, bx, by, k] of sd) A.quad(W(ax, ay, z0), W(bx, by, z0), W(bx, by, z1), W(ax, ay, z1), up0, f(k), t, t, t, t);
+    A.quad(W(x0, y0b, z1), W(x1, y0b, z1), W(x1, y1, z1), W(x0, y1, z1), up0, f(1.05), t, t, t, t); A.quad(W(x0, y0b, z0), W(x1, y0b, z0), W(x1, y1, z0), W(x0, y1, z0), up0, f(0.8), t, t, t, t); }, up0 = [0, 1, 0];
+  const flat = (r, h, col) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) A.v(W(r[tri[k]][0], r[tri[k]][1], h), up0, col, z4); }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
+  flat(UNIT_PLAN.outline, 0, c255(UNIT_FLOOR.tile).map(c => c * 0.85)); UNIT_PLAN.floors.forEach(([r, f]) => flat(rect(r), 0.003, c255(UNIT_FLOOR[f]).map(c => c * 0.85))); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95));
+  UNIT_PLAN.corr.floors.forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85)); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9)); }); flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
+  for (let [x0, y0b, x1, y1, z0 = 0, z1 = H, kind] of unitWalls()) {
+    const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
+    box([x0, y0b, x1, y1], z0, z1, c255(col), ext); }
+  const fc = c255([238, 238, 234]), Fw = 0.05, M = 0.03;   // window frames (closed): outer frame, posts, sash joints, transoms; 0.06 m deep at the glass line
+  for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { const sh = UNIT_PLAN.sashes[wi]; if (!sh.length) continue;
+    const bar = (a0, a1, t0, t1) => box(ax === 'y' ? [g - 0.03, a0, g + 0.03, a1] : [a0, g - 0.03, a1, g + 0.03], t0, t1, fc, 5);
+    bar(w0, w0 + Fw, sl, hd); bar(w1 - Fw, w1, sl, hd); bar(w0, w1, sl, sl + Fw); bar(w0, w1, hd - Fw, hd);
+    (UNIT_PLAN.posts[wi] || []).forEach(x => bar(x - 0.04, x + 0.04, sl, hd)); (UNIT_PLAN.transoms[wi] || []).forEach(f => { const z = sl + f * (hd - sl); bar(w0, w1, z - M, z + M); });
+    sh.forEach(([s0]) => { if (s0 > w0 + 0.01) bar(s0 - M, s0 + M, sl, hd); }); }
+  const gl = GPU.gl; if (GPU.inBuf) gl.deleteBuffer(GPU.inBuf); GPU.inBuf = gpuBuf(new Float32Array(A.a)); return (GPU.inN = A.n);
+}
+function gpuAttrib(pr, buf, inst) {
+  const gl = GPU.gl; gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
+  const on = (loc, n, stride, off) => { if (loc < 0) return; gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, stride, off); };
+  if (pr === GPU.main) { on(pr.a.aPos, 3, 52, 0); on(pr.a.aNor, 3, 52, 12); on(pr.a.aCol, 3, 52, 24); on(pr.a.aTex, 4, 52, 36); }
+  else if (pr === GPU.tree) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
+  else on(pr.a.aPos, 3, 12, 0);
+}
+function gpuCam(pr, cam, near, far) {
+  const gl = GPU.gl, cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  gl.useProgram(pr.p); gl.uniform3f(pr.u.uEye, cam.ex, cam.hEye, cam.ez); gl.uniform3f(pr.u.uR, cy, 0, -sy); gl.uniform3f(pr.u.uU, -sp * sy, cp, -sp * cy); gl.uniform3f(pr.u.uF, cp * sy, sp, cp * cy);
+  gl.uniform4f(pr.u.uP, (2 * cam.fPx) / cam.w, (2 * cam.fPx) / cam.h, (far + near) / (far - near), (-2 * far * near) / (far - near)); gl.uniform1f(pr.u.uReff, R_EFF);
+}
+function gpuEnv(pr, env, unlit) {
+  const gl = GPU.gl, u = pr.u, s = env.sunVec, k = c => c.map(v => v / 255), water = k(fogMix(mix(env.sky.sea, [20, 110, 150], 0.3), 800, env));
+  gl.uniform3f(u.uSun, s[0], s[1], s[2]); gl.uniform3f(u.uSkyMid, ...k(env.sky.mid)); gl.uniform3f(u.uFog, ...k(env.sky.hor)); gl.uniform3f(u.uWater, ...water);
+  gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); gl.uniform1f(u.uUnlit, unlit ? 1 : 0);
+  const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9); gl.uniform1f(u.uLitK, lit); gl.uniform1f(u.uExtK, clamp(0.35 + env.ambient * 1.3, 0.15, 1)); gl.uniform1f(u.uAlpha, 1);
+}
+// Render the scene into GPU.cv (same pixel size as the 2D canvas); caller draws it over the 2D sky. Returns false if WebGL2 is unavailable.
+function gpuRender(cam, env, pxW, pxH) {
+  if (!gpuInit()) return false; const gl = GPU.gl, cv = GPU.cv; if (cv.width !== pxW || cv.height !== pxH) { cv.width = pxW; cv.height = pxH; }
+  gpuWorld(); gl.viewport(0, 0, pxW, pxH); gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  const M = GPU.main, F = GPU.flat, NEAR = 1, FAR = 40000;
+  // ground layer (painter order, no depth): far land, land use (stencil even-odd per class, constant colour as 2D), roads
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  gpuCam(M, cam, NEAR, FAR); gpuEnv(M, env, false); gpuAttrib(M, GPU.ground); gl.drawArrays(gl.TRIANGLES, 0, GPU.farN);
+  gpuCam(F, cam, NEAR, FAR); gl.enable(gl.STENCIL_TEST);
+  const water = mix(env.sky.sea, [20, 110, 150], 0.3);
+  for (const pass of [0, 1]) for (const { L, rs } of GPU.luR) { if ((L.c === 0) !== !pass || !cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue;
+    gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.lu); gl.colorMask(false, false, false, false); gl.stencilFunc(gl.ALWAYS, 0, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
+    for (const [s, c] of rs) gl.drawArrays(gl.TRIANGLE_FAN, s, c);
+    const col = L.c === 0 ? water : shade(GROUND_ALB[L.c], [0, 1, 0], env), d = Math.max(1, Math.hypot(clamp(cam.ex, L.minx, L.maxx) - cam.ex, clamp(cam.ez, L.minz, L.maxz) - cam.ez) * 0.5 + Math.hypot(L.cx - cam.ex, L.cz - cam.ez) * 0.5), fc = fogMix(col, d, env);
+    gl.colorMask(true, true, true, true); gl.stencilFunc(gl.NOTEQUAL, 0, 1); gl.stencilOp(gl.ZERO, gl.ZERO, gl.ZERO); gl.uniform1f(F.u.uClip, 1); gl.uniform4f(F.u.uColor, fc[0] / 255, fc[1] / 255, fc[2] / 255, 1); gpuAttrib(F, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); }
+  gl.disable(gl.STENCIL_TEST);
+  if (state.showRoads) { gl.useProgram(M.p); gpuAttrib(M, GPU.ground); gl.drawArrays(gl.TRIANGLES, GPU.farN, GPU.groundN - GPU.farN); }
+  // solids with depth
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN);
+  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
+  gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuAttrib(GPU.tree, GPU.treeGeo, GPU.treeInst); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeN, TREES.n);
+  if (GPU.newR[1]) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
+    gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
+    gpuEdges(cam, env); }
+  // #134 interior: own depth range, drawn in front of the city
+  const nIn = gpuInterior(env); if (nIn) { gl.clear(gl.DEPTH_BUFFER_BIT); gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, nIn); }
+  return true;
+}
+function gpuEdges(cam, env) {   // new-tower outlines in their group colour (as the 2D stroke), haze-faded via a per-group colour
+  const gl = GPU.gl, F = GPU.flat; let i = 0;
+  for (const P of GPU.newList) { const c = hexRgb(P.group.color), d = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), T = transmittance(d, env), m = mix(env.sky.hor, c, T); gl.uniform4f(F.u.uColor, m[0] / 255, m[1] / 255, m[2] / 255, 1); gl.drawArrays(gl.LINES, i, P.n * 4); i += P.n * 4; }
+}
 function drawPerspective(m) {
   const w = perspectiveCanvas._w, h = perspectiveCanvas._h, ctx = vCtx, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
-  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); drawGround(ctx, cam, env);
+  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
+  const gpu = state.gpu && gpuRender(cam, env, perspectiveCanvas.width, perspectiveCanvas.height); if (gpu) ctx.drawImage(GPU.cv, 0, 0, w, h);
+  if (!gpu) { drawGround(ctx, cam, env);
   const items = [];
   SHIPS.forEach(([x, z, len]) => { const hull = makePrism('ship', 'existing', 12, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', 30, 12, [x - len * 0.4, z - len * 0.06, x - len * 0.2, z - len * 0.06, x - len * 0.2, z + len * 0.06, x - len * 0.4, z + len * 0.06]); items.push({ d: cam.dist(x, 10, z), draw: () => { drawPrism(ctx, cam, env, hull); drawPrism(ctx, cam, env, sup); } }); });
   MOVERS.forEach(M => { const [, z, len] = M, x = moverX(M), dir = Math.sign(M[3]), hull = makePrism('ship', 'existing', len > 60 ? 10 : 3, 0, [x - len / 2, z - len * 0.08, x + len / 2, z - len * 0.08, x + len / 2, z + len * 0.08, x - len / 2, z + len * 0.08]), sup = makePrism('ship', 'existing', len > 60 ? 26 : 6, len > 60 ? 10 : 3, [x - dir * len * 0.4, z - len * 0.06, x - dir * len * 0.22, z - len * 0.06, x - dir * len * 0.22, z + len * 0.06, x - dir * len * 0.4, z + len * 0.06].map((v, i) => v));
@@ -1841,7 +2023,7 @@ function drawPerspective(m) {
   } });
   if (env.night) nightLandmarks(cam, env, items);
   items.sort((a, b) => b.d - a.d).forEach(it => it.draw());
-  drawRain(ctx, cam, env);
+  drawRain(ctx, cam, env); }
   if (state.showLabels) {
     const pins = LANDMARKS.filter(l => l.id !== 'sea').map(l => ({ name: l.name, x: l.x, y: l.h + 4, z: l.z, color: l.color }));
     GROUPS.forEach(g => { const ts = towers.filter(t => t.group === g); if (!ts.length) return; const cx = ts.reduce((a, t) => a + t.cx, 0) / ts.length, cz = ts.reduce((a, t) => a + t.cz, 0) / ts.length; pins.push({ name: g.label.split(' (')[0], x: cx, y: Math.max(...ts.map(t => t.h)) + 6, z: cz, color: g.color }); });
@@ -1873,7 +2055,7 @@ function drawPerspective(m) {
     });
     ctx.restore();
   }
-  if (state.showBalcony && curSpot()) drawInterior(ctx, cam, env, curSpot());
+  if (state.showBalcony && curSpot()) { if (!gpu) drawInterior(ctx, cam, env, curSpot()); }
   else if (state.showBalcony) {
     const pw = Math.max(10, w * 0.015); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, pw, h); ctx.fillRect(w - pw, 0, pw, h);
     // W1 window: 550mm parapet, eye 1.55m above floor, standing 0.5m behind the glass → sight cut-off at −atan(1.0/0.5) ≈ −63.4°.
@@ -1885,6 +2067,9 @@ function drawPerspective(m) {
 /* ===================== RENDER & INPUT ===================== */
 let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
+// Interactive redraw (drag/tilt/walk): only the 3D view each frame; metrics, panels and charts once input pauses (250 ms).
+let viewPending = false, idleT = 0;
+function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawPerspective(lastMath); }); }
 function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
@@ -1901,7 +2086,7 @@ profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e);
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
 let drag3D = null;
 perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX, y: e.clientY, hd: state.heading, p: state.pitchDeg }; perspectiveCanvas.setPointerCapture(e.pointerId); });
-perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 30) * 2) / 2; renderAll(); });
+perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 30) * 2) / 2; renderView(); });
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
 bind('headingSlider', v => { state.heading = parseFloat(v); }); bind('inlineHeading', v => { state.heading = parseFloat(v); });
@@ -1960,6 +2145,7 @@ $('weatherSel').innerHTML = Object.entries(WEATHER).map(([k, W]) => `<option val
 $('weatherSel').addEventListener('change', e => { state.weather = e.target.value; state.visibilityKm = WEATHER[state.weather].vis; renderAll(); });
 $('lensBtn').addEventListener('click', () => { const i = LENS.indexOf(state.focalLength); state.focalLength = LENS[(i + 1) % LENS.length]; renderAll(); });
 const pressChip = (id, on) => { $(id).setAttribute('aria-pressed', String(on)); $(id).style.borderColor = on ? '#34d399' : ''; };
+$('gpuBtn').addEventListener('click', () => { state.gpu = !state.gpu && gpuInit(); pressChip('gpuBtn', state.gpu); if (!state.gpu && GPU.ok === false) $('gpuBtn').title = 'WebGL2 not available on this device'; renderAll(); });
 $('expoBtn').addEventListener('click', () => { state.exposure = !state.exposure; pressChip('expoBtn', state.exposure); renderAll(); });
 $('liveBtn').addEventListener('click', () => { state.live = !state.live; pressChip('liveBtn', state.live); $('liveBtn').textContent = state.live ? '⏸ Live' : '▶ Live'; LIVE.last = 0; if (state.live) requestAnimationFrame(liveTick); else renderAll(); });
 $('shotBtn').addEventListener('click', () => {
@@ -1976,7 +2162,7 @@ document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop =
 $('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const { x, y } = localXY($('walkMap'), e), X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
-  if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderAll(); } });
+  if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
 // Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
