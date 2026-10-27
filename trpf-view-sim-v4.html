@@ -70,7 +70,6 @@
     .walk-joy { position: relative; width: 112px; height: 112px; border-radius: 50%; background: rgba(15,23,42,0.45); border: 2px solid rgba(148,163,184,0.55); touch-action: none; cursor: grab; }
     .walk-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(226,232,240,0.8); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.4); pointer-events: none; }
     .walk-joy.on .walk-knob { background: #6ee7b7; }
-    .walk-door { position: absolute; left: 118px; bottom: 0; font-size: 16px; width: 40px; height: 40px; }
     .hint { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,0.55); }
     .hint-card { max-width: 360px; background: #0f172a; border: 1px solid #334155; border-radius: 14px; padding: 16px 18px; font-size: 13px; line-height: 1.55; color: #cbd5e1; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
     .hint-card b { color: #f8fafc; }
@@ -117,7 +116,6 @@
       .ov-btn { font-size: 12px; padding: 5px 8px; }
       #walkMap { width: 120px !important; height: 88px !important; opacity: 0.85; }
       .walk-joy { width: 100px; height: 100px; } .walk-knob { width: 42px; height: 42px; margin: -21px 0 0 -21px; }
-      .walk-door { left: 106px; width: 36px; height: 36px; }
       .walking #roomHud { display: none !important; }
       .furn-ed { position: fixed; inset: 0; width: auto; z-index: 60; border-left: none; background: #0f172a; padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
       .furn-ed .fe-desk { display: none; }
@@ -175,7 +173,7 @@
 <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
 <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
 <div id="walkPad" class="absolute left-3 z-10" style="bottom:40px;display:none">
-<div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div><button id="walkDoor" class="chip walk-door" title="Open / close the door in front of you (E)">🚪</button>
+<div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div>
 </div>
 <div id="furnEd" class="furn-ed" style="display:none">
 <div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
@@ -198,7 +196,7 @@
         <div id="hint" class="hint" style="display:none"><div class="hint-card">
           <div class="text-[15px] font-bold text-white mb-2">The view from #134, 27th floor</div>
           <div>👆 <b>Drag</b> the view to look around (left/right turns, up/down tilts).</div>
-          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat: drag the joystick (bottom left) or W/A/S/D, drag the view to look, 🚪 doors.</div>
+          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat: drag the joystick (bottom left) or W/A/S/D, drag the view to look, tap a door to open / close it.</div>
           <div>🛋 <b>Furnish</b> (Home panel) edits furniture, finishes, walls, doors and lights; 🚪 Room → Bedroom 2 has ideas for 2 beds.</div>
           <div>🕐 <b>Slide the time</b> at the bottom, and tap the date to change the day.</div>
           <div>☰ <b>Panels</b> (<span class="hint-where"></span>): View, Time, Future buildings, Sun &amp; light, Maps, Home.</div>
@@ -1726,18 +1724,20 @@ const finSide = (X, Y, nX, nY) => { const z = finZone(X, Y), F = FURN.fin; if (!
 // internal doors (fixed parts; plan swings): leaf 0.04 m, 2.07 m high; open = swing 90° on the plan side / bi-fold stacked at the hinge jamb / sliding parked over the wall
 function doorParts() {
   const W = UNIT_W, P = [], hc = '#8a8e92';
-  for (const [id, D] of Object.entries(DOORS)) { const t = W.d[id] || 'none'; if (t === 'none' || (id === 'br3' && !W.br3)) continue;
+  for (const [id, D] of Object.entries(DOORS)) { const t = W.d[id] || 'none'; if (t === 'none' || (id === 'br3' && !W.br3)) continue; const n0 = P.length;
     const L = D.a1 - D.a0, col = id[0] === 'w' || id === 'yard' ? '#e9e7e2' : '#d4bd96', h = D.hg ? D.a1 : D.a0, d = D.hg ? -1 : 1, f = D.g + D.s * D.hw;
     const R = (a0, a1, n0, n1, c, z0 = 0.01, z1 = 2.08) => { const p = Math.min(a0, a1), q = Math.max(a0, a1), m = Math.min(n0, n1), o = Math.max(n0, n1); P.push(D.ax === 'x' ? fRect(p, m, q, o, z0, z1, c) : fRect(m, p, o, q, z0, z1, c)); };
     if (W.dc[id]) { if (t === 'slide') { R(D.a0, D.a1, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); R(D.a1 - d * 0.1, D.a1 - d * 0.12, D.g - D.s * (D.hw + 0.04), D.g - D.s * (D.hw + 0.06), hc, 0.9, 1.1); }
       else { R(D.a0 + 0.01, D.a1 - 0.01, D.g - 0.02, D.g + 0.02, col); const e = h + d * (L - 0.09); R(e, e + d * 0.1, D.g - 0.07, D.g + 0.07, hc, 0.98, 1.02); } }
     else if (t === 'swing') { R(h + d * 0.01, h + d * 0.05, f, f + D.s * (L - 0.02), col); R(h - d * 0.03, h + d * 0.09, f + D.s * (L - 0.14), f + D.s * (L - 0.1), hc, 0.98, 1.02); }
     else if (t === 'fold') R(h + d * 0.01, h + d * 0.09, f, f + D.s * L / 2, col);
-    else { const sh = D.sl ? L : -L; R(D.a0 + sh, D.a1 + sh, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); } }
-  if (W.kit) { const FR = '#d8d8d4', n = W.kn === 2 ? 2 : 3, w = (2.02 + 0.04 * (n - 1)) / n, s = 0.06 / n, t = n === 3 ? 0.016 : 0.02, fr = W.kg === 'frosted',
+    else { const sh = D.sl ? L : -L; R(D.a0 + sh, D.a1 + sh, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); }
+    for (let i = n0; i < P.length; i++) P[i].did = id; }   // did: tap-to-toggle target (doorTap)
+  const k0 = P.length; if (W.kit) { const FR = '#d8d8d4', n = W.kn === 2 ? 2 : 3, w = (2.02 + 0.04 * (n - 1)) / n, s = 0.06 / n, t = n === 3 ? 0.016 : 0.02, fr = W.kg === 'frosted',
       g = (x0, x1, y0, y1) => P.push({ ...fRect(x0, y0, x1, y1, 0.02, 2.08, '#c8d7df'), ...(fr ? { frost: 1 } : { glass: 1 }) }, fRect(x0, y0, x0 + 0.03, y1, 0.02, 2.08, FR), fRect(x1 - 0.03, y0, x1, y1, 0.02, 2.08, FR), fRect(x0, y0, x1, y1, 2.05, 2.08, FR), fRect(x0, y0, x1, y1, 0.02, 0.06, FR));
     P.push(fRect(7.18, 6.36, 9.2, 6.42, 0, 0.012, '#9a9ea3'));
     for (let i = 0; i < n; i++) { const x0 = W.dc.kit ? 7.18 + i * (w - 0.04) : 9.2 - w, y0 = 6.36 + i * s + (s - t) / 2; g(x0, x0 + w, y0, y0 + t); if (!i) P.push(fRect(x0 + 0.05, y0 - 0.012, x0 + 0.07, y0 + t + 0.012, 0.85, 1.25, '#6b7075')); } }   // enclosed kitchen: 2 bypass / 3 telescopic glass sliding panels on a top track in the bulkhead (open = stacked W over the fridge side; clear opening 1.0 / 1.3 m), pull bar on the leading panel
+  for (let i = k0; i < P.length; i++) P[i].did = 'kit';
   return P; }
 // Lights + window coverings (owner 2026-10-27 "add them"; saved per layout as l / v; sizes, outputs, transmittances = estimates). Lights: per room none / ceiling lamp / downlights /
 // false ceiling (0.35 m L-box at 2.35 m) with cove LED + downlights; 3000 / 4000 / 6500 K; mode auto (on when the sun is < 2° up or the room's coverings pass < 25% daylight) / on / off.
@@ -2705,8 +2705,9 @@ profileCanvas.addEventListener('pointerdown', e => { if (localXY(profileCanvas, 
 profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e); });
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
 let drag3D = null;
-perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX, y: e.clientY, hd: state.heading, p: state.pitchDeg }; perspectiveCanvas.setPointerCapture(e.pointerId); });
+perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX, y: e.clientY, hd: state.heading, p: state.pitchDeg, t: performance.now() }; perspectiveCanvas.setPointerCapture(e.pointerId); });
 perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 30) * 2) / 2; renderView(); });
+perspectiveCanvas.addEventListener('pointerup', e => { const d = drag3D; if (d && state.walk && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8 && performance.now() - d.t < 500) { const { x, y } = localXY(perspectiveCanvas, e); if (doorTap(x, y)) { state.heading = d.hd; state.pitchDeg = d.p; } } });   // tap (not drag) → door
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
 bind('headingSlider', v => { state.heading = parseFloat(v); });
@@ -2817,9 +2818,24 @@ function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a 
   const cand = Object.entries(DOORS).filter(([id]) => (UNIT_W.d[id] || 'none') !== 'none' && !(id === 'br3' && !UNIT_W.br3)).map(([id, D]) => [id, D.ax === 'x' ? (D.a0 + D.a1) / 2 : D.g, D.ax === 'x' ? D.g : (D.a0 + D.a1) / 2]);
   if (UNIT_W.kit) cand.push(['kit', 8.2, 6.39]); cand.push(['main', 10.48, 7.6], ['hs', 11.3, 6.18]);
   for (const [id, cx, cy] of cand) { const dx = cx - X, dy = cy - Y, d = Math.hypot(dx, dy); if (d > 1.8) continue; const sc = d * (1.6 - (dx * fx + dy * fy) / (d || 1)); if (sc < bs) { bs = sc; best = id; } }
-  const b = $('walkDoor'); if (!best) { b.style.borderColor = '#f87171'; setTimeout(() => { b.style.borderColor = ''; }, 500); return; }
-  if (UNIT_W.dc[best]) delete UNIT_W.dc[best]; else UNIT_W.dc[best] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
-$('walkDoor').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); doorToggle(); });
+  if (best) doorFlip(best); }
+function doorFlip(id) { if (UNIT_W.dc[id]) delete UNIT_W.dc[id]; else UNIT_W.dc[id] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
+// Walk: tap a door (leaf or doorway) in the 3D view → toggle it (owner 2026-10-27). Pixel ray → plan frame; nearest hit vs walls (non-door) wins, ≤6 m.
+function doorTap(px, py) {
+  const cv = perspectiveCanvas, w = cv._w, h = cv._h; if (!state.walk || !w) return false;
+  const yaw = state.heading * DEG, pt = state.pitchDeg * DEG, fPx = (w / SENSOR_W) * state.focalLength, xc = (px - w / 2) / fPx, yc = -(py - h / 2) / fPx;
+  const dy = yc * Math.cos(pt) + Math.sin(pt), zr = -yc * Math.sin(pt) + Math.cos(pt), dx = xc * Math.cos(yaw) + zr * Math.sin(yaw), dz = -xc * Math.sin(yaw) + zr * Math.cos(yaw);
+  const nb = UNIT_FN * DEG, dX = dx * Math.cos(nb) - dz * Math.sin(nb), dY = -(dx * Math.sin(nb) + dz * Math.cos(nb)), o = [state.walk.X, state.walk.Y, state.eyeOffset], d = [dX, dY, dy];
+  const hit = b => { let t0 = 0, t1 = 6; for (let k = 0; k < 3; k++) { if (Math.abs(d[k]) < 1e-9) { if (o[k] < b[k] || o[k] > b[k + 3]) return Infinity; continue; } let a = (b[k] - o[k]) / d[k], c = (b[k + 3] - o[k]) / d[k]; if (a > c) [a, c] = [c, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return Infinity; } return t0; };
+  const T = [], W = UNIT_W;
+  for (const [id, D] of Object.entries(DOORS)) if ((W.d[id] || 'none') !== 'none' && !(id === 'br3' && !W.br3)) T.push([id, D.ax === 'x' ? [D.a0, 0, D.g - 0.12, D.a1, 2.1, D.g + 0.12] : [D.g - 0.12, 0, D.a0, D.g + 0.12, 2.1, D.a1]]);
+  if (W.kit) T.push(['kit', [7.18, 0, 6.3, 9.2, 2.1, 6.48]]);
+  T.push(['main', [9.86, 0, 7.46, 11.1, 2.1, 7.74]], ['main', [9.86, 0, 6.26, 9.95, 2.1, 7.46]], ['hs', [11.26, 0, 5.79, 11.58, 2.0, 6.57]]);
+  for (const q of doorParts()) if (q.did) { const xs = q.p.map(v => v[0]), ys = q.p.map(v => v[1]); T.push([q.did, [Math.min(...xs), q.z0, Math.min(...ys), Math.max(...xs), q.z1, Math.max(...ys)]]); }
+  let best = null, bt = Infinity; for (const [id, b] of T) { const t = hit([b[0], b[2], b[1], b[3], b[5], b[4]]); if (t < bt) { bt = t; best = id; } }
+  if (!best) return false;
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) if (!isDoorKind(kind) && hit([x0, y0, z0, x1, y1, z1]) < bt - 0.05) return false;
+  doorFlip(best); return true; }
 function handCycle() { HAND.m = (HAND.m + 1) % 3; const b = $('walkHand'); b.textContent = ['✋ Hand: off', '✋ Hand: on', '⚔ Lightsaber'][HAND.m]; b.style.borderColor = HAND.m ? '#34d399' : ''; b.style.color = HAND.m === 2 ? '#4ade80' : ''; b.setAttribute('aria-pressed', String(!!HAND.m)); renderView(); }
 $('walkHand').addEventListener('click', handCycle);
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
