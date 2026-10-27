@@ -67,6 +67,10 @@
     #roomHud { bottom: 60px !important; right: 10px !important; pointer-events: auto !important; cursor: pointer; }
     #walkMap { top: 46px !important; }
     #walkPad { bottom: 62px !important; }
+    .walk-joy { position: relative; width: 112px; height: 112px; border-radius: 50%; background: rgba(15,23,42,0.45); border: 2px solid rgba(148,163,184,0.55); touch-action: none; cursor: grab; }
+    .walk-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(226,232,240,0.8); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.4); pointer-events: none; }
+    .walk-joy.on .walk-knob { background: #6ee7b7; }
+    .walk-door { position: absolute; left: 118px; bottom: 0; font-size: 16px; width: 40px; height: 40px; }
     .hint { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,0.55); }
     .hint-card { max-width: 360px; background: #0f172a; border: 1px solid #334155; border-radius: 14px; padding: 16px 18px; font-size: 13px; line-height: 1.55; color: #cbd5e1; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
     .hint-card b { color: #f8fafc; }
@@ -112,7 +116,8 @@
       .ov-badge { font-size: 10px; padding: 5px 7px; }
       .ov-btn { font-size: 12px; padding: 5px 8px; }
       #walkMap { width: 120px !important; height: 88px !important; opacity: 0.85; }
-      #walkPad { grid-template-columns: repeat(3, 34px) !important; grid-template-rows: repeat(2, 34px) !important; opacity: 0.8; }
+      .walk-joy { width: 100px; height: 100px; } .walk-knob { width: 42px; height: 42px; margin: -21px 0 0 -21px; }
+      .walk-door { left: 106px; width: 36px; height: 36px; }
       .walking #roomHud { display: none !important; }
       .furn-ed { position: fixed; inset: 0; width: auto; z-index: 60; border-left: none; background: #0f172a; padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
       .furn-ed .fe-desk { display: none; }
@@ -169,9 +174,8 @@
 <canvas id="perspectiveCanvas" class="sim-canvas cursor-grab active:cursor-grabbing"></canvas>
 <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
 <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
-<div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
-<button id="walkHand" class="chip" style="font-size:16px" title="First-person hand: off / hand / green lightsaber (H)">✋</button><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
-<button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
+<div id="walkPad" class="absolute left-3 z-10" style="bottom:40px;display:none">
+<div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div><button id="walkDoor" class="chip walk-door" title="Open / close the door in front of you (E)">🚪</button>
 </div>
 <div id="furnEd" class="furn-ed" style="display:none">
 <div class="flex items-center gap-1 flex-wrap mb-1.5"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🛋 Layout</span>
@@ -194,7 +198,7 @@
         <div id="hint" class="hint" style="display:none"><div class="hint-card">
           <div class="text-[15px] font-bold text-white mb-2">The view from #134, 27th floor</div>
           <div>👆 <b>Drag</b> the view to look around (left/right turns, up/down tilts).</div>
-          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat: ▲▼◀▶ or W/A/S/D, ✋ hand, 🚪 doors.</div>
+          <div>🏠 <b>Room</b> (top right) picks a window, and 🚶 <b>Walk</b> lets you move through the flat: drag the joystick (bottom left) or W/A/S/D, drag the view to look, 🚪 doors.</div>
           <div>🛋 <b>Furnish</b> (Home panel) edits furniture, finishes, walls, doors and lights; 🚪 Room → Bedroom 2 has ideas for 2 beds.</div>
           <div>🕐 <b>Slide the time</b> at the bottom, and tap the date to change the day.</div>
           <div>☰ <b>Panels</b> (<span class="hint-where"></span>): View, Time, Future buildings, Sun &amp; light, Maps, Home.</div>
@@ -220,7 +224,7 @@
 <div class="flex items-center gap-2 mt-1"><button id="lensBtn" class="chip" title="Phone lens: 0.5× / 1× / 2× / 3× (13 / 26 / 52 / 77 mm equiv.)">1×</button><span id="lensBadge" class="text-[10px] mono text-sky-300"></span></div></div>
 <div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="labelsToggle" checked class="accent-sky-400">Landmark pins</label><button id="shotBtn" class="chip" title="Photo: re-render this view at 2× with soft shadows and save / share it as PNG">📷 Photo 2×</button><button id="liveBtn" class="chip" aria-pressed="false" title="Animate the scene: cars, ships, clouds, water sparkle and rain move. The clock does not advance.">▶ Animate</button></div>
 <details class="more" data-more="view"><summary></summary><div class="more-b">
-<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-ray new towers</label><button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button></div>
+<div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-300"><label class="flex items-center gap-1 cursor-pointer text-slate-300"><input type="checkbox" id="xrayToggle" class="accent-sky-400">X-ray new towers</label><button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button><button id="walkHand" class="chip" aria-pressed="false" title="First-person hand while walking: off / hand / green lightsaber (H)">✋ Hand: off</button></div>
 <div class="panel flex items-center gap-2 flex-wrap"><label class="flex items-center gap-1 text-[10px] text-slate-300"><input type="checkbox" id="facadeToggle" checked class="accent-emerald-500">Window limits</label>
 <div class="w-full flex items-center gap-2"><span class="text-[10px] text-slate-400 whitespace-nowrap">Stand-back from glass</span><input type="range" id="standSlider" min="0.1" max="3" step="0.1" value="0.5" aria-label="Stand-back distance"><span id="standVal" class="mono text-[10px] text-emerald-300 w-10 text-right"></span></div></div>
 </div></details>
@@ -1477,8 +1481,9 @@ function walkSet(X, Y) {
   const rm = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
-function walkStep(k) {
-  const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + (k === 'left' ? -90 : k === 'right' ? 90 : 0)) * DEG, sgn = k === 'back' ? -1 : 1, st = 0.15 * sgn;
+const walkStep = k => walkVec(k === 'left' ? -90 : k === 'right' ? 90 : 0, k === 'back' ? -0.15 : 0.15);
+function walkVec(off, st) {   // move st m along heading + off° (plan frame), sliding along walls
+  const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + off) * DEG;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk, esc = furnBlocks(X, Y);
   if (walkFree(X + dX, Y + dY, 0.2, esc)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y, 0.2, esc)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY, 0.2, esc)) walkSet(X, Y + dY);   // slide along walls
   const sp0 = sp.id; if (state.spot !== sp0) renderAll(); else { renderView(); drawWalkMap(); }
@@ -2795,9 +2800,17 @@ $('shotBtn').addEventListener('click', () => {   // 📷 Photo mode: re-render t
     if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } }, 'image/png');
 });
 $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; renderAll(); });
-document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop = () => { clearInterval(t); t = null; };
-  b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); });
+// Walk joystick: knob offset (≤ radius) → direction relative to heading + speed ≤ 1.4 m/s (dead zone 12%); one rAF loop while held
+{ const J = $('walkJoy'), K = $('walkKnob'), J0 = { id: null, v: [0, 0], raf: 0, t: 0 };
+  const set = e => { const b = J.getBoundingClientRect(), R = b.width / 2, dx = e.clientX - b.left - R, dy = e.clientY - b.top - R, m = Math.hypot(dx, dy), k = m > R ? R / m : 1;
+    J0.v = [dx * k / R, dy * k / R]; K.style.transform = `translate(${dx * k}px,${dy * k}px)`; };
+  const tick = t => { const dt = Math.min(0.1, (t - J0.t) / 1000), [x, y] = J0.v, m = Math.hypot(x, y); J0.t = t;
+    if (m > 0.12 && dt > 0) walkVec(Math.atan2(x, -y) / DEG, 1.4 * Math.min(1, (m - 0.12) / 0.8) * dt);
+    J0.raf = J0.id !== null ? requestAnimationFrame(tick) : 0; };
+  const end = e => { if (e.pointerId !== J0.id) return; J0.id = null; J0.v = [0, 0]; K.style.transform = ''; J.classList.remove('on'); };
+  J.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (J0.id !== null) return; J0.id = e.pointerId; J.setPointerCapture(e.pointerId); J.classList.add('on'); set(e); J0.t = performance.now(); if (!J0.raf) J0.raf = requestAnimationFrame(tick); });
+  J.addEventListener('pointermove', e => { if (e.pointerId === J0.id) { e.stopPropagation(); set(e); } });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => J.addEventListener(ev, end)); }
 $('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const k = 190 / ($('walkMap').getBoundingClientRect().width || 190), { x: x0, y: y0 } = localXY($('walkMap'), e), x = x0 * k, y = y0 * k, X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
 // Walk: open/close the internal door nearest in front of the eye (≤1.8 m; ahead weighted over behind); saved per door in the layout
 function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a = (state.heading - 350.3) * DEG, fx = -Math.sin(a), fy = Math.cos(a); let best = null, bs = 1e9;
@@ -2807,8 +2820,8 @@ function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a 
   const b = $('walkDoor'); if (!best) { b.style.borderColor = '#f87171'; setTimeout(() => { b.style.borderColor = ''; }, 500); return; }
   if (UNIT_W.dc[best]) delete UNIT_W.dc[best]; else UNIT_W.dc[best] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
 $('walkDoor').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); doorToggle(); });
-function handCycle() { HAND.m = (HAND.m + 1) % 3; const b = $('walkHand'); b.textContent = HAND.m === 2 ? '⚔' : '✋'; b.style.borderColor = HAND.m ? '#34d399' : ''; b.style.color = HAND.m === 2 ? '#4ade80' : ''; b.setAttribute('aria-pressed', String(!!HAND.m)); renderView(); }
-$('walkHand').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); handCycle(); });
+function handCycle() { HAND.m = (HAND.m + 1) % 3; const b = $('walkHand'); b.textContent = ['✋ Hand: off', '✋ Hand: on', '⚔ Lightsaber'][HAND.m]; b.style.borderColor = HAND.m ? '#34d399' : ''; b.style.color = HAND.m === 2 ? '#4ade80' : ''; b.setAttribute('aria-pressed', String(!!HAND.m)); renderView(); }
+$('walkHand').addEventListener('click', handCycle);
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   if (e.key === 'e' || e.key === 'E') { e.preventDefault(); doorToggle(); return; }
   if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
