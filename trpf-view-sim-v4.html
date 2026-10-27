@@ -96,7 +96,10 @@
     }
     /* Phone landscape (short screen): 3D pane fills the screen, ribbon = one scrollable row, overlays tighter */
     @media (max-height: 500px) {
-      .canvas-pane-bottom { height: calc(100svh - 4px); min-height: 220px; }
+      .canvas-pane-bottom { height: calc(100dvh - 4px); min-height: 220px; }
+      .view-max.app-shell { height: 100dvh; }
+      .view-max:not(.ribbon-open) .middle-ribbon { display: none; }
+      .view-max #ribbonBtn { display: inline-block !important; }
       .canvas-pane-top { height: 200px; }
       .middle-ribbon { flex-wrap: wrap; padding: 3px 8px; gap: 2px 8px; }
       .middle-ribbon > div:not(#roomBar) { flex: 1 1 0 !important; min-width: 0 !important; gap: 4px; }
@@ -210,6 +213,7 @@
             <button id="expoBtn" class="chip" aria-pressed="false" title="Eye/phone exposure from inside the room: bright outside slightly washed, room slightly darker">◐ Exposure</button>
             <button id="liveBtn" class="chip" aria-pressed="false" title="Live: traffic, ships, clouds, glitter and rain move (time of day not advanced)">▶ Live</button>
             <button id="shotBtn" class="chip" title="Save / share this 3D view as PNG">📷</button>
+            <button id="ribbonBtn" class="chip keep" style="display:none" aria-pressed="false" title="Show / hide the room bar and sliders (phone landscape, Expand)">🎚</button>
             <button id="expandBtn" class="chip keep text-emerald-300" aria-pressed="false">⤢ Expand</button>
           </div>
         </div>
@@ -2544,6 +2548,7 @@ function setExpanded(on) {
   const b = $('expandBtn'); b.textContent = on ? '⤡ Collapse' : '⤢ Expand'; b.setAttribute('aria-pressed', String(on));
   requestAnimationFrame(resizeCanvases);
 }
+$('ribbonBtn').addEventListener('click', () => { const o = document.querySelector('.app-shell').classList.toggle('ribbon-open'); $('ribbonBtn').setAttribute('aria-pressed', String(o)); $('ribbonBtn').style.borderColor = o ? '#34d399' : ''; requestAnimationFrame(resizeCanvases); });
 $('expandBtn').addEventListener('click', () => setExpanded(!document.querySelector('.app-shell').classList.contains('view-max')));
 $('walkBtn').addEventListener('click', () => setWalk(!state.walk));
 const LENS = [13, 26, 52, 77], LENS_LABEL = { 13: '0.5×', 26: '1×', 52: '2×', 77: '3×' };
