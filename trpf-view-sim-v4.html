@@ -182,9 +182,9 @@
 <div id="feOwRow" class="flex items-center gap-1 mb-1.5 flex-wrap" style="display:none"><span class="text-[11px] text-slate-300">Overwrite</span><select id="feOwSel" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout to overwrite"></select><button id="feOwGo" class="chip text-amber-300">💾 Overwrite</button><button id="feOwX" class="chip">Cancel</button></div>
 <div id="feSaved" class="text-[10px] text-slate-500 mb-1"></div>
 <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
-<canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none"></canvas>
+<div style="position:relative"><canvas id="fePlan" class="w-full rounded border border-slate-800" style="touch-action:none;display:block"></canvas><div style="position:absolute;right:4px;top:4px;display:flex;gap:3px"><button class="chip" data-fz="1.5" title="Zoom in (pinch / wheel)">＋</button><button class="chip" data-fz="0.667" title="Zoom out">−</button><button class="chip" data-fz="0" title="Whole flat">⤢</button></div></div>
 <div id="feTabFin" style="display:none"></div><div id="feTabWalls" style="display:none"></div><div id="feTabLt" style="display:none"></div>
-<div id="feTabFurn"><div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div>
+<div id="feTabFurn"><div class="flex items-center gap-1 mt-1.5"><select id="feCat" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Item"></select><button id="feAdd" class="chip text-amber-300">＋ Add</button></div><label class="flex items-center gap-1 mt-1 text-[10px] text-slate-400"><input type="checkbox" id="feCol" class="accent-amber-400" style="flex:0 0 auto;width:13px;height:13px" checked>Stop at walls, fittings &amp; furniture (red outline = overlapping)</label>
 <div class="flex items-center gap-1 mt-1.5 text-[11px] text-slate-300"><span class="text-amber-300">Kitchen</span><select id="feKit" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Kitchen counter"></select><label class="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" id="feKitTop" class="accent-amber-400">Top cabinets</label></div>
 <div id="feSel" class="panel mt-1.5"></div></div>
 <div id="feMsg" class="text-[10px] text-emerald-300 mt-1 min-h-[12px]"></div>
@@ -1628,7 +1628,7 @@ const FURN_SAMPLE = () => [
   furnNew('lamp', 12.6, 4.25), furnNew('fcu', 12.735, 2.8, 90), furnNew('fan', 11.1, 3.0), furnNew('shoe', 11.125, 7.0, 90), furnNew('din4', 8.0, 4.85),
   furnNew('bedQ', 1.335, 2.4, 270), furnNew('bedside', 0.53, 1.375, 270), furnNew('bedside', 0.53, 3.425, 270), furnNew('robe', 1.1, 4.18, 180), furnNew('fcu', 0.435, 2.4, 270),
   furnNew('bedSS', 4.335, 1.95, 270), furnNew('robe', 3.85, 3.03, 180, { w: 1.0 }), furnNew('desk', 5.9, 0.75, 90), furnNew('chair', 5.3, 0.75, 270),
-  furnNew('bedSS', 8.265, 1.95, 90), furnNew('robe', 8.7, 3.03, 180, { w: 1.0 }), furnNew('desk', 6.6, 0.75, 270), furnNew('chair', 7.2, 0.75, 90),
+  furnNew('bedSS', 8.17, 1.95, 90), furnNew('robe', 8.7, 3.03, 180, { w: 1.0 }), furnNew('desk', 6.6, 0.75, 270), furnNew('chair', 7.2, 0.75, 90),
   furnNew('fridge', 8.85, 6.8, 90), furnNew('washer', 6.1, 8.38, 180)];
 // Bathrooms (owner 2026-10-27; fixed, no OCS): WC + HDB-style wall-hung basin + mirror at the 4-Room Type 1 plan positions, fixed glass shower panel by the floor trap
 // at the far end of each bath (positions/sizes estimates). Kitchen: counter config per layout (FURN.kit.c), wall cabinets toggle (FURN.kit.top) with built-in hood, else chimney hood.
@@ -1786,7 +1786,7 @@ function cvParts() {   // curtains / blinds per window at the inner face (rail 0
   return P; }
 const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), lt: LT_DEF(), cv: CV_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv; if (FIX_CACHE.key !== key) FIX_CACHE = { key, P: [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit), ...doorParts(), ...ltCached().P, ...cvParts()] }; return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts()] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
@@ -1799,6 +1799,43 @@ function furnBlocks(X, Y, r = 0.2) {
   if (furnFixed().some(q => { if (q.z0 >= 1.2 || q.z1 - q.z0 < 0.05) return false; let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, y] of q.p) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return X > a - r && X < c + r && Y > b - r && Y < d + r; })) return true;   // WC, basin, shower glass, counters
   return FURN.items.some(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return false; const [lx, ly] = furnLocal(it, X, Y), [a, b, c, d] = it._ext || (it._ext = furnExt(it)); return lx > a - r && lx < c + r && ly > b - r && ly < d + r; });
 }
+// Furnish collisions (owner 2026-10-27 "space and object aware"): an item's parts vs wall boxes (not ext/stair/doors), fixed fittings
+// (bath, shelter, kitchen; `FIX_CACHE.col`) and other items' parts: plan SAT, > 15 mm overlap (contact/flush passes), only where z ranges overlap (chair seat under a
+// desk top, lamp shade over a sofa arm, TV above the console all pass); rugs (< 5 cm) only meet walls; every vertex inside the unit outline.
+const FC = { W: null, F: null, O: [] }, fcOn = () => UI.fcol !== false;
+const polyBB = p => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, y] of p) { if (x < a) a = x; if (y < b) b = y; if (x > c) c = x; if (y > d) d = y; } return [a, b, c, d]; };
+const sepAx = (p, q) => { for (const P of [p, q]) for (let i = 0, n = P.length; i < n; i++) { const [x0, y0] = P[i], [x1, y1] = P[(i + 1) % n], nx = y0 - y1, ny = x1 - x0, L = Math.hypot(nx, ny); if (L < 1e-6) continue;
+  let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (const [x, y] of p) { const v = (x * nx + y * ny) / L; if (v < a) a = v; if (v > b) b = v; } for (const [x, y] of q) { const v = (x * nx + y * ny) / L; if (v < c) c = v; if (v > d) d = v; }
+  if (b - c < 0.015 || d - a < 0.015) return true; } return false; };
+const bbHit = (A, B, m = 0.015) => A[0] < B[2] - m && B[0] < A[2] - m && A[1] < B[3] - m && B[1] < A[3] - m;
+const clashP = (a, b) => a.z0 < b.z1 - 0.01 && b.z0 < a.z1 - 0.01 && bbHit(a.bb, b.bb) && !sepAx(a.p, b.p);
+const colPart = q => ({ p: q.p, bb: polyBB(q.p), z0: q.z0, z1: q.z1 });
+function furnObs() { const W = unitWalls(); furnFixed(); const F = FIX_CACHE.col;
+  if (FC.W !== W || FC.F !== F) { FC.W = W; FC.F = F; FC.O = [...W.filter(w => !isExtKind(w[6]) && !isDoorKind(w[6]) && w[6] !== 'stair').map(([x0, y0, x1, y1, z0 = 0, z1 = UNIT_H]) => colPart({ p: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z0, z1 })), ...F.filter(q => q.z1 - q.z0 >= 0.005).map(colPart)]; }
+  return FC.O; }
+const furnWP = (it, x = it.x, y = it.y, r = it.r) => { const A = furnParts({ ...it, x, y, r }).filter(q => q.z1 - q.z0 >= 0.005).map(colPart); A.bb = polyBB(A.flatMap(a => [[a.bb[0], a.bb[1]], [a.bb[2], a.bb[3]]])); return A; };
+function furnClash(i, x, y, r) {   // item i placed at (x, y, r) overlaps something?
+  const it = FURN.items[i], A = furnWP(it, x, y, r); if (!A.length) return false;
+  for (const a of A) { const n = a.p.length, cx = a.p.reduce((v, q) => v + q[0], 0) / n, cy = a.p.reduce((v, q) => v + q[1], 0) / n; for (const [X, Y] of a.p) { const L = Math.hypot(X - cx, Y - cy), k = L > 0.03 ? 0.015 / L : 0; if (!ringIn(walkRing, X + (cx - X) * k, Y + (cy - Y) * k)) return true; } }
+  for (const b of furnObs()) if (bbHit(A.bb, b.bb)) for (const a of A) if (clashP(a, b)) return true;
+  if (it.h < 0.05) return false;
+  for (let j = 0; j < FURN.items.length; j++) { const o = FURN.items[j]; if (j === i || o.h < 0.05) continue; const k = [o.t, o.x, o.y, o.r, o.w, o.d, o.h, o.e, o.o].join();
+    if (o._wpk !== k) { o._wpk = k; o._wp = furnWP(o); } const B = o._wp; if (!B.length || !bbHit(A.bb, B.bb)) continue;
+    for (const a of A) for (const b of B) if (clashP(a, b)) return true; }
+  return false; }
+function furnMoveTo(i, tx, ty) {   // ≤1 cm steps toward the target, sliding along whatever it meets; an item already overlapping moves freely until clear
+  const it = FURN.items[i]; it._ext = null; if (!fcOn() || furnClash(i, it.x, it.y, it.r)) { it.x = tx; it.y = ty; return; }
+  let x = it.x, y = it.y; const n = Math.min(2000, Math.ceil(Math.hypot(tx - x, ty - y) / 0.01));
+  for (let k = 0; k < n; k++) { const dx = (tx - x) / (n - k), dy = (ty - y) / (n - k);
+    if (!furnClash(i, x + dx, y + dy, it.r)) { x += dx; y += dy; } else if (Math.abs(dx) > 1e-6 && !furnClash(i, x + dx, y, it.r)) x += dx; else if (Math.abs(dy) > 1e-6 && !furnClash(i, x, y + dy, it.r)) y += dy; else break; }
+  it.x = Math.round(x * 1000) / 1000; it.y = Math.round(y * 1000) / 1000; }
+function furnFree(i, R = 2, st = 0.05) {   // nudge item i to the nearest spot (≤ R m) where it fits; false = none
+  const it = FURN.items[i], x0 = it.x, y0 = it.y; it._ext = null; if (!fcOn() || !furnClash(i, x0, y0, it.r)) return true;
+  for (let rr = st; rr <= R + 1e-9; rr += st) { const n = Math.max(8, Math.round(2 * Math.PI * rr / st)); for (let k = 0; k < n; k++) { const a = k / n * 2 * Math.PI, x = Math.round((x0 + rr * Math.cos(a)) * 1000) / 1000, y = Math.round((y0 + rr * Math.sin(a)) * 1000) / 1000; if (!furnClash(i, x, y, it.r)) { it.x = x; it.y = y; return true; } } }
+  return false; }
+function furnRotate(i, r) {   // turn in place, else at the nearest spot ≤ 0.4 m where it fits, else refuse
+  const it = FURN.items[i], o = [it.x, it.y, it.r], was = fcOn() && furnClash(i, it.x, it.y, it.r); it.r = norm360(r); it._ext = null; if (was || furnFree(i, 0.4, 0.02)) return true;
+  [it.x, it.y, it.r] = o; it._ext = null; const m = $('feMsg'); if (m) { m.textContent = 'No room to turn it here: move it clear first.'; setTimeout(() => { m.textContent = ''; }, 3000); } return false; }
 // Sofa posture with Room interior: eye on the first sofa placed in the living/dining area (seat centre, facing its front) instead of 3.5 m back from the window
 function furnSofaSeat() {
   const it = FURN.items.find(q => FURN_CAT[q.t] && FURN_CAT[q.t].seat && UNIT_ROOMS.some(([id, [x0, y0, x1, y1]]) => id === 'living' && q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1)); if (!it) return null;
@@ -1864,7 +1901,10 @@ function furnInit() {
   window.addEventListener('hashchange', furnFromHash);   // link opened in an already-open tab
 }
 /* ---- editor UI: top-down plan (drag = move, tap = select), add from catalogue, size/height/colour/rotation per item; desktop docked right of the 3D view, phone full-screen ---- */
-const FE = { s: 26, ox: -0.3, oy: -0.4, drag: null, tab: 'furn', room: 'living' };
+const FE = { s: 26, s0: 26, z: 1, ox: -0.3, oy: -0.4, drag: null, pan: null, pinch: null, tab: 'furn', room: 'living' };
+const feClamp = () => { const m = 0.3, vw = 13.7 / FE.z, vh = 9.6 / FE.z; FE.ox = clamp(FE.ox, -0.3 - (FE.z > 1 ? m : 0), -0.3 + 13.7 - vw + (FE.z > 1 ? m : 0)); FE.oy = clamp(FE.oy, -0.4 - (FE.z > 1 ? m : 0), -0.4 + 9.6 - vh + (FE.z > 1 ? m : 0)); };
+function feZoom(px, py, f) {   // zoom the plan about canvas point (px, py), 1×–6×
+  const X = px / FE.s + FE.ox, Y = py / FE.s + FE.oy; FE.z = clamp(FE.z * f, 1, 6); FE.s = FE.s0 * FE.z; FE.ox = X - px / FE.s; FE.oy = Y - py / FE.s; feClamp(); furnDrawPlan(); }
 function furnLayoutSel() {
   const sel = $('feLayout'); if (!sel) return; const names = [...Object.keys(FURN_BUILTIN), ...Object.keys(FURN.saved).filter(n => !FURN_BUILTIN[n])];
   sel.innerHTML = names.map(n => `<option${n === FURN.name ? ' selected' : ''}>${n.replace(/</g, '&lt;')}</option>`).join(''); $('feDel').disabled = !!FURN_BUILTIN[FURN.name];
@@ -1891,7 +1931,7 @@ function furnSelUI() {
     <div class="text-[9px] text-slate-500 mt-1">X ${it.x.toFixed(2)} m · Y ${it.y.toFixed(2)} m from the master-bedroom facade corner</div>`;
 }
 function furnDrawPlan() {
-  const cv = $('fePlan'); if (!cv || !FURN.open) return; const cw = cv.clientWidth || 320, dpr = window.devicePixelRatio || 1; FE.s = cw / 13.7; const ch = Math.round(9.6 * FE.s);
+  const cv = $('fePlan'); if (!cv || !FURN.open) return; const cw = cv.clientWidth || 320, dpr = window.devicePixelRatio || 1; FE.s0 = cw / 13.7; FE.s = FE.s0 * FE.z; feClamp(); const ch = Math.round(9.6 * FE.s0);
   if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); cv.style.height = `${ch}px`; }
   const g = cv.getContext('2d'), P = (X, Y) => [(X - FE.ox) * FE.s, (Y - FE.oy) * FE.s]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#0b1220'; g.fillRect(0, 0, cw, ch);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = '#1e293b'; g.fill();
@@ -1902,14 +1942,14 @@ function furnDrawPlan() {
   [['Master', 1.75, 0.7], ['Bedroom 2', 4.75, 0.7], ['Bedroom 3', 7.8, 0.7], ['Living', 11.1, 2.15], ['Dining', 8.0, 3.85], ['Kitchen', 8.2, 7.6], ['Yard', 6.4, 7.6], ['Bath', 3.1, 5.4], ['WC', 5.25, 5.4], ['Shelter', 12.2, 6.3]].forEach(([t, X, Y]) => { const [x, y] = P(X, Y); g.fillText(t, x, y); });
   for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'doorOpen') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
   for (const q of [...furnFixed()].sort((p, q) => p.z1 - q.z1)) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = (q.glass || q.frost) ? 0.8 : q.z0 >= 1.2 ? 0.25 : 0.75; g.fillStyle = (q.glass || q.frost) ? '#7dd3fc' : q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = 'rgba(15,23,42,0.5)'; g.lineWidth = 0.5; g.stroke(); }   // fixed: bath fittings, kitchen
-  FURN.items.forEach((it, i) => { const parts = furnParts(it).sort((p, q) => p.z1 - q.z1), on = i === FURN.sel, wall = (it.e || 0) >= 1.2;
-    for (const q of parts) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = wall ? 0.45 : 0.9; g.fillStyle = q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = on ? '#fbbf24' : 'rgba(15,23,42,0.55)'; g.lineWidth = on ? 1.4 : 0.6; g.stroke(); }
+  const col = fcOn(); FURN.items.forEach((it, i) => { const parts = furnParts(it).sort((p, q) => p.z1 - q.z1), on = i === FURN.sel, wall = (it.e || 0) >= 1.2, bad = col && furnClash(i, it.x, it.y, it.r);
+    for (const q of parts) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = wall ? 0.45 : 0.9; g.fillStyle = q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = bad ? '#f43f5e' : on ? '#fbbf24' : 'rgba(15,23,42,0.55)'; g.lineWidth = on || bad ? 1.4 : 0.6; g.stroke(); }
     const [x, y] = P(it.x, it.y), f = [-Math.sin(it.r * DEG), Math.cos(it.r * DEG)]; if (on) { g.strokeStyle = '#fbbf24'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + f[0] * 12, y + f[1] * 12); g.stroke(); } });
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (S && state.showBalcony) {   // current eye + view direction
     const ss = state.posture === 'sofa' && !state.walk && furnSofaSeat(), [X, Y] = state.walk ? [state.walk.X, state.walk.Y] : ss ? [ss.X, ss.Y] : spotEyeP(S, Math.max(0.1, state.standDist)), [x, y] = P(X, Y), nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h);
     const dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), a0 = Math.atan2(dY, dX), fov = Math.atan(SENSOR_W / 2 / state.focalLength);
     g.beginPath(); g.moveTo(x, y); g.arc(x, y, 26, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.22)'; g.fill(); g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); }
-  g.fillStyle = '#94a3b8'; g.textAlign = 'left'; g.fillText('S ▲ windows', 4, 11); const [m0] = P(0, 0), [m1] = P(1, 0); g.fillRect(cw - 12 - (m1 - m0), ch - 8, m1 - m0, 2); g.textAlign = 'right'; g.fillText('1 m', cw - 12, ch - 12);
+  g.fillStyle = '#94a3b8'; g.textAlign = 'left'; g.fillText('S ▲ windows', 4, 11); if (FE.z > 1.01) g.fillText(`${FE.z.toFixed(1)}×`, 4, ch - 6); const [m0] = P(0, 0), [m1] = P(1, 0); g.fillRect(cw - 12 - (m1 - m0), ch - 8, m1 - m0, 2); g.textAlign = 'right'; g.fillText('1 m', cw - 12, ch - 12);
 }
 function finUI() {   // Finishes tab: room picker (or tap the plan), floor tiles, paint + accent wall, wall tiles + feature, kitchen cabinets; ★ saves a colour to every room's swatch row
   const box = $('feTabFin'); if (!box || FE.tab !== 'fin') return; const F = FURN.fin, r = FE.room, T = F.tile[r];
@@ -1995,25 +2035,39 @@ function furnBindUI() {
   $('feShare').addEventListener('click', async () => { const url = furnLink(), msg = t => { $('feMsg').textContent = t; setTimeout(() => { $('feMsg').textContent = ''; }, 3500); };
     if (navigator.share && matchMedia('(pointer: coarse)').matches) { try { await navigator.share({ title: `#134 layout: ${FURN.name}`, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
     try { await navigator.clipboard.writeText(url); msg('Link copied: open it on another device to load this layout.'); } catch (e) { prompt('Copy this link:', url); } });
-  $('feAdd').addEventListener('click', () => { const t = $('feCat').value, [x, y] = furnRoomCentre(t); FURN.items.push(furnNew(t, x, y)); FURN.sel = FURN.items.length - 1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); });
+  $('feAdd').addEventListener('click', () => { const t = $('feCat').value, [x, y] = furnRoomCentre(t); FURN.items.push(furnNew(t, x, y)); FURN.sel = FURN.items.length - 1; furnFree(FURN.sel); furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); });
   const box = $('feSel');
   box.addEventListener('input', e => { const k = e.target.dataset.k; if (k) { const v = parseFloat(e.target.value); if (!isFinite(v)) return; furnEdit(it => { it[k] = k === 'r' ? v : Math.max(k === 'e' ? 0 : 0.01, v / 100); }); }
     else if (e.target.id === 'feCol') furnEdit(it => { it.c = e.target.value; }); else if (e.target.id === 'feName') furnEdit(it => { it.n = e.target.value.slice(0, 30); }); });
   box.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const a = b.dataset.a;
     if (b.dataset.c) furnEdit(it => { it.c = b.dataset.c; }, true);
     else if (a === 'del') { FURN.items.splice(FURN.sel, 1); FURN.sel = -1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); }
-    else if (a === 'dup') { const it = FURN.items[FURN.sel]; FURN.items.push({ ...furnPlain(it), x: it.x + 0.3, y: it.y + 0.3 }); FURN.sel = FURN.items.length - 1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); }
+    else if (a === 'dup') { const it = FURN.items[FURN.sel]; FURN.items.push({ ...furnPlain(it), x: it.x + 0.3, y: it.y + 0.3 }); FURN.sel = FURN.items.length - 1; furnFree(FURN.sel); furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); }
     else if (a === 'opt') furnEdit(it => { it.o = it.o ? 0 : 1; }, true);
-    else if (a && a[0] === 'r') furnEdit(it => { it.r = norm360(it.r + parseFloat(a.slice(1))); }, true); });
+    else if (a && a[0] === 'r') furnEdit(it => furnRotate(FURN.sel, it.r + parseFloat(a.slice(1))), true); });
   const cv = $('fePlan'), XY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / FE.s + FE.ox, (e.clientY - r.top) / FE.s + FE.oy]; };
-  cv.addEventListener('pointerdown', e => { const [X, Y] = XY(e); if (FE.tab !== 'furn') { const z = FE.tab === 'fin' && finZone(X, Y); if (z) { FE.room = z; finUI(); furnDrawPlan(); } return; } const i = furnHit(X, Y); furnPick(i); if (i >= 0) { const it = FURN.items[i]; FE.drag = { dx: it.x - X, dy: it.y - Y, moved: false }; cv.setPointerCapture(e.pointerId); } });
-  cv.addEventListener('pointermove', e => { if (!FE.drag) return; const [X, Y] = XY(e), it = FURN.items[FURN.sel], sn = v => Math.round(v * 20) / 20;
-    it.x = clamp(sn(X + FE.drag.dx), -0.5, 14); it.y = clamp(sn(Y + FE.drag.dy), -0.5, 9.5); FE.drag.moved = true; FURN.ver++; it._ext = null; furnDrawPlan(); renderView(); });
-  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (FE.drag && FE.drag.moved) { furnChanged(); furnSelUI(); } FE.drag = null; }));
+  const PT = new Map(), cxy = (x, y) => { const r = cv.getBoundingClientRect(); return [x - r.left, y - r.top]; }, pin2 = () => { const [a, b] = [...PT.values()]; return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; };
+  const dragEnd = () => { if (FE.drag && FE.drag.moved) { furnChanged(); furnSelUI(); } FE.drag = null; };
+  cv.addEventListener('pointerdown', e => { PT.set(e.pointerId, [e.clientX, e.clientY]); try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    if (PT.size === 2) { dragEnd(); FE.pan = null; FE.pinch = pin2(); return; } if (PT.size > 2) return;   // two fingers: pinch zoom + pan
+    const [X, Y] = XY(e), i = FE.tab === 'furn' ? furnHit(X, Y) : -1;
+    if (i >= 0) { furnPick(i); const it = FURN.items[i]; FE.drag = { dx: it.x - X, dy: it.y - Y, moved: false }; }
+    else FE.pan = { x: e.clientX, y: e.clientY, ox: FE.ox, oy: FE.oy, X, Y, moved: false }; });   // empty space: pan (zoomed), tap = deselect / pick room
+  cv.addEventListener('pointermove', e => { if (!PT.has(e.pointerId)) return; PT.set(e.pointerId, [e.clientX, e.clientY]);
+    if (FE.pinch && PT.size >= 2) { const q = pin2(), [px, py] = cxy(...q.m), [qx, qy] = cxy(...FE.pinch.m); FE.ox -= (px - qx) / FE.s; FE.oy -= (py - qy) / FE.s; const d0 = FE.pinch.d; FE.pinch = q; feZoom(px, py, q.d / d0); return; }
+    if (FE.pan) { const dx = e.clientX - FE.pan.x, dy = e.clientY - FE.pan.y; if (!FE.pan.moved && Math.hypot(dx, dy) < 5) return; FE.pan.moved = true; FE.ox = FE.pan.ox - dx / FE.s; FE.oy = FE.pan.oy - dy / FE.s; feClamp(); furnDrawPlan(); return; }
+    if (!FE.drag) return; const [X, Y] = XY(e), it = FURN.items[FURN.sel], sn = v => Math.round(v * 20) / 20; if (!it) return;
+    furnMoveTo(FURN.sel, clamp(sn(X + FE.drag.dx), -0.5, 14), clamp(sn(Y + FE.drag.dy), -0.5, 9.5)); FE.drag.moved = true; FURN.ver++; furnDrawPlan(); renderView(); });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, e => { PT.delete(e.pointerId); if (FE.pinch) { if (PT.size < 2) FE.pinch = null; return; }
+    if (FE.pan && !FE.pan.moved && t === 'pointerup') { const { X, Y } = FE.pan; if (FE.tab === 'fin') { const z = finZone(X, Y); if (z) { FE.room = z; finUI(); furnDrawPlan(); } } else if (FE.tab === 'furn') furnPick(-1); }
+    FE.pan = null; dragEnd(); }));
+  cv.addEventListener('wheel', e => { e.preventDefault(); const [px, py] = cxy(e.clientX, e.clientY); feZoom(px, py, Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015))); }, { passive: false });
+  document.querySelectorAll('[data-fz]').forEach(b => b.addEventListener('click', () => { const f = parseFloat(b.dataset.fz); if (!f) { FE.z = 1; FE.ox = -0.3; FE.oy = -0.4; furnDrawPlan(); } else feZoom(cv.clientWidth / 2, cv.clientHeight / 2, f); }));
+  $('feCol').checked = fcOn(); $('feCol').addEventListener('change', e => { UI.fcol = e.target.checked; uiSave(); furnDrawPlan(); });
   window.addEventListener('keydown', e => { if (!FURN.open || FURN.sel < 0 || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return; const st = e.shiftKey ? 0.01 : 0.05;
     const mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
-    if (mv) { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => { it.x += mv[0]; it.y += mv[1]; }, true); }
-    else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => { it.r = norm360(it.r + (e.shiftKey ? -90 : 90)); }, true); }
+    if (mv) { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => furnMoveTo(FURN.sel, it.x + mv[0], it.y + mv[1]), true); }
+    else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); e.stopImmediatePropagation(); furnEdit(it => furnRotate(FURN.sel, it.r + (e.shiftKey ? -90 : 90)), true); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); FURN.items.splice(FURN.sel, 1); FURN.sel = -1; furnChanged(); furnSelUI(); furnDrawPlan(); renderView(); } }, true);
 }
 let lastMath = null;
