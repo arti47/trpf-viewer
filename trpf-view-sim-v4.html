@@ -204,7 +204,7 @@
         <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
         <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
         <div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
-          <span></span><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
+          <button id="walkHand" class="chip" style="font-size:16px" title="First-person hand: off / hand / green lightsaber (H)">✋</button><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
           <button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
         </div>
         <div id="furnEd" class="furn-ed" style="display:none">
@@ -2291,14 +2291,16 @@ function gpuRenderInterior(cam, env, kIn) {
   const LS = ltState(), lit0 = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
   gpuCam(M, cam, 0.02, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, (0.12 + (lit0 - 0.12) * LS.kCov) * kIn); gl.uniform1f(M.u.uEmis, LS.on ? 1.35 : clamp(lit0 * kIn, 0.45, 0.95));
   gl.uniform2f(M.u.uPO, ...Wm.o); gl.uniform2f(M.u.uPU, ...Wm.u); gl.uniform2f(M.u.uPN, ...Wm.n); gl.uniform2f(M.u.uPP, ...Wm.p);
-  if (LS.on) { const Ls = ltCached().L, p4 = [], r4 = [], c3 = []; for (const l of Ls) { p4.push(...GPU.W(l.p[0], l.p[1], l.p[2]), l.I); r4.push(...l.r); c3.push(...l.c); }   // room lights (shader, clipped per room)
-    gl.uniform1i(M.u.uNL, Ls.length); if (Ls.length) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } } else gl.uniform1i(M.u.uNL, 0);
+  const HV = state.walk && HAND.m ? handGeo(cam) : null, Ls = (LS.on ? ltCached().L : []).slice(0, HV && HV.light ? 27 : 28), p4 = [], r4 = [], c3 = [];
+  for (const l of Ls) { p4.push(...GPU.W(l.p[0], l.p[1], l.p[2]), l.I); r4.push(...l.r); c3.push(...l.c); }   // room lights (shader, clipped per room)
+  if (HV && HV.light) { p4.push(...HV.light, 0.35 * (1.15 - lit0)); r4.push(-99, -99, 99, 99); c3.push(0.3, 1, 0.4); }   // saber glow on the room
+  const nl = p4.length / 4; gl.uniform1i(M.u.uNL, nl); if (nl) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } if (HV) HV.nl = nl;
   if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
   gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
   if (GPU.sheerN) { const k = clamp((0.12 + (lit0 - 0.12) * LS.kCov) * kIn + (LS.on ? 0.35 : 0), 0.25, 1) * 0.6; gl.uniform4f(F.u.uColor, 0.97 * k, 0.96 * k, 0.93 * k, 0.6); gpuAttrib(F, GPU.sheerBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.sheerN); }   // sheer curtains (premultiplied)
-  gl.depthMask(true); return true;
+  gl.depthMask(true); if (HV) gpuHand(HV); GPU.hv = HV; return true;
 }
 // Interior sun shadow map: unit walls, frames, ceilings, furniture seen from the sun (ortho ±12 m around the unit, ±30 m deep); re-rendered when the interior or the sun changes.
 function gpuShadowInterior() {
@@ -2309,6 +2311,57 @@ function gpuShadowInterior() {
   gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...L.r); gl.uniform3f(pr.u.uLu, ...L.u); gl.uniform3f(pr.u.uLf, ...L.f); gl.uniform2f(pr.u.uLs, 12, 30); gpuAttrib(pr, GPU.inBuf);
   for (const [a, b] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = 0.008; gl.uniform3f(pr.u.uLc, ...c.map((v, i) => v + (L.r[i] * a + L.u[i] * b) * k)); gl.drawArrays(gl.TRIANGLES, 0, GPU.inN); }   // casters dilated ±8 mm: closes pinholes where wall boxes only touch (light dots on walls)
   gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return true;
+}
+// First-person hand / lightsaber (owner 2026-10-27; walk mode only, visual only): viewmodel built in camera space each frame, drawn after the room with depth cleared at a
+// fixed 26 mm-equivalent FOV (independent of the lens chip), lit like the furniture (room lights, interior sun). Saber: emissive core + additive glow shells + 2D bloom, and a green point light on the room.
+const HAND = { m: 0, d: 0, X: null, Y: 0 };   // m 0 off / 1 hand / 2 saber; d = distance walked (bob)
+const vAdd = (...v) => v.reduce((a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]), vMul = (a, k) => [a[0] * k, a[1] * k, a[2] * k], vNorm = a => vMul(a, 1 / (Math.hypot(...a) || 1)), vCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function handGeo(cam) {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), R = [cy, 0, -sy], U = [-sp * sy, cp, -sp * cy], F = [cp * sy, sp, cp * cy];
+  const Wd = v => vAdd(vMul(R, v[0]), vMul(U, v[1]), vMul(F, v[2])), Wp = v => vAdd([cam.ex, cam.hEye, cam.ez], Wd(v)), L0 = vNorm([0.35, 0.8, -0.5]);
+  const S = Math.min(cam.w, cam.h * 1.4), f = (S / SENSOR_W) * 26, vm = { ...cam, fPx: f }, wk = state.walk;
+  if (HAND.X != null) HAND.d += Math.min(0.5, Math.hypot(wk.X - HAND.X, wk.Y - HAND.Y)); HAND.X = wk.X; HAND.Y = wk.Y;
+  const ph = (HAND.d * Math.PI) / 0.75, z0 = 0.45, sx = cam.w - 0.22 * S, sy2 = cam.h - (HAND.m === 2 ? 0.2 : 0.12) * S;
+  const G = vAdd([((sx - cam.w / 2) / f) * z0, (-(sy2 - cam.h / 2) / f) * z0, z0], [0.006 * Math.sin(ph), -0.008 * Math.abs(Math.cos(ph)), 0]), A = glArr();
+  const V = (p, n, c) => { const k = 0.72 + 0.3 * Math.max(0, n[0] * L0[0] + n[1] * L0[1] + n[2] * L0[2]); A.v(Wp(p), Wd(n), c.map(x => Math.min(1, x * k)), [0, 0, 0, 0]); };
+  const box = (C, ax, ay, az, col) => { for (const [a, b, c] of [[ax, ay, az], [vMul(ax, -1), az, ay], [ay, az, ax], [vMul(ay, -1), ax, az], [az, ax, ay], [vMul(az, -1), ay, ax]]) { const n = vNorm(a), o = vAdd(C, a);
+    const p = [vAdd(o, vMul(b, -1), vMul(c, -1)), vAdd(o, b, vMul(c, -1)), vAdd(o, b, c), vAdd(o, vMul(b, -1), c)]; [0, 1, 2, 0, 2, 3].forEach(i => V(p[i], n, col)); } };
+  const cyl = (p0, p1, r0, r1, col, seg = 10, cap = true) => { const a = vNorm(vAdd(p1, vMul(p0, -1))), t = Math.abs(a[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], b = vNorm(vCross(a, t)), c = vCross(a, b), ring = (p, r, i) => vAdd(p, vMul(b, r * Math.cos((i / seg) * 2 * Math.PI)), vMul(c, r * Math.sin((i / seg) * 2 * Math.PI)));
+    for (let i = 0; i < seg; i++) { const n0 = vNorm(ring([0, 0, 0], 1, i)), n1 = vNorm(ring([0, 0, 0], 1, i + 1)), q = [ring(p0, r0, i), ring(p0, r0, i + 1), ring(p1, r1, i + 1), ring(p1, r1, i)], nn = [n0, n1, n1, n0];
+      [0, 1, 2, 0, 2, 3].forEach(k => V(q[k], nn[k], col)); if (cap) { V(p1, a, col); V(q[3], a, col); V(q[2], a, col); V(p0, vMul(a, -1), col); V(q[1], vMul(a, -1), col); V(q[0], vMul(a, -1), col); } } };
+  const SK = [0.86, 0.66, 0.52], SK2 = [0.8, 0.6, 0.47], SL = [0.17, 0.22, 0.3], out = { vm, A, f, S };
+  if (HAND.m === 2) {   // saber: fist around the hilt, blade up-forward-left
+    const a = vNorm([-0.3, 0.8, 0.5]), b = vNorm(vCross(a, [0, 0, 1])), c = vCross(a, b), Wr = vAdd(G, vMul(b, 0.035), vMul(a, -0.05));
+    cyl(vAdd(G, vMul(a, -0.11)), vAdd(G, vMul(a, 0.13)), 0.017, 0.017, [0.6, 0.62, 0.64], 12); cyl(vAdd(G, vMul(a, -0.125)), vAdd(G, vMul(a, -0.11)), 0.02, 0.02, [0.15, 0.15, 0.16], 12);
+    cyl(vAdd(G, vMul(a, 0.13)), vAdd(G, vMul(a, 0.16)), 0.021, 0.019, [0.2, 0.2, 0.22], 12); box(vAdd(G, vMul(a, 0.09), vMul(c, -0.018)), vMul(a, 0.008), vMul(b, 0.005), vMul(c, 0.004), [0.75, 0.1, 0.08]);
+    [-0.085, -0.07].forEach(t => cyl(vAdd(G, vMul(a, t)), vAdd(G, vMul(a, t + 0.008)), 0.0185, 0.0185, [0.1, 0.1, 0.1], 12, false));
+    cyl(vAdd(G, vMul(b, 0.02), vMul(a, -0.047)), vAdd(G, vMul(b, 0.02), vMul(a, 0.047)), 0.034, 0.031, SK, 14);   // fist (back of the hand to the right)
+    for (let i = 0; i < 4; i++) { const t = 0.032 - i * 0.021, p = vAdd(G, vMul(a, t), vMul(b, -0.012)); cyl(vAdd(p, vMul(c, -0.03)), vAdd(p, vMul(c, 0.03)), 0.0105 - i * 0.0007, 0.0105 - i * 0.0007, i % 2 ? SK2 : SK, 8); }   // curled fingers wrapping the hilt
+    cyl(vAdd(G, vMul(b, 0.03), vMul(a, 0.035), vMul(c, -0.02)), vAdd(G, vMul(b, -0.005), vMul(a, 0.06), vMul(c, -0.028)), 0.011, 0.0095, SK2, 8);   // thumb over the top
+    const fa = vNorm([0.35, -0.7, -0.6]); cyl(Wr, vAdd(Wr, vMul(fa, 0.42)), 0.033, 0.045, SK, 12); cyl(vAdd(Wr, vMul(fa, 0.11)), vAdd(Wr, vMul(fa, 0.5)), 0.05, 0.06, SL, 12);
+    const B0 = vAdd(G, vMul(a, 0.16)), B1 = vAdd(B0, vMul(a, 0.95)), mid = vAdd(B0, vMul(a, 0.4)); Object.assign(out, { a, B0, B1, Bw: [Wp(B0), Wp(B1)], light: Wp(mid) });
+    const sh = []; for (const [r, k] of [[0.009, 0], [0.018, 0.5], [0.032, 0.2], [0.055, 0.07]]) { const g = glArr(), v0 = (p, c) => g.v(Wp(p), [0, 1, 0], c, [0, 0, 0, 0]);
+      const bb = vNorm(vCross(a, [0, 1, 0])), cc = vCross(a, bb); for (let i = 0; i < 14; i++) { const q = (j, s = 1) => vAdd(vMul(bb, r * s * Math.cos((j / 14) * 2 * Math.PI)), vMul(cc, r * s * Math.sin((j / 14) * 2 * Math.PI))), s0 = k ? 0.4 : 1, p = [vAdd(B0, q(i, s0)), vAdd(B0, q(i + 1, s0)), vAdd(B1, q(i + 1)), vAdd(B1, q(i))];   // glow shells taper into the emitter
+        [0, 1, 2, 0, 2, 3, 3, 2].forEach(j => v0(p[j], [0, 0, 0])); v0(vAdd(B1, vMul(a, r)), [0, 0, 0]); }   // + rounded-off tip
+      sh.push({ k, a: g.a.filter((_, i) => i % 13 < 3) }); } out.blade = sh;
+  } else {   // open hand reaching forward, back of the hand up-right
+    const h = vNorm([-0.3, 0.15, 1]), w0 = vNorm(vCross([0, 1, 0], h)), n0 = vCross(h, w0), ro = 35 * DEG, n = vAdd(vMul(n0, Math.cos(ro)), vMul(w0, Math.sin(ro))), w = vAdd(vMul(w0, Math.cos(ro)), vMul(n0, -Math.sin(ro)));
+    box(vAdd(G, vMul(h, 0.05)), vMul(h, 0.05), vMul(w, 0.042), vMul(n, 0.017), SK);
+    [[-0.03, 0.075], [-0.01, 0.085], [0.01, 0.08], [0.03, 0.064]].forEach(([o, l], i) => { const k0 = vAdd(G, vMul(h, 0.098), vMul(w, o)), d1 = vNorm(vAdd(h, vMul(n, -0.35))), d2 = vNorm(vAdd(h, vMul(n, -1))), k1 = vAdd(k0, vMul(d1, l * 0.55)), r = 0.0095 - i * 0.0006;
+      cyl(k0, k1, r, r * 0.95, SK, 8); cyl(k1, vAdd(k1, vMul(d2, l * 0.45)), r * 0.95, r * 0.85, SK2, 8); });
+    const t0 = vAdd(G, vMul(h, 0.025), vMul(w, -0.036), vMul(n, -0.006)), t1 = vAdd(t0, vMul(vNorm(vAdd(vMul(h, 0.6), vMul(w, -0.6), vMul(n, -0.3))), 0.045)); cyl(t0, t1, 0.012, 0.011, SK, 8); cyl(t1, vAdd(t1, vMul(vNorm(vAdd(h, vMul(w, -0.2), vMul(n, -0.25))), 0.035)), 0.011, 0.009, SK2, 8);
+    const fa = vNorm([0.3, -0.45, -0.85]); cyl(G, vAdd(G, vMul(fa, 0.42)), 0.032, 0.045, SK, 12); cyl(vAdd(G, vMul(fa, 0.12)), vAdd(G, vMul(fa, 0.5)), 0.05, 0.06, SL, 12); }
+  return out;
+}
+function gpuHand(HV) {   // after the room: depth cleared, hand (main program, room lighting uniforms still set), saber core + additive glow shells (flat program)
+  const gl = GPU.gl, M = GPU.main, F = GPU.flat; gl.clear(gl.DEPTH_BUFFER_BIT); gl.depthMask(true); gpuCam(M, HV.vm, 0.02, 10); gl.uniform1i(M.u.uNL, HV.nl); gpuAttrib(M, gpuDyn('hand', HV.A.a)); gl.drawArrays(gl.TRIANGLES, 0, HV.A.n);
+  if (!HV.blade) return; gpuCam(F, HV.vm, 0.02, 10); gl.uniform1f(F.u.uClip, 0); const fl = 0.93 + 0.07 * Math.sin(simT() * 37);
+  HV.blade.forEach(({ k, a }, i) => { if (i === 1) { gl.depthMask(false); gl.blendFunc(gl.ONE, gl.ONE); } gl.uniform4f(F.u.uColor, ...(i ? [0.12, 1, 0.2, k * fl] : [0.82, 1, 0.85, 1]));   /* premultiplied: alpha = k so the glow also shows over the transparent (sky) part of the canvas */ gpuAttrib(F, gpuDyn('blade' + i, a)); gl.drawArrays(gl.TRIANGLES, 0, a.length / 3); });
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true);
+}
+function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, additive)
+  const P = p => [HV.vm.w / 2 + (p[0] / p[2]) * HV.f, HV.vm.h / 2 - (p[1] / p[2]) * HV.f], a = P(HV.B0), b = P(HV.B1), r = (0.009 / HV.B0[2]) * HV.f;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (const [k, al] of [[14, 0.05], [8, 0.08], [4, 0.12]]) { ctx.strokeStyle = `rgba(40,255,80,${al})`; ctx.lineWidth = r * k; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); } ctx.restore();
 }
 function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr.length ? arr : [0]), gl.DYNAMIC_DRAW); return b; }
 // Per-frame moving / night items: ships (prisms) + wakes, cars (drawCars/deckCars via CAR_SINK), Flyer ring + capsules, night landmarks. Uploads dynamic buffers; returns counts.
@@ -2392,7 +2445,7 @@ function drawPerspective(m) {
     ctx.restore();
   }
   if (state.showBalcony && curSpot()) { if (gpu) { const X = exposureOf(env); if (X.wash > 0) { ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = `rgba(255,250,240,${X.wash.toFixed(3)})`; ctx.fillRect(0, 0, w, h); ctx.restore(); }   // exterior wash (room drawn over it)
-      if (gpuRenderInterior(cam, env, X.kIn)) ctx.drawImage(GPU.cv, 0, 0, w, h); } }
+      if (gpuRenderInterior(cam, env, X.kIn)) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); } } }
   else if (state.showBalcony) {
     const pw = Math.max(10, w * 0.015); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, pw, h); ctx.fillRect(w - pw, 0, pw, h);
     // W1 window: 550mm parapet, eye 1.55m above floor, standing 0.5m behind the glass → sight cut-off at −atan(1.0/0.5) ≈ −63.4°.
@@ -2506,8 +2559,11 @@ function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a 
   const b = $('walkDoor'); if (!best) { b.style.borderColor = '#f87171'; setTimeout(() => { b.style.borderColor = ''; }, 500); return; }
   if (UNIT_W.dc[best]) delete UNIT_W.dc[best]; else UNIT_W.dc[best] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
 $('walkDoor').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); doorToggle(); });
+function handCycle() { HAND.m = (HAND.m + 1) % 3; const b = $('walkHand'); b.textContent = HAND.m === 2 ? '⚔' : '✋'; b.style.borderColor = HAND.m ? '#34d399' : ''; b.style.color = HAND.m === 2 ? '#4ade80' : ''; b.setAttribute('aria-pressed', String(!!HAND.m)); renderView(); }
+$('walkHand').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); handCycle(); });
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   if (e.key === 'e' || e.key === 'E') { e.preventDefault(); doorToggle(); return; }
+  if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
   if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
