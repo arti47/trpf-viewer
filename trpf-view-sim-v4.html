@@ -178,6 +178,7 @@
 <select id="feLayout" style="min-width:120px" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout"></select>
 <button id="feOw" class="chip text-amber-300" title="Overwrite a saved layout with the current setup (furniture, finishes, walls/doors, lights, curtains)">💾 Save to…</button><button id="feSave" class="chip" title="Save as a new named layout">Save as…</button><button id="feDel" class="chip" title="Delete this layout">🗑</button>
 <button id="feShare" class="chip text-sky-300" title="Copy a link that loads this layout on another device">🔗 Share</button><button id="feExp" class="chip text-sky-300" title="Export all your layouts to a file (iPhone: Save to Files → iCloud Drive)">⬆ Export</button><button id="feImp" class="chip text-sky-300" title="Import layouts from an exported file">⬇ Import</button><input id="feImpFile" type="file" accept=".json,application/json,text/plain" style="display:none"><button id="feClose" class="chip text-emerald-300" title="Close (back to the 3D view)"><span class="phone-only">👁 3D</span><span class="fe-desk">✕</span></button></div>
+<div class="flex items-center gap-1 mb-1.5 flex-wrap"><span class="text-[11px] font-semibold text-amber-300 mr-0.5">🚪 Room</span><select id="feRvRoom" class="bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Room"></select><select id="feRvVar" style="min-width:110px" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Room layout"></select><button id="feRvSave" class="chip" title="Save this room's furniture as a room layout">＋ Save room</button><button id="feRvDel" class="chip" title="Delete this saved room layout">🗑</button></div>
 <div id="feOwRow" class="flex items-center gap-1 mb-1.5 flex-wrap" style="display:none"><span class="text-[11px] text-slate-300">Overwrite</span><select id="feOwSel" class="flex-1 min-w-0 bg-slate-800 text-slate-200 text-[11px] rounded px-1 py-0.5 border border-slate-700" aria-label="Layout to overwrite"></select><button id="feOwGo" class="chip text-amber-300">💾 Overwrite</button><button id="feOwX" class="chip">Cancel</button></div>
 <div id="feSaved" class="text-[10px] text-slate-500 mb-1"></div>
 <div class="flex items-center gap-1 mb-1.5"><button class="chip fe-tab on" data-tab="furn">🛋 Furniture</button><button class="chip fe-tab" data-tab="fin">🎨 Finishes</button><button class="chip fe-tab" data-tab="walls" title="Walls &amp; doors">🧱 Walls</button><button class="chip fe-tab" data-tab="lt" title="Lights &amp; curtains / blinds">💡 Lights</button></div>
@@ -1682,8 +1683,12 @@ const BR2_PLANS = {
     furnNew('desk', 5.9, 1.0, 90), furnNew('chair', 5.45, 1.0, 270)] } };
 const furnTypical = items => ({ i: items, k:{ c: 'L', top: 1 }, l: { m: 'auto', r: { living: { t: 'cove', k: 3000 }, dining: { t: 'down', k: 3000 }, mbrS: { t: 'ceil', k: 3000 }, br2: { t: 'ceil', k: 4000 }, br3: { t: 'ceil', k: 4000 }, kitchen: { t: 'down', k: 4000 } } }, v: { c: '#d9cfc0', w: { living: { t: 'curtain', s: 'open' }, mbrS: { t: 'curtain', s: 'open' }, br2: { t: 'roller', s: 'open' }, br3: { t: 'roller', s: 'open' } } } });
 const inBR2 = it => it.x > 3.31 && it.x < 6.2 && it.y < 3.33;
-const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => furnTypical(FURN_SAMPLE()),
-  ...Object.fromEntries(Object.entries(BR2_PLANS).map(([n, B]) => [n, () => furnTypical([...FURN_SAMPLE().filter(it => !inBR2(it)), ...B.i()])])) };
+const FURN_BUILTIN = { 'Bare flat': () => ({ i: [], k: { c: 'none', top: 1 } }), 'Typical 4-Room': () => furnTypical(FURN_SAMPLE()) };
+// Room layouts (owner 2026-10-27: main menu = whole-house layouts; pick a room → its saved variants): a variant = that room's items only; applying one swaps the room's items in the current
+// whole-house layout (rest untouched). Room of an item = finZone of its centre. Built-ins: Bedroom 2 ideas (BR2_PLANS). User variants global on this device (`trpf134.roomVars`), carried by Export/Import.
+const RV_ROOMS = { living: 'Living / dining', mbrS: 'Master bedroom', br2: 'Bedroom 2', br3: 'Bedroom 3', kitchen: 'Kitchen', yard: 'Service yard' }, RV_LS = 'trpf134.roomVars';
+const RV_BUILTIN = { br2: Object.fromEntries(Object.entries(BR2_PLANS).map(([n, B]) => [n.replace(/^Bedroom 2: /, ''), B.i])) };
+const itemRoom = it => finZone(it.x, it.y);
 // Finishes (owner 2026-10-27 interview; saved per layout as f; presets/defaults = estimates): whole flat tiled (floor colour per room), wall paint per room + one accent wall,
 // saved swatches reusable in any room, kitchen door/countertop colour + bar handles or handleless, wall tiles per bath/kitchen/yard (colour + layout) + feature tile (shower wall / backsplash).
 // Finish zones = plan rects (first match); anything else inside the outline = living/dining/hall.
@@ -1831,17 +1836,30 @@ const layNorm = L => { const items = (Array.isArray(L && L.i) ? L.i : []).filter
   const k = L && L.k || {}; return { i: items, k: { c: KIT_CFG[k.c] ? k.c : 'none', top: k.top === 0 ? 0 : 1 }, f: finNorm(L && L.f), w: wallNorm(L && L.w), l: ltNorm(L && L.l), v: cvNorm(L && L.v) }; };
 function furnExport() {
   const d = new Date(), ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`, name = `trpf134-layouts-${ds}.json`;
-  const txt = JSON.stringify({ app: 'trpf134-layouts', v: 1, cur: FURN.name, layouts: FURN.saved }), file = new File([txt], name, { type: 'application/json' });
+  const txt = JSON.stringify({ app: 'trpf134-layouts', v: 1, cur: FURN.name, layouts: FURN.saved, roomVars: FURN.rv || {} }), file = new File([txt], name, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: name }).catch(() => {}); return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 function furnImport(txt) { let J; try { J = JSON.parse(txt); } catch (e) { alert('That file is not a layout export.'); return; }
   const src = J && J.app === 'trpf134-layouts' && J.layouts && typeof J.layouts === 'object' ? J.layouts : null; if (!src) { alert('That file is not a layout export.'); return; }
-  const names = Object.keys(src).filter(n => !FURN_BUILTIN[n]).slice(0, 50); if (!names.length) { alert('No layouts in that file.'); return; }
+  const names = Object.keys(src).filter(n => !FURN_BUILTIN[n]).slice(0, 50); if (!names.length && !J.roomVars) { alert('No layouts in that file.'); return; }
   const clash = names.filter(n => FURN.saved[n] && JSON.stringify(FURN.saved[n]) !== JSON.stringify(layNorm(src[n]))), rep = !clash.length || confirm(`${clash.length} layout(s) with the same name already exist here (${clash.slice(0, 3).join(', ')}${clash.length > 3 ? '…' : ''}). OK = replace them, Cancel = keep both (imported copies get "(imported)").`);
+  const RVi = J.roomVars && typeof J.roomVars === 'object' ? J.roomVars : {}; let nRv = 0; FURN.rv = FURN.rv || {};
+  for (const room of Object.keys(RV_ROOMS)) for (const [n, it] of Object.entries(RVi[room] || {}).slice(0, 50)) { if ((RV_BUILTIN[room] || {})[n]) continue; (FURN.rv[room] = FURN.rv[room] || {})[String(n).slice(0, 30)] = layNorm({ i: it }).i; nRv++; }
+  lsSet(RV_LS, FURN.rv); rvUI();
   let last = null; for (const n0 of names) { const lay = layNorm(src[n0]); let n = String(n0).slice(0, 40); if (!rep && clash.includes(n0)) n = `${n.slice(0, 29)} (imported)`; FURN.saved[n] = lay; last = n0 === J.cur ? n : last || n; }
-  lsSet(FURN_LS, FURN.saved); furnLoad(last); const sv = $('feSaved'); if (sv) sv.textContent = `✓ Imported ${names.length} layout${names.length > 1 ? 's' : ''}`; }
+  lsSet(FURN_LS, FURN.saved); furnLoad(last); const sv = $('feSaved'); if (sv) sv.textContent = `✓ Imported ${names.length} layout${names.length > 1 ? 's' : ''}${nRv ? ` + ${nRv} room layout${nRv > 1 ? 's' : ''}` : ''}`; }
+function rvList(room) { return [...Object.keys(RV_BUILTIN[room] || {}).map(n => ({ n, b: 1 })), ...Object.keys((FURN.rv || {})[room] || {}).map(n => ({ n, b: 0 }))]; }
+function rvApply(room, name) { const B = (RV_BUILTIN[room] || {})[name], U = ((FURN.rv || {})[room] || {})[name], items = B ? B() : U ? JSON.parse(JSON.stringify(U)) : null; if (!items) return;
+  if (!FURN.items.length && FURN_BUILTIN[FURN.name]) furnLoad('Typical 4-Room');   // bare flat: start from the typical layout so the rest of the flat is furnished
+  FURN.items = [...FURN.items.filter(it => itemRoom(it) !== room), ...items.map(it => ({ ...it }))]; FURN.sel = -1; FURN.rvCur = { room, name }; furnChanged(); furnSelUI && furnSelUI(); furnDrawPlan(); rvUI(); renderAll(); }
+function rvSave(room) { const nm = (prompt(`Save the current ${RV_ROOMS[room]} as:`, '') || '').trim().slice(0, 30); if (!nm) return; if ((RV_BUILTIN[room] || {})[nm]) { alert(`“${nm}” is a built-in idea. Pick another name.`); return; }
+  FURN.rv = FURN.rv || {}; const R = FURN.rv[room] = FURN.rv[room] || {}; if (R[nm] && !confirm(`Replace the saved “${nm}”?`)) return; R[nm] = FURN.items.filter(it => itemRoom(it) === room).map(furnPlain); lsSet(RV_LS, FURN.rv); FURN.rvCur = { room, name: nm }; rvUI(); }
+function rvDel(room, nm) { if (!nm || (RV_BUILTIN[room] || {})[nm] || !confirm(`Delete the saved ${RV_ROOMS[room]} layout “${nm}”?`)) return; delete FURN.rv[room][nm]; lsSet(RV_LS, FURN.rv); FURN.rvCur = null; rvUI(); }
+function rvUI() { const rs = $('feRvRoom'), vs = $('feRvVar'); if (!rs) return; const room = rs.value || 'br2', L = rvList(room), cur = FURN.rvCur && FURN.rvCur.room === room ? FURN.rvCur.name : '';
+  vs.innerHTML = `<option value="">${L.length ? `— ${L.length} saved layout${L.length > 1 ? 's' : ''} —` : '— none saved yet —'}</option>` + L.map(v => `<option value="${v.n.replace(/"/g, '&quot;')}"${v.n === cur ? ' selected' : ''}>${v.n.replace(/</g, '&lt;')}${v.b ? '' : ' ★'}</option>`).join('');
+  $('feRvDel').disabled = !cur || !!(RV_BUILTIN[room] || {})[cur]; }
 function furnInit() {
-  FURN.saved = lsGet(FURN_LS) || {}; const cur = lsGet(FURN_LS_CUR); furnCatUI();
+  FURN.saved = lsGet(FURN_LS) || {}; FURN.rv = lsGet(RV_LS) || {}; for (const n of Object.keys(FURN.saved)) if (/^Bedroom 2: /.test(n) && BR2_PLANS[n]) delete FURN.saved[n]; const cur = lsGet(FURN_LS_CUR); furnCatUI();
   if (!furnFromHash()) { if (cur && (FURN_BUILTIN[cur] || FURN.saved[cur])) furnLoad(cur); else furnLayoutSel(); }
   window.addEventListener('hashchange', furnFromHash);   // link opened in an already-open tab
 }
@@ -1938,9 +1956,12 @@ function furnOpen(on) {
 function furnBindUI() {
   // Bedroom 2 ideas (Home panel): load the built-in layout, then walk in at the BR2 door looking SW across the room (heading = UNIT_FN + plan bearing)
   Object.entries(BR2_PLANS).forEach(([n, B]) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = B.s; b.title = `${n}: ${B.a}`;
-    b.addEventListener('click', () => { furnLoad(n); const sp = UNIT_SPOTS.find(q => q.id === 'br2'); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes('br2')) setPosture('stand');
+    b.addEventListener('click', () => { if ($('feRvRoom')) $('feRvRoom').value = 'br2'; rvApply('br2', n.replace(/^Bedroom 2: /, '')); const sp = UNIT_SPOTS.find(q => q.id === 'br2'); state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes('br2')) setPosture('stand');
       setWalk(true); state.walk = { X: 5.65, Y: 3.0 }; state.heading = Math.round(UNIT_FN - 32); state.pitchDeg = -18; state.focalLength = 13; if (!matchMedia(PHONE_MQ).matches && !FURN.open) furnOpen(true); $('br2Note').textContent = `${B.s}: ${B.a}.`; document.querySelectorAll('#br2Ideas .chip').forEach(c => c.classList.toggle('on', c === b)); renderAll(); });
     $('br2Ideas').appendChild(b); });
+  $('feRvRoom').innerHTML = Object.entries(RV_ROOMS).map(([k, n]) => `<option value="${k}"${k === 'br2' ? ' selected' : ''}>${n}</option>`).join(''); rvUI();
+  $('feRvRoom').addEventListener('change', () => { FURN.rvCur = null; rvUI(); }); $('feRvVar').addEventListener('change', e => { if (e.target.value) rvApply($('feRvRoom').value, e.target.value); });
+  $('feRvSave').addEventListener('click', () => rvSave($('feRvRoom').value)); $('feRvDel').addEventListener('click', () => rvDel($('feRvRoom').value, $('feRvVar').value));
   $('furnBtn').addEventListener('click', () => furnOpen(!FURN.open));$('feClose').addEventListener('click', () => furnOpen(false));
   $('feLayout').addEventListener('change', e => furnLoad(e.target.value));
   document.querySelectorAll('.fe-tab').forEach(b => b.addEventListener('click', () => feTab(b.dataset.tab)));
