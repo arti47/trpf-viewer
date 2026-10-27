@@ -204,7 +204,7 @@
         <div id="roomHud" class="absolute bottom-2.5 right-3 pointer-events-none bg-slate-900/85 px-2 py-1 rounded border border-slate-700 text-[10px] mono text-slate-300 z-10" style="max-width:calc(100% - 24px);overflow:hidden"></div>
         <canvas id="walkMap" class="absolute left-3 z-10 rounded border border-slate-700 cursor-crosshair" style="top:48px;display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
         <div id="walkPad" class="absolute left-3 z-10 grid gap-1" style="bottom:40px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)">
-          <span></span><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><span></span>
+          <span></span><button class="chip walk-key" data-k="fwd" style="font-size:18px">▲</button><button id="walkDoor" class="chip" style="font-size:16px" title="Open / close the door in front of you (E)">🚪</button>
           <button class="chip walk-key" data-k="left" style="font-size:18px">◀</button><button class="chip walk-key" data-k="back" style="font-size:18px">▼</button><button class="chip walk-key" data-k="right" style="font-size:18px">▶</button>
         </div>
         <div id="furnEd" class="furn-ed" style="display:none">
@@ -566,7 +566,7 @@ const DOORS = { mbr: { n: 'Master', ax: 'y', a0: 3.44, a1: 4.48, g: 4.26, hw: 0.
   br3: { n: 'Bedroom 3', ax: 'x', a0: 6.4, a1: 7.36, g: 3.385, hw: 0.055, hg: 0, s: -1, sl: 1 }, wc1: { n: 'Bath (master)', ax: 'x', a0: 2.75, a1: 3.45, g: 4.53, hw: 0.05, hg: 0, s: 1, sl: 0 },
   wc2: { n: 'Bath (common)', ax: 'x', a0: 5.35, a1: 6.0, g: 4.53, hw: 0.05, hg: 1, s: 1, sl: 0 }, yard: { n: 'Service yard', ax: 'y', a0: 7.0, a1: 7.9, g: 7.145, hw: 0.035, hg: 0, s: -1, sl: 1 } };
 const DOOR_T = { none: 'No door', swing: 'Swing', slide: 'Sliding', fold: 'Bi-fold' };
-const WALL_DEF = () => ({ br3: 1, br23: 1, kit: 0, closed: 0, d: { mbr: 'swing', br2: 'swing', br3: 'swing', wc1: 'fold', wc2: 'fold', yard: 'fold' } });
+const WALL_DEF = () => ({ br3: 1, br23: 1, kit: 0, dc: {}, d: { mbr: 'swing', br2: 'swing', br3: 'swing', wc1: 'fold', wc2: 'fold', yard: 'fold' } });
 const WALL_GROUPS = { br3: ['9.29,1.69,9.38,3.44', '6.4,3.33,7.36,3.44', '7.36,3.33,9.38,3.44'], br23: ['6.2,0.16,6.3,3.44'] };
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
 const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', W = UNIT_W, key = o + W.br3 + W.br23 + W.kit;
@@ -1633,7 +1633,8 @@ const finNorm = f => { const D = FIN_DEF(); if (!f || typeof f !== 'object') ret
   for (const r of FIN_PAINT) { const a = (f.acc || {})[r]; if (a && 'NSEW'.includes(a.s) && a.s) D.acc[r] = { s: a.s, c: hexOk(a.c, '#5a6b78') }; }
   for (const r in D.tile) { const t = (f.tile || {})[r] || {}; D.tile[r] = { c: hexOk(t.c, D.tile[r].c), p: [0, 1, 2].includes(t.p) ? t.p : 0, f: t.f ? hexOk(t.f, '') : '' }; }
   const c = f.cab || {}; D.cab = { d: hexOk(c.d, D.cab.d), t: hexOk(c.t, D.cab.t), h: c.h === 'none' ? 'none' : 'bar' }; D.sw = (Array.isArray(f.sw) ? f.sw : []).map(v => hexOk(v, '')).filter(Boolean).slice(0, 12); return D; };
-const wallNorm = w => { const D = WALL_DEF(); if (!w || typeof w !== 'object') return D; for (const k of ['br3', 'br23', 'kit', 'closed']) if (w[k] !== undefined) D[k] = w[k] ? 1 : 0;
+const wallNorm = w => { const D = WALL_DEF(); if (!w || typeof w !== 'object') return D; for (const k of ['br3', 'br23', 'kit']) if (w[k] !== undefined) D[k] = w[k] ? 1 : 0;
+  for (const id of [...Object.keys(DOORS), 'kit']) if (w.closed || (w.dc && w.dc[id])) D.dc[id] = 1;   // per-door closed (old layouts: closed = all)
   for (const id in D.d) { const t = (w.d || {})[id]; if (DOOR_T[t] && DOORS[id].no !== t) D.d[id] = t; } return D; };
 const finZone = (X, Y) => { for (const [id, [x0, y0, x1, y1]] of FIN_ZONES) if (X >= x0 && X <= x1 && Y >= y0 && Y <= y1) return id; return ringIn(walkRing, X, Y) ? 'living' : null; };
 const finFeature = (z, X, Y, nX, nY) => { if (z === 'wc1') return X < 2.85 ? 'f' : ''; if (z === 'wc2') return X > 5.5 ? 'f' : '';   // shower walls (glass panel X 2.85 / 5.5)
@@ -1650,13 +1651,13 @@ function doorParts() {
   for (const [id, D] of Object.entries(DOORS)) { const t = W.d[id] || 'none'; if (t === 'none' || (id === 'br3' && !W.br3)) continue;
     const L = D.a1 - D.a0, col = id[0] === 'w' || id === 'yard' ? '#e9e7e2' : '#d4bd96', h = D.hg ? D.a1 : D.a0, d = D.hg ? -1 : 1, f = D.g + D.s * D.hw;
     const R = (a0, a1, n0, n1, c, z0 = 0.01, z1 = 2.08) => { const p = Math.min(a0, a1), q = Math.max(a0, a1), m = Math.min(n0, n1), o = Math.max(n0, n1); P.push(D.ax === 'x' ? fRect(p, m, q, o, z0, z1, c) : fRect(m, p, o, q, z0, z1, c)); };
-    if (W.closed) { if (t === 'slide') { R(D.a0, D.a1, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); R(D.a1 - d * 0.1, D.a1 - d * 0.12, D.g - D.s * (D.hw + 0.04), D.g - D.s * (D.hw + 0.06), hc, 0.9, 1.1); }
+    if (W.dc[id]) { if (t === 'slide') { R(D.a0, D.a1, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); R(D.a1 - d * 0.1, D.a1 - d * 0.12, D.g - D.s * (D.hw + 0.04), D.g - D.s * (D.hw + 0.06), hc, 0.9, 1.1); }
       else { R(D.a0 + 0.01, D.a1 - 0.01, D.g - 0.02, D.g + 0.02, col); const e = h + d * (L - 0.09); R(e, e + d * 0.1, D.g - 0.07, D.g + 0.07, hc, 0.98, 1.02); } }
     else if (t === 'swing') { R(h + d * 0.01, h + d * 0.05, f, f + D.s * (L - 0.02), col); R(h - d * 0.03, h + d * 0.09, f + D.s * (L - 0.14), f + D.s * (L - 0.1), hc, 0.98, 1.02); }
     else if (t === 'fold') R(h + d * 0.01, h + d * 0.09, f, f + D.s * L / 2, col);
     else { const sh = D.sl ? L : -L; R(D.a0 + sh, D.a1 + sh, D.g - D.s * (D.hw + 0.005), D.g - D.s * (D.hw + 0.04), col); } }
   if (W.kit) { const FR = '#d8d8d4', g = (x0, x1, y0, y1) => P.push({ ...fRect(x0, y0, x1, y1, 0.02, 2.08, '#c8d7df'), glass: 1 }, fRect(x0, y0, x0 + 0.03, y1, 0.02, 2.08, FR), fRect(x1 - 0.03, y0, x1, y1, 0.02, 2.08, FR), fRect(x0, y0, x1, y1, 2.05, 2.08, FR), fRect(x0, y0, x1, y1, 0.02, 0.06, FR));
-    P.push(fRect(7.18, 6.36, 9.2, 6.42, 0, 0.012, '#9a9ea3')); if (W.closed) { g(7.18, 8.21, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } else { g(8.17, 9.2, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } }   // enclosed kitchen: 2 glass sliding panels (open = stacked W)
+    P.push(fRect(7.18, 6.36, 9.2, 6.42, 0, 0.012, '#9a9ea3')); if (W.dc.kit) { g(7.18, 8.21, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } else { g(8.17, 9.2, 6.37, 6.39); g(8.17, 9.2, 6.40, 6.42); } }   // enclosed kitchen: 2 glass sliding panels (open = stacked W)
   return P; }
 // Lights + window coverings (owner 2026-10-27 "add them"; saved per layout as l / v; sizes, outputs, transmittances = estimates). Lights: per room none / ceiling lamp / downlights /
 // false ceiling (0.35 m L-box at 2.35 m) with cove LED + downlights; 3000 / 4000 / 6500 K; mode auto (on when the sun is < 2° up or the room's coverings pass < 25% daylight) / on / off.
@@ -1822,10 +1823,11 @@ function finSet(k, v) { const F = FURN.fin, r = FE.room;
   if (k === 'floor') F.floor[r] = v; else if (k === 'paint') F.paint[r] = v; else if (k === 'acc' && F.acc[r]) F.acc[r].c = v; else if (k === 'tile') F.tile[r].c = v; else if (k === 'feat') F.tile[r].f = v;
   else if (k === 'cabd') F.cab.d = v; else if (k === 'cabt') F.cab.t = v; furnChanged(); furnDrawPlan(); renderView(); }
 function wallUI() {   // Walls & doors tab
-  const box = $('feTabWalls'); if (!box || FE.tab !== 'walls') return; const W = UNIT_W, ck = (k, lab, on) => `<label class="fe-crow"><input type="checkbox" data-w="${k}" class="accent-amber-400"${on ? ' checked' : ''}><span>${lab}</span></label>`;
+  const box = $('feTabWalls'); if (!box || FE.tab !== 'walls') return; const W = UNIT_W, dck = id => `<label class="text-[10px] text-slate-300" style="flex:0 0 auto;display:flex;gap:3px;align-items:center"><input type="checkbox" data-dc="${id}" class="accent-amber-400"${W.dc[id] ? ' checked' : ''}>closed</label>`, ck = (k, lab, on) => `<label class="fe-crow"><input type="checkbox" data-w="${k}" class="accent-amber-400"${on ? ' checked' : ''}><span>${lab}</span></label>`;
   box.innerHTML = `<div class="text-[11px] text-amber-300 mt-1.5">Non-structural walls</div>` + ck('br3', 'Bedroom 3 walls (to living + corridor). Off = open to living/dining', W.br3) + ck('br23', 'Bedroom 2 / Bedroom 3 partition', W.br23) + ck('kit', 'Enclosed kitchen: glass sliding doors at the dining side', W.kit) +
-    `<div class="text-[11px] text-amber-300 mt-2">Doors</div>` + Object.entries(DOORS).map(([id, D]) => `<div class="fe-crow"><span class="fe-cl">${D.n}</span><select data-d="${id}" class="fe-selx"${id === 'br3' && !W.br3 ? ' disabled' : ''}>${Object.entries(DOOR_T).filter(([t]) => t !== D.no).map(([t, n]) => `<option value="${t}"${W.d[id] === t ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('') +
-    ck('closed', 'Show doors closed (closed doors block walking)', W.closed) + `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Structural walls (black on the HDB plan) are locked. Removing a wall merges the rooms in the daylight readings (one floor area, all their windows). Door swings and bi-fold bath/yard doors follow the HDB plan; leaves and colours are estimates.</div>`;
+    `<div class="text-[11px] text-amber-300 mt-2">Doors</div>` + Object.entries(DOORS).map(([id, D]) => `<div class="fe-crow"><span class="fe-cl">${D.n}</span><select data-d="${id}" class="fe-selx"${id === 'br3' && !W.br3 ? ' disabled' : ''}>${Object.entries(DOOR_T).filter(([t]) => t !== D.no).map(([t, n]) => `<option value="${t}"${W.d[id] === t ? ' selected' : ''}>${n}</option>`).join('')}</select>${dck(id)}</div>`).join('') +
+    (W.kit ? `<div class="fe-crow"><span class="fe-cl">Kitchen (glass)</span><span style="flex:1"></span>${dck('kit')}</div>` : '') +
+    `<div class="fe-crow"><button class="chip" data-all="1">Close all</button><button class="chip" data-all="0">Open all</button><span class="text-[9px] text-slate-500" style="flex:1">Closed doors block walking. In Walk: 🚪 or E opens/closes the door in front of you.</span></div>` + `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Structural walls (black on the HDB plan) are locked. Removing a wall merges the rooms in the daylight readings (one floor area, all their windows). Door swings and bi-fold bath/yard doors follow the HDB plan; leaves and colours are estimates.</div>`;
 }
 function ltUI() {   // Lights & blinds tab
   const box = $('feTabLt'); if (!box || FE.tab !== 'lt') return; const L = FURN.lt, V = FURN.cv, sel = (att, opts, v, dis) => `<select ${att} class="fe-selx"${dis ? ' disabled' : ''}>${Object.entries(opts).map(([k, n]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
@@ -1862,8 +1864,9 @@ function furnBindUI() {
     else if (d.cv) ltSet(() => { FURN.cv.w[d.cv].t = t.value; }); else if (d.cs) ltSet(() => { FURN.cv.w[d.cs].s = t.value; }); else if (t.id === 'feCvC') ltUI(); });
   lt.addEventListener('input', e => { if (e.target.id === 'feCvC') { FURN.cv.c = e.target.value; furnChanged(); renderView(); } });
   lt.addEventListener('click', e => { const b = e.target.closest('button[data-cc]'); if (b) ltSet(() => { FURN.cv.c = b.dataset.cc; }); });
-  $('feTabWalls').addEventListener('change', e => { const t = e.target; if (t.dataset.w) UNIT_W[t.dataset.w] = t.checked ? 1 : 0; else if (t.dataset.d) UNIT_W.d[t.dataset.d] = t.value; else return;
+  $('feTabWalls').addEventListener('change', e => { const t = e.target; if (t.dataset.w) UNIT_W[t.dataset.w] = t.checked ? 1 : 0; else if (t.dataset.dc) { if (t.checked) UNIT_W.dc[t.dataset.dc] = 1; else delete UNIT_W.dc[t.dataset.dc]; } else if (t.dataset.d) UNIT_W.d[t.dataset.d] = t.value; else return;
     furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
+  $('feTabWalls').addEventListener('click', e => { const a = e.target.dataset && e.target.dataset.all; if (a === undefined) return; UNIT_W.dc = {}; if (a === '1') [...Object.keys(DOORS), 'kit'].forEach(id => { UNIT_W.dc[id] = 1; }); furnChanged(); wallUI(); furnDrawPlan(); renderAll(); });
   $('feKit').addEventListener('change', e => { FURN.kit.c = e.target.value; furnChanged(); furnDrawPlan(); renderView(); }); $('feKitTop').addEventListener('change', e => { FURN.kit.top = e.target.checked ? 1 : 0; furnChanged(); furnDrawPlan(); renderView(); });
   $('feSave').addEventListener('click', () => { const nm = (prompt('Save layout as:', FURN_BUILTIN[FURN.name] ? 'My layout' : `${FURN.name} copy`) || '').trim().slice(0, 40); if (!nm || FURN_BUILTIN[nm]) return; FURN.name = nm; furnChanged(); });
   $('feDel').addEventListener('click', () => { if (FURN_BUILTIN[FURN.name] || !confirm(`Delete layout “${FURN.name}”?`)) return; delete FURN.saved[FURN.name]; lsSet(FURN_LS, FURN.saved); furnLoad('Bare flat'); });
@@ -2493,7 +2496,16 @@ document.querySelectorAll('.walk-key').forEach(b => { let t = null; const stop =
   b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); stop(); walkStep(b.dataset.k); t = setInterval(() => walkStep(b.dataset.k), 90); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop)); });
 $('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const k = 190 / ($('walkMap').getBoundingClientRect().width || 190), { x: x0, y: y0 } = localXY($('walkMap'), e), x = x0 * k, y = y0 * k, X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
+// Walk: open/close the internal door nearest in front of the eye (≤1.8 m; ahead weighted over behind); saved per door in the layout
+function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a = (state.heading - 350.3) * DEG, fx = -Math.sin(a), fy = Math.cos(a); let best = null, bs = 1e9;
+  const cand = Object.entries(DOORS).filter(([id]) => (UNIT_W.d[id] || 'none') !== 'none' && !(id === 'br3' && !UNIT_W.br3)).map(([id, D]) => [id, D.ax === 'x' ? (D.a0 + D.a1) / 2 : D.g, D.ax === 'x' ? D.g : (D.a0 + D.a1) / 2]);
+  if (UNIT_W.kit) cand.push(['kit', 8.2, 6.39]);
+  for (const [id, cx, cy] of cand) { const dx = cx - X, dy = cy - Y, d = Math.hypot(dx, dy); if (d > 1.8) continue; const sc = d * (1.6 - (dx * fx + dy * fy) / (d || 1)); if (sc < bs) { bs = sc; best = id; } }
+  const b = $('walkDoor'); if (!best) { b.style.borderColor = '#f87171'; setTimeout(() => { b.style.borderColor = ''; }, 500); return; }
+  if (UNIT_W.dc[best]) delete UNIT_W.dc[best]; else UNIT_W.dc[best] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
+$('walkDoor').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); doorToggle(); });
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+  if (e.key === 'e' || e.key === 'E') { e.preventDefault(); doorToggle(); return; }
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
   if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('.app-shell').classList.contains('view-max')) setExpanded(false); });
