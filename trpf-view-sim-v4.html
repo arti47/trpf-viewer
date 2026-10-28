@@ -1769,7 +1769,7 @@ function exposureOf(env) {
 // Live mode: redraw the 3D view ~10×/s with a running clock (traffic, ships, clouds, glitter, rain); time of day itself is not advanced.
 const LIVE = { t: 0, last: 0 };
 const simT = () => state.hour * 3600 + LIVE.t;
-function liveTick(ts) { if (!state.live) return; if (!LIVE.last) LIVE.last = ts; if (ts - LIVE.last >= 100) { LIVE.t += Math.min(0.5, (ts - LIVE.last) / 1000); LIVE.last = ts; if (lastMath && !document.hidden) drawPerspective(lastMath); } requestAnimationFrame(liveTick); }
+function liveTick(ts) { if (!state.live) return; if (!LIVE.last) LIVE.last = ts; if (ts - LIVE.last >= 100) { LIVE.t += Math.min(0.5, (ts - LIVE.last) / 1000); LIVE.last = ts; if (lastMath && !document.hidden) drawFast(lastMath); } requestAnimationFrame(liveTick); }
 function drawClouds(ctx, cam, env) {
   const el = env.sun.elDeg, day = clamp((el + 4) / 10, 0, 1);
   const lit = el > -6 ? mix(mix([255, 255, 255], [255, 196, 150], env.warm), [70, 74, 92], 1 - day) : [40, 44, 58];
@@ -3027,7 +3027,8 @@ function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscree
   if (state.showBalcony && curSpot()) { if (gpu) { const X = exposureOf(env); if (X.wash > 0) { ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = `rgba(255,250,240,${X.wash.toFixed(3)})`; ctx.fillRect(0, 0, w, h); ctx.restore(); }   // exterior wash (room drawn over it)
       let pinsDone = false; if (gpuRenderInterior(cam, env, X.kIn)) { const gl = GPU.gl, kx = GPU.cv.width / w, ky = GPU.cv.height / h, px = new Uint8Array(4);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); const vis = pt => { gl.readPixels(Math.round(pt.x * kx), Math.round(GPU.cv.height - pt.y * ky), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return px[3] < 140; };   // outside seen through glass / openings
-        const ok = pinPts.filter(q => vis(q.pt)); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
+        // readPixels stalls the GPU pipeline: only on full renders; fast frames (drag/walk/animate) reuse the last result per pin
+        const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
       if (!pinsDone) drawPins(); } }
   else drawPins();
   if (state.showBalcony && !curSpot()) {
@@ -3043,7 +3044,9 @@ let renderPending = false;
 function renderAll() { if (renderPending) return; renderPending = true; requestAnimationFrame(renderNow); }
 // Interactive redraw (drag/tilt/walk): only the 3D view each frame; metrics, panels and charts once input pauses (250 ms).
 let viewPending = false, idleT = 0;
-function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawPerspective(lastMath); }); }
+const PIN_VIS = { m: new Map(), fast: false };   // pin anchor visible through the room (name → bool), from the last full render
+const drawFast = m => { PIN_VIS.fast = true; try { drawPerspective(m); } finally { PIN_VIS.fast = false; } };
+function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawFast(lastMath); }); }
 function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
@@ -3248,10 +3251,10 @@ function drawStrip() {
   g.font = `600 9px ${UIFONT}`; g.fillStyle = '#8391a7'; g.fillText('30', cx, 11); g.fillText('1', cx, h - 5);
   const eye = lastMath ? lastMath.hEye.toFixed(1) : ''; cv.setAttribute('aria-valuenow', f); cv.setAttribute('aria-valuetext', `${f}F, eye ${eye} m`); cv.title = `Floor ${f}F (eye ${eye} m): drag to change; green dot = #134 (27F)`;
 }
-{ const cv = $('floorStrip'); let on = false; const set = e => { const { y } = localXY(cv, e), f = clamp(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29), 1, 30); if (f !== state.obsFloor) { state.obsFloor = f; renderAll(); } };
+{ const cv = $('floorStrip'); let on = false; const set = e => { const { y } = localXY(cv, e), f = clamp(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29), 1, 30); if (f !== state.obsFloor) { state.obsFloor = f; renderView(); } };   // fast 3D redraw while dragging; full render on release
   cv.addEventListener('pointerdown', e => { e.stopPropagation(); on = true; cv.setPointerCapture(e.pointerId); set(e); });
-  cv.addEventListener('pointermove', e => { if (on) set(e); }); ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { on = false; }));
-  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); state.obsFloor = clamp(state.obsFloor + d, 1, 30); renderAll(); }); }
+  cv.addEventListener('pointermove', e => { if (on) set(e); }); ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (on) renderAll(); on = false; }));
+  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); state.obsFloor = clamp(state.obsFloor + d, 1, 30); renderView(); }); }
 // Time scrubber track: sky colour by sun elevation over 05–23 h for the selected date, sunrise/sunset + solar-noon ticks, hour labels
 const TT = { key: '' };
 function drawTimeTrack() {
