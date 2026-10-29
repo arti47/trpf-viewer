@@ -996,13 +996,18 @@ const UNIT_PLAN = (() => {
   acLedge(43.6, 6.34, 45.8, 7.43, 'nwe', [44.2, 6.4, 45.2, 6.78]); acLedge(29.8, 5.04, 30.83, 6.34, 'nsw', [29.9, 5.4, 30.28, 6.0]); acLedge(21.77, 5.04, 22.8, 6.34, 'nse', [22.32, 5.4, 22.7, 6.0]);
   // #136 / #138 service yards (TY plan 2026-10-29, ≈52 px/m via the lifts, ±0.15 m; #136 kitchen face X 21.77, was 22.37): enclosed yard like #134's (TY 2026-10-29),
   // yard block 0.57 m proud of the kitchen face, ground→roof; per storey a 2.0 m casement as #134's yard window: sill 1.0 m, head 2.4 m, 3 sashes, white frames, clear glass (estimate)
-  w.push([30.26, 6.48, 30.83, 8.71, -200, 200, 'ext'], [21.77, 6.48, 22.34, 8.71, -200, 200, 'ext']);
-  for (let k = -6; k <= 6; k++) { const z = k * 2.8;
-    for (const [g0, g1] of [[30.24, 30.26], [22.34, 22.36]]) {
-      w.push([g0, 6.6, g1, 8.6, z + 1.0, z + 2.4, 'xglass']);
-      const f0 = g0 < 25 ? g1 : g0 - 0.03, f1 = g0 < 25 ? g1 + 0.03 : g0;
-      w.push([f0, 6.6, f1, 8.6, z + 1.0, z + 1.05, 'ac'], [f0, 6.6, f1, 8.6, z + 2.35, z + 2.4, 'ac'], [f0, 6.6, f1, 6.65, z + 1.05, z + 2.35, 'ac'], [f0, 8.55, f1, 8.6, z + 1.05, z + 2.35, 'ac'],
-        [f0, 7.245, f1, 7.295, z + 1.05, z + 2.35, 'ac'], [f0, 7.905, f1, 7.955, z + 1.05, z + 2.35, 'ac']); } }
+  // yardBox: block x0..x1 × y0..y1 (ground→roof), window w0..w1 on its face at X = g facing direction sg (±1)
+  const yardBox = (x0, x1, y0, y1, w0, w1, g, sg) => {
+    w.push([x0, y0, x1, y1, -200, 200, 'ext']);
+    const gl = [Math.min(g, g + 0.02 * sg), Math.max(g, g + 0.02 * sg)], f0 = Math.min(g, g + 0.03 * sg), f1 = Math.max(g, g + 0.03 * sg), m = (w1 - w0) / 3;
+    for (let k = -6; k <= 6; k++) { const z = k * 2.8;
+      w.push([gl[0], w0, gl[1], w1, z + 1.0, z + 2.4, 'xglass'],
+        [f0, w0, f1, w1, z + 1.0, z + 1.05, 'ac'], [f0, w0, f1, w1, z + 2.35, z + 2.4, 'ac'], [f0, w0, f1, w0 + 0.05, z + 1.05, z + 2.35, 'ac'], [f0, w1 - 0.05, f1, w1, z + 1.05, z + 2.35, 'ac'],
+        [f0, w0 + m - 0.025, f1, w0 + m + 0.025, z + 1.05, z + 2.35, 'ac'], [f0, w0 + 2 * m - 0.025, f1, w0 + 2 * m + 0.025, z + 1.05, z + 2.35, 'ac']); } };
+  yardBox(30.26, 30.83, 6.48, 8.71, 6.6, 8.6, 30.26, -1); yardBox(21.77, 22.34, 6.48, 8.71, 6.6, 8.6, 22.34, 1);   // #138, #136
+  // #146 / #148 (N slot) and #140 (S slot) yards (TY plans 2026-10-29, ≈48–52 px/m via the A/C ledges, ±0.3 m): grating box beside the yard on the slot face, same casement
+  yardBox(46.98, 47.53, 10.75, 13.13, 10.95, 12.95, 46.98, -1); yardBox(33.65, 34.2, 10.75, 13.13, 10.95, 12.95, 34.2, 1);   // #146, #148
+  yardBox(42.98, 43.53, 7.3, 8.95, 7.45, 8.85, 43.53, 1);   // #140 kitchen/utility (3-room), 1.5 m window
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   wins.push([9.05, 10.64, 58.75, 'y', 1.0, 2.4]);   // W corridor end opening
