@@ -973,7 +973,7 @@ const UNIT_PLAN = (() => {
       [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
-  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 19.6, 11.33], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
+  const corr = { walk: [[9.51, 7.46, 13.26, 10.64], [13.26, 9.05, 19.6, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 19.6, 11.33]], stop: 19.6, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 19.6, 11.33], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 19.6, was 13.26) + #132/#136 door recesses + under the E lift pair; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
@@ -1934,9 +1934,9 @@ function generateTrees() {
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
 // Room bar / readings follow the windowed room you are in (world eye jumps to that room's window; interior eye stays free). Exterior seen from that window (parallax ≤ a few m).
-const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]], ['corr', [9.51, 7.6, 13.26, 10.64]]];
+const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]], ['corr', [9.51, 7.6, 13.26, 10.64]], ...UNIT_PLAN.corr.walk.slice(1).map(r => ['corr', r])];
 const walkRing = UNIT_PLAN.outline.flat();
-const inCorr = (X, Y) => { const [x0, y0, x1, y1] = UNIT_PLAN.corr.walk; return X >= x0 && X <= x1 && Y >= y0 && Y <= y1; };   // corridor: walk bounded by the owner's stop line
+const inCorr = (X, Y) => UNIT_PLAN.corr.walk.some(([x0, y0, x1, y1]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);   // corridor: walk bounded by the owner's stop line
 const walkFree = (X, Y, r = 0.2, esc = false) => (ringIn(walkRing, X, Y) || inCorr(X, Y)) && !unitWalls().some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || !furnBlocks(X, Y, r));   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
   if (!state.walk) return; state.walk.X = X; state.walk.Y = Y;
@@ -1959,9 +1959,10 @@ function setWalk(on) {
 const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
 function drawWalkMap() {
   const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1; if (cv.width !== 190 * dpr) { cv.width = 190 * dpr; cv.height = 140 * dpr; }
+  WALK_MAP.ox = Math.max(-0.25, state.walk.X - 13.5); WALK_MAP.oy = Math.max(-0.6, state.walk.Y - 10.2);   // follow the eye along the corridor
   const g = cv.getContext('2d'), sc = WALK_MAP.s, P = (X, Y) => [(X - WALK_MAP.ox) * sc, (Y - WALK_MAP.oy) * sc]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, 190, 140);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
-  { const [a, b] = P(UNIT_PLAN.corr.walk[0], UNIT_PLAN.corr.walk[1]), [c, d] = P(UNIT_PLAN.corr.walk[2], UNIT_PLAN.corr.walk[3]); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, c - a, d - b); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, b); g.lineTo(c, d); g.stroke(); }   // corridor + stop line
+  UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, c - a, d - b); if (x1 === UNIT_PLAN.corr.stop) { g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, b); g.lineTo(c, d); g.stroke(); } });   // corridor + stop line
   for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
   FURN.items.forEach(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return; g.beginPath(); const [a, b, c, d] = it._ext || (it._ext = furnExt(it)), cs = Math.cos(it.r * DEG), sn = Math.sin(it.r * DEG); [[a, b], [c, b], [c, d], [a, d]].forEach(([lx, ly], i) => { const [x, y] = P(it.x + cs * lx - sn * ly, it.y + sn * lx + cs * ly); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(251,191,36,0.35)'; g.fill(); });   // furniture footprints
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
@@ -1980,7 +1981,7 @@ function roomEyeWorld() {
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 20 && Y > 7.4 && Y < 12.3) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
 }
 /* ===================== FURNITURE (layout editor) ===================== */
 // Loose furniture in #134 (owner 2026-10-27; visual only, readings stay furniture-free): items in plan metres (X along facade 0 = E → W, Y into the flat), IKEA-style default sizes
