@@ -3071,7 +3071,10 @@ function gpuInit() {
 }
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
-  if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, A = glArr(), own = [], E = [];
+  if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
+  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+    for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
+  const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
@@ -3084,6 +3087,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof, GBTB domes + Supertree canopies; plain shading (mode 0)
   const z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), nrm = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
@@ -3970,10 +3974,33 @@ $('toFurnLt').addEventListener('click', () => { if (!FURN.open) furnOpen(true); 
 $('feTabLt').addEventListener('click', e => { if (!e.target.closest('#toGlass')) return; furnOpen(false); if (!PNL.open.includes('light')) pnlToggle('light'); setTimeout(() => { $('glassSelect').focus(); $('glassSelect').closest('.panel').classList.add('flash'); setTimeout(() => $('glassSelect').closest('.panel').classList.remove('flash'), 1900); }, 80); });
 $('sunRooms').addEventListener('click', e => { const b = e.target.closest('[data-room]'); if (!b) return; const rb = document.querySelector(`.room-btn[data-id="${b.dataset.room}"]`); if (rb) rb.click(); });
 
+/* ---------- Startup cache (TY 2026-10-29: repeat visits): IndexedDB copy of the startup world build (gpuWorld buffers, trees, plaza paving runs).
+   Key = hash of all app script text + GEO (minus buildings) + every startup prism (own props; buildings enter here) + pools + existing toggle → any code/data/scenario change misses and rebuilds. Only the build at startup's WORLD_VER is cached. ---------- */
+const WC = { ver: -1, key: '', e: null, save: null };
+function wcHash() { let a = 0x811c9dc5, b = 0x9747b28c; const f = new Float64Array(1), u = new Uint32Array(f.buffer), seen = new Set();
+  const w = x => { a = Math.imul(a ^ x, 0x01000193); b = Math.imul(b ^ x, 0x5bd1e995); b ^= b >>> 13; };
+  const str = t => { w(t.length); for (let i = 0; i < t.length; i++) w(t.charCodeAt(i)); };
+  const SKIP = new Set(['stamp', 'minx', 'maxx', 'minz', 'maxz', 'cx', 'cz']);   // query stamp + bbox/centroid (derived from xs/zs) don't change geometry
+  const val = (v, d) => { if (typeof v === 'number') { if ((v | 0) === v) w(v); else { f[0] = v; w(u[0]); w(u[1]); } } else if (typeof v === 'string') str(v); else if (typeof v === 'boolean') w(v ? 3 : 2); else if (v == null) w(1);
+    else if (typeof v === 'object' && d < 6 && !seen.has(v)) { seen.add(v); if (Array.isArray(v) || ArrayBuffer.isView(v)) { w(v.length); for (let i = 0; i < v.length; i++) val(v[i], d + 1); }
+      else for (const k in v) { if (SKIP.has(k)) continue; str(k); val(k === 'group' ? v[k] && [v[k].id, v[k].color] : v[k], d + 1); } } };
+  for (const sc of document.scripts) str(sc.src ? sc.src.split('/').pop() : sc.textContent);
+  for (const k in GEO) if (k !== 'b') { str(k); val(GEO[k], 1); }   // GEO.b (buildings) enters via the EXISTING prisms in ALL
+  seen.clear(); ALL.forEach(P => { seen.clear(); val(P, 0); }); val(CONDO_POOLS, 0); w(state.showExisting ? 1 : 0);
+  return (a >>> 0).toString(36) + (b >>> 0).toString(36); }
+const wcDB = () => new Promise((res, rej) => { const r = indexedDB.open('trpf134-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('w'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { WC.key = ''; return Promise.resolve(); }
+  const get = wcDB().then(db => new Promise(res => { const q = db.transaction('w').objectStore('w').get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; db.close(); res(); }; q.onerror = () => { db.close(); res(); }; }));
+  return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
+function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, trees: { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
 let initialized = false;
 function initApp() {
   if (initialized) return; initialized = true;
-  buildGroupRows(); generateTowers(); rebuildIndex(); generateTrees(); furnBindUI(); furnInit(); resizeCanvases();
+  buildGroupRows(); generateTowers(); rebuildIndex(); wcLoad().then(initApp2); }
+function initApp2() { const E = WC.e;
+  if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees();
+  furnBindUI(); furnInit(); resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
   const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); }
   let pending = false; const sz = () => [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement, planCanvas].map(e => `${e.clientWidth}x${e.clientHeight}`).join() + FURN.open, last = { k: sz() };
   const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; const k = sz(); if (k !== last.k) { last.k = k; resizeCanvases(); return; }   // observers fire once on observe: no full re-render unless a main pane changed size
