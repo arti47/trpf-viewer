@@ -894,8 +894,15 @@ const PARCELS = GEO.parcels.concat([{"id":"E1","label":"Planned residential E of
 [['KB1', [-1310, 1250, -1090, 1250, -1080, 1360, -1180, 1390, -1260, 1360, -1310, 1300]], ['KB2', [-1150, 1490, -1040, 1490, -970, 1560, -990, 1620, -1060, 1700, -1160, 1710, -1160, 1600]], ['KB3', [-1265, 1050, -1190, 1050, -1110, 1180, -1120, 1195, -1210, 1195, -1250, 1120]]].forEach(([id, ring]) => {
   let A = 0; for (let i = 0, n = ring.length / 2, j = n - 1; i < n; j = i++) A += ring[2 * j] * ring[2 * i + 1] - ring[2 * i] * ring[2 * j + 1];
   PARCELS.push({ id, label: 'Kampong Bugis (planned)', lu: 'RESIDENTIAL', gpr: '3.5', area: Math.abs(A) / 2, ring }); });
+// Long Island (TY 2026-10-29: URA concept maps, "conceptual profile, illustrative only"): 3 raised islands Marina East → Tanah Merah, reservoir behind
+// (= existing sea), 2 tidal gates. Traced from the URA map registered on Marina Barrage + Tanah Merah Ferry Terminal (≈9.8 m/px, N up; ±100 m).
+const LI_Z = 4, LI_GATES = [[5391, -547], [9778, 960]];   // platform +4 m above today's ground (estimate: "reclaimed at higher levels")
+[['LI1', [-196, -1896, 1900, -439, 2680, -202, 3655, -104, 4630, -173, 5166, -399, 5332, -616, 340, -2271]], ['LI2', [6044, -399, 6142, 172, 6483, 566, 7360, 911, 8530, 1108, 9456, 1108, 9652, 911, 9700, 812]],
+ ['LI3', [10432, 1256, 10480, 1551, 10870, 1797, 11455, 1994, 12040, 2093, 12089, 1846]]].forEach(([id, ring]) => {
+  let A = 0; for (let i = 0, n = ring.length / 2, j = n - 1; i < n; j = i++) A += ring[2 * j] * ring[2 * i + 1] - ring[2 * i] * ring[2 * j + 1];
+  PARCELS.push({ id, label: 'Long Island (URA concept)', lu: 'RESIDENTIAL', gpr: '3.0', area: Math.abs(A) / 2, ring }); });
 // RT excludes the 106 ha Marina East reserve that merely touches the 700m radius (it is group RE).
-const groupParcels = g => PARCELS.filter(p => (g.id === 'KB' ? /^KB\d/.test(p.id) : g.id === 'RT' ? /^R\d/.test(p.id) && p.area < 500000 : g.id === 'EA' ? /^E\d/.test(p.id) : p.id === g.id));
+const groupParcels = g => PARCELS.filter(p => (g.id === 'LI' ? /^LI\d/.test(p.id) : g.id === 'KB' ? /^KB\d/.test(p.id) : g.id === 'RT' ? /^R\d/.test(p.id) && p.area < 500000 : g.id === 'EA' ? /^E\d/.test(p.id) : p.id === g.id));
 const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP + TRPF_CROWN : b.h === 'MSCP_TOP' ? MSCP_TOP : +b.h }));
 // Blk 32A raster fix (owner stack plan #132/#134, 2026-10-26): the gap N of #134's kitchen/yard recess (plan Y ≈9–11.9, E of the corridor end line) is open air,
 // but the 0.5 m raster filled it as full-height block → drop box [28.5,-2,31.5,0.5] (plan X 3.18–6.18, Y 8.56–11.06) and trim [25.5,-4,28.5,0.5] at the kitchen N face (v −1.5 ≈ Y 9.06).
@@ -1143,12 +1150,13 @@ const GROUPS = [
   { id: 'RS', label: 'Marina East reserve (S)', color: '#a855f7' },
   { id: 'RT', label: 'Reserve sites near TRPF', color: '#ec4899' },
   { id: 'KB', label: 'Kampong Bugis (planned, est.)', color: '#84cc16' },
-  { id: 'KA', label: 'Kallang Alive masterplan (est.)', color: '#38bdf8', fixed: true }
+  { id: 'KA', label: 'Kallang Alive masterplan (est.)', color: '#38bdf8', fixed: true },
+  { id: 'LI', label: 'Long Island (URA concept, est.)', color: '#f59e0b' }
 ];
 const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 26,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
-  groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 } },
+  groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 30, towers: 0 }, E2: { floors: 26, towers: 3 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 }, LI: { on: false, min: 20, max: 40, gpr: 3.0, net: 0.5, low: 10, step: false } },
   showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: true, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
@@ -1200,11 +1208,27 @@ function kaBuild(g, out) {
   add('Home of TeamSG', 26, 0, box(170, 985, 80, 60, r), [226, 220, 210], 6);
   add('TeamSG track', 0.4, 0, poly(0, 975, 90, 48, r), [176, 86, 62], 0); add('TeamSG field', 0.5, 0, poly(0, 975, 62, 36, r), [84, 150, 78], 0);
 }
+// Long Island build-out (estimate, TY: all 3 islands, GPR 3.0 on 50% net, 20–40F): raised platform prisms (park-green top) + towers on 52 m candidates in hashed
+// random order (uniform spread, ≥46 m apart) until GPR × net × area; within 45 m of the island edge (waterfront parks) frontage F. Tidal gates 60×20×12 m.
+function liBuild(g, st, out) {
+  const add = (n, h, b, f, alb, fl) => { const P = makePrism(n, 'new', h, b, f, 2); P.group = g; P.floors = fl; if (alb) P.alb = alb; out.push(P); return P; }, lo = Math.min(st.min, st.max), hi = Math.max(st.min, st.max), fp = state.footprint, hf = fp / 2;
+  let n = 0;
+  for (const p of groupParcels(g)) { const r = p.ring; add(`Long Island ${p.id} platform`, LI_Z, 0, r, [176, 170, 150], 0).topc = [150, 176, 118];
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity; for (let i = 0; i < r.length; i += 2) { minx = Math.min(minx, r[i]); maxx = Math.max(maxx, r[i]); minz = Math.min(minz, r[i + 1]); maxz = Math.max(maxz, r[i + 1]); }
+    const edgeD = (x, z) => { let m = Infinity; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) { const ax = r[j], az = r[j + 1], dx = r[i] - ax, dz = r[i + 1] - az, L2 = dx * dx + dz * dz || 1, t = clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1); m = Math.min(m, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return m; };
+    const step = Math.max(40, fp + 18), cand = []; for (let x = Math.floor(minx / step) * step + step / 2; x <= maxx; x += step) for (let z = Math.floor(minz / step) * step + step / 2; z <= maxz; z += step)
+      if (edgeD(x, z) > hf + 25 && [[0, 0], [-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]].every(([a, b]) => ringIn(r, x + a, z + b))) cand.push([x, z, hash01(x, z, state.seed + 7)]);
+    cand.sort((a, b) => a[2] - b[2]); const target = st.gpr * st.net * p.area; let gfa = 0;
+    for (const [x, z, u] of cand) { if (gfa >= target) break; const low = edgeD(x, z) < 45 + hf; let floors = low ? st.low : lo + Math.floor(hash01(z, x, state.seed) * (hi - lo + 1)); floors = Math.min(floors, Math.floor((target - gfa) / (fp * fp))); if (floors < (low ? st.low : lo)) break;
+      gfa += fp * fp * floors; const P = add(`LI${++n}`, newRoof(floors) + LI_Z, LI_Z, [x - hf, z - hf, x + hf, z - hf, x + hf, z + hf, x - hf, z + hf], null, floors); P.low = low; } }
+  LI_GATES.forEach(([x, z], i) => add(`Long Island tidal gate ${i + 1}`, 12, 0, [x - 30, z - 10, x + 30, z - 10, x + 30, z + 10, x - 30, z + 10], [150, 156, 162], 0));
+}
 function generateTowers() {
   const out = [], S = state.spacing, h = state.footprint / 2; CONDO_POOLS = [];
   for (const g of GROUPS) {
     const st = state.groups[g.id]; if (!st.on) continue;
     if (g.fixed) { kaBuild(g, out); continue; }
+    if (g.id === 'LI') { liBuild(g, st, out); continue; }
     const lo = Math.min(st.min, st.max), hi = Math.max(st.min, st.max);
     const parcels = groupParcels(g);
     let n = 0;
@@ -2947,7 +2971,7 @@ function glPrism(A, P) {
   const e = P.kind === 'road' ? 0 : 0.01 + 0.002 * ((GPU.pid = (GPU.pid || 0) + 1) % 11), X = new Float64Array(P.n), Z = new Float64Array(P.n);
   for (let i = 0; i < P.n; i++) { const dx = P.xs[i] - P.cx, dz = P.zs[i] - P.cz, l = Math.hypot(dx, dz) || 1; X[i] = P.xs[i] + (dx / l) * e * 1.414; Z[i] = P.zs[i] + (dz / l) * e * 1.414; }
   const al = (P.style ? (P.style === 'club' ? [150, 175, 190] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
-  const top = (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170]).map(c => c / 255);
+  const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255);
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.kind === 'road' || P.tank || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
   const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
   const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
@@ -3598,16 +3622,16 @@ window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (WA
   if (!any) { const k = PNL.open.filter(q => !PNL.pin.includes(q)).pop(); if (k) pnlToggle(k); else if (FURN.open) furnOpen(false); } });   // Esc: close the top popover, else the last unpinned panel / editor
 // Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
 const PRESETS = {
-  movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false, KB: false, KA: false } },
-  low: { me: [20, 30], gpr: 3.5, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false } },
-  base: { me: [30, 44], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false } },
-  tall: { me: [35, 50], gpr: 5.6, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false } },
-  allres: { me: [30, 44], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true, KB: true, KA: true } }
+  movein: { me: [25, 30], date: '2029-12-15', on: { N: false, S: false, EA: false, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
+  low: { me: [20, 30], gpr: 3.5, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
+  base: { me: [30, 44], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
+  tall: { me: [35, 50], gpr: 5.6, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
+  allres: { me: [30, 44], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true, KB: true, KA: true, LI: true } }
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
   Object.assign(state, { spacing: 95, showExisting: true, showRoads: true });
   state.dateStr = p.date || todayISO();
-  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {})); regen(); });
+  GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' || g.id === 'LI' || g.fixed ? { on: p.on[g.id] } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {})); regen(); });
 /* ===================== ON-VIEW CONTROLS (UX round 2): compass tape, floor strip, time scrubber + date popover, room plan menu, scenario cards ===================== */
 const UIFONT = '-apple-system, "SF Pro Text", Inter, system-ui, sans-serif';
 const rrect = (g, x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
@@ -3862,7 +3886,7 @@ function scnImpSchedule() { const key = scnImpKey(); if (key !== SCN_IMP.key) { 
 function scnImpStep() { if (!PNL.open.includes('future') || SCN_IMP.key !== scnImpKey()) return; if (drag3D || TAPE.drag) { SCN_IMP.t = setTimeout(scnImpStep, 300); return; }
   const v = Object.keys(PRESETS).find(k => !SCN_IMP.v[k]); if (!v) return; const p = PRESETS[v], sv = { towers, pools: CONDO_POOLS, groups: state.groups, spacing: state.spacing }; let o = null;
   try { state.groups = JSON.parse(JSON.stringify(state.groups)); state.spacing = 95;   // same group settings as picking that scenario (presets handler)
-    GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' ? { on: p.on.EA } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {}));
+    GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' || g.id === 'LI' || g.fixed ? { on: p.on[g.id] } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {}));
     generateTowers(); o = computeOcclusionMask(perspectiveCanvas._w || 820, perspectiveCanvas._h || 360, EXISTING.concat(DECKS, TRPF, towers)); }
   finally { towers = sv.towers; CONDO_POOLS = sv.pools; state.groups = sv.groups; state.spacing = sv.spacing; }
   SCN_IMP.v[v] = { b: o.total, hz: o.horizonVisiblePct }; scnImpUI(); SCN_IMP.t = setTimeout(scnImpStep, 80); }
