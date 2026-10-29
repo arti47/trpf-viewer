@@ -886,6 +886,12 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
   { const pier = EXISTING.filter(P => P.cx > -760 && P.cx < -540 && P.cz > -1800 && P.cz < -1640 && (P.maxx - P.minx) * (P.maxz - P.minz) < 300); pier.forEach(P => { P.h = 9; P.est = 2; P.alb = [176, 180, 184]; });
     if (pier.length > 1) { pier.sort((a, b) => a.cx - b.cx); const a = pier[0], b = pier[pier.length - 1], L = Math.hypot(b.cx - a.cx, b.cz - a.cz), ux = (b.cx - a.cx) / L, uz = (b.cz - a.cz) / L;
       const P = makePrism('Marina Barrage crest gates', 'existing', 4, 0, [a.cx - uz * 2, a.cz + ux * 2, b.cx - uz * 2, b.cz + ux * 2, b.cx + uz * 2, b.cz - ux * 2, a.cx + uz * 2, a.cz - ux * 2], 2); P.alb = [70, 82, 94]; EXISTING.push(P); } }
+  // Tanjong Rhu Substation, 67 Tanjong Rhu Rd (TY Street View 2024-06 + aerial, 2026-10-29; no published height): OSM 58.5 × 31.5 m outline. Main hall (N 23.5 m):
+  // white walls to 12.5 m + timber-clad upper hall to 17 m; S front block (8 m, facing the road) white to 14 m with roof railing. Heights scaled from cars/fence/trees in the photo (±2 m).
+  { const i = P0('Tanjong Rhu Substation'); if (i >= 0) { EXISTING.splice(i, 1); const o = [-62.5, 97], U = [58.5, 4.5], V = [-2.5, 31.5], q = (a, b) => [o[0] + U[0] * a + V[0] * b, o[1] + U[1] * a + V[1] * b];
+    const box = (a0, a1, b0, b1) => [q(a0, b0), q(a1, b0), q(a1, b1), q(a0, b1)].flat(), add = (h, b, f, alb) => { const P = makePrism('Tanjong Rhu Substation', 'existing', h, b, f, 2); P.alb = alb; P.plain = true; EXISTING.push(P); return P; };
+    const hb = 8 / 31.6; add(14, 0, box(0, 1, 0, hb), [232, 232, 228]); add(15.1, 14, box(0.01, 0.99, 0.005, hb - 0.01), [205, 208, 210]).topc = [190, 192, 194];   // front block + railing band
+    add(12.5, 0, box(0, 1, hb, 1), [232, 232, 228]); add(17, 12.5, box(0, 1, hb, 1), [170, 116, 78]).topc = [120, 112, 108]; } }   // hall: white base, timber upper hall, dark metal roof
   // Tanjong Rhu condos W of TRPF (OSM heights): cream condo facade (as E1/E2)
   for (const P of EXISTING) if (P.h > 20 && P.cx > -920 && P.cx < -200 && P.cz > -150 && P.cz < 170) P.style = 'condo';
 }
