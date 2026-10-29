@@ -994,11 +994,15 @@ const UNIT_PLAN = (() => {
     [30.83, -0.3, 31.03, 9.05, -200, 200, 'ext'], [21.57, -0.3, 21.77, 8.75, -200, 200, 'ext']);
   acLedge(43.63, 12.0, 46.23, 13.28, 'swe', [44.4, 12.85, 45.4, 13.23]); acLedge(34.95, 12.0, 37.34, 13.28, 'swe', [35.6, 12.85, 36.6, 13.23]);
   acLedge(43.6, 6.34, 45.8, 7.43, 'nwe', [44.2, 6.4, 45.2, 6.78]); acLedge(29.8, 5.04, 30.83, 6.34, 'nsw', [29.9, 5.4, 30.28, 6.0]); acLedge(21.77, 5.04, 22.8, 6.34, 'nse', [22.32, 5.4, 22.7, 6.0]);
-  // #136 / #138 kitchen service-yard ledges on the slot's side walls (TY plan 2026-10-29, ≈52 px/m via the lifts, ±0.15 m; #136 kitchen face X 21.77, was 22.37):
-  // hatched plan box = slab + 1.0 m metal screen per storey (as #132's yard ledge, estimate) + kitchen/yard window above it
+  // #136 / #138 service yards (TY plan 2026-10-29, ≈52 px/m via the lifts, ±0.15 m; #136 kitchen face X 21.77, was 22.37): enclosed yard like #134's (TY 2026-10-29),
+  // yard block 0.57 m proud of the kitchen face, ground→roof; per storey a 2.0 m casement as #134's yard window: sill 1.0 m, head 2.4 m, 3 sashes, white frames, clear glass (estimate)
+  w.push([30.26, 6.48, 30.83, 8.71, -200, 200, 'ext'], [21.77, 6.48, 22.34, 8.71, -200, 200, 'ext']);
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
-    w.push([30.26, 6.48, 30.83, 8.71, z - 0.12, z, 'ext'], [30.26, 6.48, 30.31, 8.71, z, z + 1.0, 'rack'], [30.31, 6.48, 30.83, 6.53, z, z + 1.0, 'rack'], [30.81, 6.8, 30.83, 8.4, z + 1.0, z + 2.4, 'xglass'],
-      [21.77, 6.48, 22.34, 8.71, z - 0.12, z, 'ext'], [22.29, 6.48, 22.34, 8.71, z, z + 1.0, 'rack'], [21.77, 6.48, 22.29, 6.53, z, z + 1.0, 'rack'], [21.77, 6.8, 21.79, 8.4, z + 1.0, z + 2.4, 'xglass']); }
+    for (const [g0, g1] of [[30.24, 30.26], [22.34, 22.36]]) {
+      w.push([g0, 6.6, g1, 8.6, z + 1.0, z + 2.4, 'xglass']);
+      const f0 = g0 < 25 ? g1 : g0 - 0.03, f1 = g0 < 25 ? g1 + 0.03 : g0;
+      w.push([f0, 6.6, f1, 8.6, z + 1.0, z + 1.05, 'ac'], [f0, 6.6, f1, 8.6, z + 2.35, z + 2.4, 'ac'], [f0, 6.6, f1, 6.65, z + 1.05, z + 2.35, 'ac'], [f0, 8.55, f1, 8.6, z + 1.05, z + 2.35, 'ac'],
+        [f0, 7.245, f1, 7.295, z + 1.05, z + 2.35, 'ac'], [f0, 7.905, f1, 7.955, z + 1.05, z + 2.35, 'ac']); } }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   wins.push([9.05, 10.64, 58.75, 'y', 1.0, 2.4]);   // W corridor end opening
