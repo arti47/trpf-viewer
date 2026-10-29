@@ -1047,16 +1047,19 @@ const UNIT_PLAN = (() => {
     ...recS(33.5, 35.0, 7.85, 33.75), ...recS(38.2, 39.9, 7.85, 38.55), [35.0, 7.85, 38.2, 9.05, 0, H, 'cor'], [35.6, 9.05, 36.5, 9.065, 0.1, 2.1, 'steel'], [36.7, 9.05, 37.6, 9.065, 0.1, 2.1, 'steel'],   // #138, #140 + riser
     ...recS(57.0, 58.6, 7.85, 57.3), [55.3, 7.74, 57.0, 9.05, 0, H, 'cor'], [55.7, 9.05, 56.6, 9.065, 0.1, 2.1, 'steel'],      // #142 entrance + riser A
     [54.1, 7.0, 55.3, 7.92, 0, H, 'cor'], [54.25, 7.92, 55.15, 7.95, 0.1, 2.1, 'steel'], [53.3, 7.86, 54.1, 7.98, 0, H, 'cor'], [52.3, 7.86, 53.3, 7.98, 2.1, H, 'cor'], [52.3, 7.89, 53.3, 7.95, 0, 2.1, 'door'], [52, 7.86, 52.3, 7.98, 0, H, 'cor'],   // #142 stair alcove: riser B + fire door
-    [13.12, 1.3, 15.45, 1.6, 0, H, 'cor'], [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
+    [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
   // walkable dog-leg stair (TY 2026-10-29 "walk up and down the stairs"; was a single 14-step flight + dark stairwell patch): 16 × 0.175 m risers per 2.8 m storey, 0.28 m treads (STAIR);
   // flight A (W half, X 14.35–15.45) from the floor landing (Y 5.6) S up to the mid landing (Y 1.6–3.64, +1.4 m), flight B (E half, X 13.12–14.25) N up to the next floor's landing.
   // Built for the storeys below / at / above (k −1..1) with the well walls, divider and other floors' fire doors (closed), so the well is continuous while climbing; depth-buffered GPU → below-floor parts are fine.
   for (let k = -1; k <= 1; k++) { const b = k * FLOOR_HEIGHT, z1 = b + FLOOR_HEIGHT;
     for (let i = 1; i <= 7; i++) w.push([14.35, 5.6 - 0.28 * i, 15.45, 5.6 - 0.28 * (i - 1), b + 0.175 * i - 0.45, b + 0.175 * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + 1.575 + 0.175 * (i - 1) - 0.45, b + 1.575 + 0.175 * (i - 1), 'stair']);
     w.push([13.12, 1.6, 15.45, 3.64, b + 1.2, b + 1.4, 'stair'], [14.25, 3.64, 14.35, 5.6, b, z1, 'cor']);   // mid landing, divider between the flights
-    if (k) w.push([13.12, 5.6, 15.45, 7.86, b - 0.18, b, 'stair'], [12.86, 1.6, 13.12, 7.86, b, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, b, z1, 'cor'], [13.12, 1.3, 15.45, 1.6, b, z1, 'cor'], [13.12, 7.0, 14.32, 7.98, b, z1, 'cor'],
+    if (k) w.push([13.12, 5.6, 15.45, 7.86, b - 0.18, b, 'stair'], [12.86, 1.6, 13.12, 7.86, b, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, b, z1, 'cor'], [13.12, 7.0, 14.32, 7.98, b, z1, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, z1, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, z1, 'cor']);   // other storeys' landing slab, well walls, riser B, fire door (closed)
-    else w.push([12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [13.12, 1.3, 15.45, 1.6, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']); }   // this storey: well walls up to the slab above
+    else w.push([12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']); }   // this storey: well walls up to the slab above
+  // outer stair wall (Y 1.3–1.6, set back between the units): open vent opening above each mid landing, no glass (TY model photo 2026-10-29, typical BTO stair core); 1.0 m wide, sill 1.0 / head 2.0 above the landing (estimate)
+  { const z0 = -FLOOR_HEIGHT - 0.4, z1 = 2 * FLOOR_HEIGHT; w.push([13.12, 1.3, 13.8, 1.6, z0, z1, 'cor'], [14.8, 1.3, 15.45, 1.6, z0, z1, 'cor']); let z = z0;
+    for (const k of [-1, 0, 1]) { const s0 = k * FLOOR_HEIGHT + 1.4 + 1.0, s1 = s0 + 1.0; w.push([13.8, 1.3, 14.8, 1.6, z, s0, 'cor']); z = s1; } w.push([13.8, 1.3, 14.8, 1.6, z, z1, 'cor']); }
   w.push([13.12, 1.3, 15.76, 7.98, 2 * FLOOR_HEIGHT - 0.2, 2 * FLOOR_HEIGHT, 'stair'], [13.12, 1.3, 15.76, 7.98, -FLOOR_HEIGHT - 0.4, -FLOOR_HEIGHT - 0.18, 'stair']);   // well caps beyond the modelled storeys
   // #132 exterior across the recess N of #134 (owner plan markup 2026-10-26, ≈75 px/m, ±0.2 m): bath block + master bedroom E end (ground to roof, clamped in drawInterior),
   // yard E wall; per storey ±6: yard grating ledge (plan hatched box, X 8.85–9.42: slab + 1.0 m metal screen, estimate), A/C ledge (X 5.36–8.05, Y 12.11–13.2: slab, 1.0 m parapet, 1 condenser), windows.
