@@ -851,7 +851,7 @@ const EXISTING = GEO.b.map(([h, e, n, flat]) => makePrism(n || '', 'existing', h
 // Real landmarks NW of #134 (TY 2026-10-29): Sports Hub across the Geylang River, Kallang Basin far bank, Tanjong Rhu condos. OSM footprints;
 // heights from public figures where found, else estimates (est 2). Curved roofs = GPU meshes (`LM_MESH`); sightlines use stacked prisms flagged `nogl`.
 const LM = { stad: { c: [-436, 842], r: 157, h: 80, open: [100, 62], th: 90 }, sis: { c: [-428, 428], cr: [[-446, 520], [-372, 458], [-394, 334], [-502, 400]], eave: 10, h: 45 } };   // stadium: OSM circle fit (r 159; span 310 m), dome height + pitch axis (N–S) estimates; roof open (TY); SIS 45–47 m (thekallang.com.sg / NLB)
-const LM_MESH = [];
+const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
 {
   const P0 = n => EXISTING.findIndex(P => P.name === n), drop = n => { const i = P0(n); if (i >= 0) EXISTING.splice(i, 1); }, setH = (n, h) => { const i = P0(n); if (i >= 0) { EXISTING[i].h = h; EXISTING[i].est = 2; } };
   const ring = (cx, cz, r, n = 32) => { const o = []; for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI; o.push(cx + r * Math.cos(a), cz + r * Math.sin(a)); } return o; };
@@ -876,6 +876,16 @@ const LM_MESH = [];
   { const a = 37 * DEG, c = [-1352, 738], u = [Math.cos(a), Math.sin(a)], v = [Math.sin(a), -Math.cos(a)], f = [[-20, -15], [20, -15], [20, 15], [-20, 15]].flatMap(([p, q]) => [c[0] + p * u[0] + q * v[0], c[1] + p * u[1] + q * v[1]]);
     EXISTING.push(makePrism('Aurea (Golden Mile, ~2028)', 'existing', 158, 0, f, 2)); }   // 45-storey tower on the residential plot NE of the complex; position/footprint/height estimates
   setH('The Concourse Office Tower', 175); setH('The Concourse', 20); setH('Golden Mile Tower', 60);   // Concourse: 41 storeys, 175 m; Golden Mile Tower 16 storeys (estimate)
+  // Gardens by the Bay (TY 2026-10-29): Flower Dome 38 m / Cloud Forest 58 m as glass domes over their OSM outlines (ellipsoidal profile, physics = 6 stacked
+  // shrinking outlines); Supertrees (OSM trunks 25–50 m) → green vertical-garden trunk to 72% + purple steel canopy funnel (radius 0.22·h + 3, estimate);
+  // Marina Barrage: pump house 12 m with green roof, crest-gate piers 9 m + steel gate line between them (positions OSM, sizes estimates).
+  for (const n of ['Flower Dome', 'Cloud Forest']) { const i = P0(n); if (i < 0) continue; const G = EXISTING[i], H = G.h, pts = [...G.xs].map((x, k) => [x, G.zs[k]]); EXISTING.splice(i, 1); LM_DOMES.push({ pts, c: [G.cx, G.cz], H });
+    for (let k = 0; k < 6; k++) { const y0 = (k * H) / 6, y1 = ((k + 1) * H) / 6, sc = Math.sqrt(1 - (y1 / H) ** 2) * 0.98 + 0.02; ghost(n, y1, y0, pts.flatMap(([x, z]) => [G.cx + (x - G.cx) * sc, G.cz + (z - G.cz) * sc])); } }
+  for (const P of EXISTING) if (P.cx > -1700 && P.cx < -1500 && P.cz > -1740 && P.cz < -1360 && P.h >= 24 && P.h <= 52 && P.maxx - P.minx < 30) { LM_TREES.push([P.cx, P.cz, P.h, (P.maxx - P.minx) / 2]); P.h *= 0.72; P.alb = [86, 108, 70]; P.topc = [70, 60, 70]; }
+  { const i = P0('Marina Barrage Pump House'); if (i >= 0) { EXISTING[i].h = 12; EXISTING[i].est = 2; EXISTING[i].topc = [112, 160, 88]; EXISTING[i].plain = true; EXISTING[i].alb = [196, 202, 206]; } }
+  { const pier = EXISTING.filter(P => P.cx > -760 && P.cx < -540 && P.cz > -1800 && P.cz < -1640 && (P.maxx - P.minx) * (P.maxz - P.minz) < 300); pier.forEach(P => { P.h = 9; P.est = 2; P.alb = [176, 180, 184]; });
+    if (pier.length > 1) { pier.sort((a, b) => a.cx - b.cx); const a = pier[0], b = pier[pier.length - 1], L = Math.hypot(b.cx - a.cx, b.cz - a.cz), ux = (b.cx - a.cx) / L, uz = (b.cz - a.cz) / L;
+      const P = makePrism('Marina Barrage crest gates', 'existing', 4, 0, [a.cx - uz * 2, a.cz + ux * 2, b.cx - uz * 2, b.cz + ux * 2, b.cx + uz * 2, b.cz - ux * 2, a.cx + uz * 2, a.cz - ux * 2], 2); P.alb = [70, 82, 94]; EXISTING.push(P); } }
   // Tanjong Rhu condos W of TRPF (OSM heights): cream condo facade (as E1/E2)
   for (const P of EXISTING) if (P.h > 20 && P.cx > -920 && P.cx < -200 && P.cz > -150 && P.cz < 170) P.style = 'condo';
 }
@@ -2972,7 +2982,7 @@ function glPrism(A, P) {
   for (let i = 0; i < P.n; i++) { const dx = P.xs[i] - P.cx, dz = P.zs[i] - P.cz, l = Math.hypot(dx, dz) || 1; X[i] = P.xs[i] + (dx / l) * e * 1.414; Z[i] = P.zs[i] + (dz / l) * e * 1.414; }
   const al = (P.style ? (P.style === 'club' ? [150, 175, 190] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255);
-  const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.kind === 'road' || P.tank || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
+  const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
   const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
   const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
   for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = X[j], z0 = Z[j], x1 = X[i], z1 = Z[i], ex = x1 - x0, ez = z1 - z0, L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], u1 = L / 3.6;
@@ -3053,9 +3063,16 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
 }
-function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof; plain shading (mode 0)
+function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof, GBTB domes + Supertree canopies; plain shading (mode 0)
   const z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), nrm = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
   const tri = (p, n, col) => { for (let k = 0; k < 3; k++) A.v(p[k], n[k], col, z4); }, quad = (p, n, col) => { tri([p[0], p[1], p[2]], [n[0], n[1], n[2]], col); tri([p[0], p[2], p[3]], [n[0], n[2], n[3]], col); };
+  for (const { pts, c: [cx, cz], H } of LM_DOMES) { const K = 10, m = pts.length;   // ellipsoidal glass dome over the outline: point = c + (v − c)·cos φ, y = H·sin φ
+    const V = (j, k) => { const f = (k / K) * Math.PI / 2, [x, z] = pts[j % m], dx = x - cx, dz = z - cz, R2 = dx * dx + dz * dz || 1; return [[cx + dx * Math.cos(f), H * Math.sin(f), cz + dz * Math.cos(f)], nrm([dx * Math.cos(f) / R2, Math.sin(f) / H, dz * Math.cos(f) / R2])]; };
+    for (let j = 0; j < m; j++) for (let k = 0; k < K; k++) { const a = V(j, k), b = V(j + 1, k), d = V(j + 1, k + 1), e = V(j, k + 1); quad([a[0], b[0], d[0], e[0]], [a[1], b[1], d[1], e[1]], c(j % 3 ? [204, 218, 224] : [178, 192, 200])); } }
+  for (const [x, z, h, r] of LM_TREES) { const y0 = h * 0.72, R = 0.22 * h + 3, N = 16;   // Supertree canopy: flared steel funnel (inverted frustum) + rim
+    for (let j = 0; j < N; j++) { const a0 = (j / N) * 2 * Math.PI, a1 = ((j + 1) / N) * 2 * Math.PI, P = (a, rr, y) => [x + rr * Math.cos(a), y, z + rr * Math.sin(a)], sl = (R - r) / (h - y0), n0 = nrm([-Math.cos(a0), sl, -Math.sin(a0)]), n1 = nrm([-Math.cos(a1), sl, -Math.sin(a1)]);
+      quad([P(a0, r, y0), P(a1, r, y0), P(a1, R, h), P(a0, R, h)], [n0, n1, n1, n0], c(j % 2 ? [128, 72, 108] : [96, 58, 86]));
+      const up = [0, 1, 0]; quad([P(a0, R - 1, h), P(a1, R - 1, h), P(a1, R, h + 0.6), P(a0, R, h + 0.6)], [up, up, up, up], c([150, 96, 128])); } }
   { const S = LM.stad, [cx, cz] = S.c, Rs = (S.r ** 2 + S.h ** 2) / (2 * S.h), th = S.th * DEG, [ea, eb] = S.open, NS = 96, NR = 14;
     const yAt = r => Math.sqrt(Math.max(0, Rs ** 2 - r * r)) - (Rs - S.h), rOpen = f => 1 / Math.hypot(Math.cos(f - th) / ea, Math.sin(f - th) / eb);
     const P = (f, t, off = 0) => { const r0 = rOpen(f), r = r0 + (S.r - r0) * t, x = cx + r * Math.cos(f), z = cz + r * Math.sin(f), y = yAt(r); return [[x, y - off, z], nrm([x - cx, y + Rs - S.h, z - cz])]; };
