@@ -946,7 +946,10 @@ const UNIT_PLAN = (() => {
     [13.34, 12.24, 13.6, 12.4, 0, H, 'cor'], [13.6, 12.24, 14.6, 12.4, 2.1, H, 'cor'], [13.6, 12.28, 14.6, 12.36, 0, 2.1, 'door'], [14.6, 12.24, 15.4, 12.4, 0, H, 'cor'], [15.1, 11.9, 15.4, 12.24, 0, H, 'cor'],
     [15.4, 11.9, 16.96, 12.2, 0, H, 'cor'],
     // lift lobby (owner storey plan 2026-10-26, ≈16.9 px/m): 2 + 2 lifts facing across a 3.1 m lobby, N end to wash area/refuse chutes (closed off here)
-    [16.96, 10.8, 19.6, 16.7, 0, H, 'cor'], [22.7, 10.8, 25.7, 16.7, 0, H, 'cor'], [19.6, 16.7, 22.7, 17.0, 0, H, 'cor'],
+    [16.96, 11.33, 19.6, 16.7, 0, H, 'cor'], [22.7, 10.8, 25.7, 16.7, 0, H, 'cor'],   // E lift pair: shaft S face Y 11.33 (owner plan 2026-10-29, ≈98.5 px/m)
+    // service risers (owner plan 2026-10-29, thin-line outlines ±0.2 m, full height; steel access doors estimate): #132 stepped riser under its shelter + E lift pair, #136 riser N of its shelter (0.3 m back from the corridor line)
+    [15.1, 10.64, 18.73, 11.33, 0, H, 'cor'], [15.1, 11.33, 16.96, 11.9, 0, H, 'cor'], [15.5, 10.61, 16.4, 10.64, 0.1, 2.1, 'steel'], [16.8, 10.61, 17.7, 10.64, 0.1, 2.1, 'steel'],
+    [15.76, 8.0, 17.3, 8.75, 0, H, 'cor'], [16.0, 8.75, 16.9, 8.78, 0.1, 2.1, 'steel'], [19.6, 16.7, 22.7, 17.0, 0, H, 'cor'],
     ...[11.4, 14.0].flatMap(y => [[19.56, y, 19.6, y + 1.1, 0, 2.2, 'steel'], [22.7, y, 22.74, y + 1.1, 0, 2.2, 'steel']]),
     // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
     [25.7, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
@@ -970,7 +973,7 @@ const UNIT_PLAN = (() => {
       [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
-  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
+  const corr = { walk: [9.51, 7.46, 13.26, 10.64], stop: 13.26, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 19.6, 11.33], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rect (owner red stop line at X 13.26), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
