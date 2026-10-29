@@ -1034,7 +1034,7 @@ const UNIT_PLAN = (() => {
     [15.76, 8.0, 17.3, 8.75, 0, H, 'cor'], [16.0, 8.75, 16.9, 8.78, 0.1, 2.1, 'steel'],         // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
     [29.6, 10.64, 33.65, 10.95, 0, H, 'cor'], [47.53, 10.64, 52.0, 10.95, 0, H, 'cor'], [33.65, 10.64, 47.53, 10.95, 0, 1.0, 'cor'], [33.65, 10.64, 47.53, 10.95, 2.4, H, 'cor'], [58.6, 7.7, 58.9, 9.05, 0, H, 'cor'], [58.6, 10.64, 58.9, 12.4, 0, H, 'cor'], [58.6, 9.05, 58.9, 10.64, 0, 1.0, 'cor'], [58.6, 9.05, 58.9, 10.64, 2.4, H, 'cor'],   // W end open above a 1.0 m parapet like the E end (TY 2026-10-29)
    
-    [15.45, 1.6, 15.76, 9.05, 0, H, 'cor'], [14.32, 7.86, 15.23, 7.98, 2.1, H, 'cor'], [14.32, 7.89, 15.23, 7.95, 0, 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, 0, H, 'cor'],   // TY plan 2026-10-29 (≈110 px/m): stair door set back 1.1 m in an alcove (X 13.12–15.45, Y 7.92–9.05), hinged W
+    [15.45, 1.6, 15.76, 9.05, 0, H, 'cor'], [14.32, 7.86, 15.23, 7.98, 2.1, H, 'cor'], [14.32, 7.89, 15.23, 7.95, 0, 2.1, 'stairDoor'], [15.17, 6.98, 15.23, 7.89, 0, 2.1, 'stairOpen'], [15.23, 7.86, 15.45, 7.98, 0, H, 'cor'],   // TY plan 2026-10-29 (≈110 px/m): stair door set back 1.1 m in an alcove (X 13.12–15.45, Y 7.92–9.05), hinged W
     // service riser enclosures (TY plan 2026-10-29, thin-line outlines ±0.2 m): full height; was flush with the corridor line (rendered as a blank wall); steel access doors estimate
     [11.3, 7.74, 13.12, 8.56, 0, H, 'cor'], [13.12, 7.0, 14.32, 7.92, 0, H, 'cor'], [11.75, 8.56, 12.65, 8.59, 0.1, 2.1, 'steel'], [13.27, 7.89, 14.17, 7.92, 0.1, 2.1, 'steel'],   // risers: A N of the shelter (face Y 8.56, 0.5 m back from the corridor line), B in the alcove beside the stair door (TY plan 2026-10-29)
     [15.76, 7.85, 17.3, 8.0, 0, H, 'cor'], [17.3, 7.85, 18.3, 8.0, 2.1, H, 'cor'], [17.3, 7.89, 18.3, 7.96, 0, 2.1, 'door'], [18.3, 7.85, 18.9, 8.0, 0, H, 'cor'], [18.6, 8.0, 18.9, 8.75, 0, H, 'cor'],
@@ -1047,10 +1047,17 @@ const UNIT_PLAN = (() => {
     ...recS(33.5, 35.0, 7.85, 33.75), ...recS(38.2, 39.9, 7.85, 38.55), [35.0, 7.85, 38.2, 9.05, 0, H, 'cor'], [35.6, 9.05, 36.5, 9.065, 0.1, 2.1, 'steel'], [36.7, 9.05, 37.6, 9.065, 0.1, 2.1, 'steel'],   // #138, #140 + riser
     ...recS(57.0, 58.6, 7.85, 57.3), [55.3, 7.74, 57.0, 9.05, 0, H, 'cor'], [55.7, 9.05, 56.6, 9.065, 0.1, 2.1, 'steel'],      // #142 entrance + riser A
     [54.1, 7.0, 55.3, 7.92, 0, H, 'cor'], [54.25, 7.92, 55.15, 7.95, 0.1, 2.1, 'steel'], [53.3, 7.86, 54.1, 7.98, 0, H, 'cor'], [52.3, 7.86, 53.3, 7.98, 2.1, H, 'cor'], [52.3, 7.89, 53.3, 7.95, 0, 2.1, 'door'], [52, 7.86, 52.3, 7.98, 0, H, 'cor'],   // #142 stair alcove: riser B + fire door
-    [13.12, 1.3, 15.45, 1.6, 0, H, 'cor'], [14.25, 1.6, 14.35, 5.6, 0, H, 'cor'], [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
-  // stair flights (0.175 m risers, 0.28 m treads): W half up as steps; E half down drawn as a dark stairwell patch with tread lines (corr.hole) — nothing below
-  // floor level (z < 0) may be modelled: interior floors are painted first, so below-floor faces painted over the living floor (owner photos 2026-10-26)
-  for (let i = 1; i <= 14; i++) { const y1 = 5.6 - 0.28 * (i - 1), y0 = y1 - 0.28; if (y0 < 1.6) break; w.push([14.35, y0, 15.45, y1, 0, 0.175 * i, 'stair']); }
+    [13.12, 1.3, 15.45, 1.6, 0, H, 'cor'], [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
+  // walkable dog-leg stair (TY 2026-10-29 "walk up and down the stairs"; was a single 14-step flight + dark stairwell patch): 16 × 0.175 m risers per 2.8 m storey, 0.28 m treads (STAIR);
+  // flight A (W half, X 14.35–15.45) from the floor landing (Y 5.6) S up to the mid landing (Y 1.6–3.64, +1.4 m), flight B (E half, X 13.12–14.25) N up to the next floor's landing.
+  // Built for the storeys below / at / above (k −1..1) with the well walls, divider and other floors' fire doors (closed), so the well is continuous while climbing; depth-buffered GPU → below-floor parts are fine.
+  for (let k = -1; k <= 1; k++) { const b = k * FLOOR_HEIGHT, z1 = b + FLOOR_HEIGHT;
+    for (let i = 1; i <= 7; i++) w.push([14.35, 5.6 - 0.28 * i, 15.45, 5.6 - 0.28 * (i - 1), b + 0.175 * i - 0.45, b + 0.175 * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + 1.575 + 0.175 * (i - 1) - 0.45, b + 1.575 + 0.175 * (i - 1), 'stair']);
+    w.push([13.12, 1.6, 15.45, 3.64, b + 1.2, b + 1.4, 'stair'], [14.25, 3.64, 14.35, 5.6, b, z1, 'cor']);   // mid landing, divider between the flights
+    if (k) w.push([13.12, 5.6, 15.45, 7.86, b - 0.18, b, 'stair'], [12.86, 1.6, 13.12, 7.86, b, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, b, z1, 'cor'], [13.12, 1.3, 15.45, 1.6, b, z1, 'cor'], [13.12, 7.0, 14.32, 7.98, b, z1, 'cor'],
+      [14.32, 7.86, 15.23, 7.98, b + 2.1, z1, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, z1, 'cor']);   // other storeys' landing slab, well walls, riser B, fire door (closed)
+    else w.push([12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [13.12, 1.3, 15.45, 1.6, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']); }   // this storey: well walls up to the slab above
+  w.push([13.12, 1.3, 15.76, 7.98, 2 * FLOOR_HEIGHT - 0.2, 2 * FLOOR_HEIGHT, 'stair'], [13.12, 1.3, 15.76, 7.98, -FLOOR_HEIGHT - 0.4, -FLOOR_HEIGHT - 0.18, 'stair']);   // well caps beyond the modelled storeys
   // #132 exterior across the recess N of #134 (owner plan markup 2026-10-26, ≈75 px/m, ±0.2 m): bath block + master bedroom E end (ground to roof, clamped in drawInterior),
   // yard E wall; per storey ±6: yard grating ledge (plan hatched box, X 8.85–9.42: slab + 1.0 m metal screen, estimate), A/C ledge (X 5.36–8.05, Y 12.11–13.2: slab, 1.0 m parapet, 1 condenser), windows.
   w.push([5.36, 13.2, 9.7, 15.33, -200, 200, 'ext'], [3.7, 15.07, 9.7, 19.06, -200, 200, 'ext'], [9.42, 10.95, 9.7, 13.2, -200, 200, 'ext']);
@@ -1083,7 +1090,7 @@ const UNIT_PLAN = (() => {
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   wins.push([9.05, 10.64, 58.75, 'y', 1.0, 2.4]);   // W corridor end opening
-  const corr = { wash: [20.89, 16.91, 25.31, 20.71], walk: [[9.51, 7.46, 13.26, 10.64], [13.12, 7.92, 15.45, 9.05], [26.37, 10.64, 29.6, 11.95], [52.0, 10.64, 53.8, 11.95], [57.3, 10.64, 58.6, 11.95], [33.5, 8.0, 35.0, 9.05], [38.2, 8.0, 39.9, 9.05], [57.0, 8.0, 58.6, 9.05], [52.0, 7.92, 55.3, 9.05], [55.3, 8.55, 57.0, 9.05], [13.26, 9.05, 58.4, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 58.4, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 21.77, 10.95], [21.77, 8.75, 58.6, 10.95], [26.37, 10.95, 29.6, 12.1], [52.0, 10.95, 58.6, 12.1], [33.5, 7.85, 35.0, 8.75], [38.2, 7.85, 39.9, 8.75], [52, 7.86, 58.6, 8.75], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [13.12, 5.6, 15.45, 7.74], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
+  const corr = { wash: [20.89, 16.91, 25.31, 20.71], walk: [[9.51, 7.46, 13.26, 10.64], [13.12, 7.92, 15.45, 9.05], [13.12, 1.6, 15.45, 7.92], [26.37, 10.64, 29.6, 11.95], [52.0, 10.64, 53.8, 11.95], [57.3, 10.64, 58.6, 11.95], [33.5, 8.0, 35.0, 9.05], [38.2, 8.0, 39.9, 9.05], [57.0, 8.0, 58.6, 9.05], [52.0, 7.92, 55.3, 9.05], [55.3, 8.55, 57.0, 9.05], [13.26, 9.05, 58.4, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 58.4, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 21.77, 10.95], [21.77, 8.75, 58.6, 10.95], [26.37, 10.95, 29.6, 12.1], [52.0, 10.95, 58.6, 12.1], [33.5, 7.85, 35.0, 8.75], [38.2, 7.85, 39.9, 8.75], [52, 7.86, 58.6, 8.75], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [13.12, 5.6, 15.45, 7.74], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
@@ -1116,11 +1123,11 @@ const DOOR_T = { none: 'No door', swing: 'Swing', slide: 'Sliding', fold: 'Bi-fo
 const WALL_DEF = () => ({ br3: 1, br23: 1, kit: 0, kn: 3, kg: 'clear', dc: {}, d: { mbr: 'swing', br2: 'swing', br3: 'swing', wc1: 'fold', wc2: 'fold', yard: 'fold' } });
 const WALL_GROUPS = { br3: ['9.29,1.69,9.38,3.44', '6.4,3.33,7.36,3.44', '7.36,3.33,9.38,3.44'], br23: ['6.2,0.16,6.3,3.44'] };
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
-const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', W = UNIT_W, key = o + W.br3 + W.br23 + W.kit;
+const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, key = o + so + W.br3 + W.br23 + W.kit;   // stair fire door open while walking (stairs walkable)
   if (UW_CACHE.key !== key) { const off = new Set([...(W.br3 ? [] : WALL_GROUPS.br3), ...(W.br23 ? [] : WALL_GROUPS.br23)]);
-    UW_CACHE = { key, w: UNIT_PLAN.walls.filter(q => q[6] !== o && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : []) }; }
+    UW_CACHE = { key, w: UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : []) }; }
   return UW_CACHE.w; };
-const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen';
+const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen' || k === 'stairDoor' || k === 'stairOpen';
 { // service yard + corridor end spots: world position from the 4 window spots (mean of plan → world maps)
   const base = UNIT_SPOTS.slice(); for (const [id, label] of [['yard', 'Service yard (E)'], ['corr', 'Corridor end (E)']]) {
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [yx, yy] = spotP(UNIT_PLAN.spots[id]), ws = base.map(sp => { const [px, py] = spotP(UNIT_PLAN.spots[sp.id]); return [sp.x + u[0] * (yx - px) - n[0] * (yy - py), sp.z + u[1] * (yx - px) - n[1] * (yy - py)]; });
@@ -1393,7 +1400,8 @@ const fogMix = (rgb, dist, env) => mix(env.sky.hor, rgb, transmittance(dist, env
 
 /* ===================== CAMERA ===================== */
 function makeCamera(w, h, eye) {
-  const hEye = getEyeHeight(state.obsFloor), yaw = state.heading * DEG, pitch = state.pitchDeg * DEG;
+  const hEye = getEyeHeight(state.obsFloor) + (eye && state.walk ? state.walk.Z || 0 : 0), yaw = state.heading * DEG,   // 3D view eye: + stair height while walking
+    pitch = state.pitchDeg * DEG;
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), fPx = (w / SENSOR_W) * state.focalLength, ex = eye ? eye[0] : state.vx, ez = eye ? eye[1] : state.vz;
   const toCam = (x, y, z) => { const dx = x - ex, dz = z - ez, relY = y - hEye - curvatureDrop(Math.hypot(dx, dz)), xr = dx * cy - dz * sy, zr = dx * sy + dz * cy; return [xr, relY * cp - zr * sp, relY * sp + zr * cp]; };
   const proj = c => [w / 2 + (c[0] / c[2]) * fPx, h / 2 - (c[1] / c[2]) * fPx];
@@ -2099,9 +2107,17 @@ function generateTrees() {
 const UNIT_ROOMS = [['mbrS', [0.31, 0.15, 3.2, 4.48]], ['mbrS', [3.2, 3.44, 4.22, 4.48]], ['br2', [3.31, 0.15, 6.2, 3.33]], ['br3', [6.3, 0.15, 9.29, 3.33]], ['living', [9.38, 1.68, 12.86, 7.46]], ['yard', [5.75, 6.42, 7.11, 8.7]], ['living', [6.6, 3.44, 9.38, 6.1]], ['corr', [9.51, 7.6, 13.26, 10.64]], ...UNIT_PLAN.corr.walk.slice(1).map(r => ['corr', r])];
 const walkRing = UNIT_PLAN.outline.flat();
 const inCorr = (X, Y) => UNIT_PLAN.corr.walk.some(([x0, y0, x1, y1]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);   // corridor: walk bounded by the owner's stop line
-const walkFree = (X, Y, r = 0.2, esc = false) => (ringIn(walkRing, X, Y) || inCorr(X, Y)) && !unitWalls().some(([x0, y0, x1, y1, z0 = 0]) => z0 < 1.2 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || !furnBlocks(X, Y, r));   // esc: already inside furniture → may walk out
+// Stairs (TY 2026-10-29): state.walk.Z = feet height above the current floor slab, kept in [−1.4, 1.4) — crossing a mid landing moves state.obsFloor ±1 (the storey geometry repeats).
+// Walk surface = plan height mod FLOOR_HEIGHT: 0 outside the stair, continuous ramps through the flights (eye smooth; drawn steps ≤0.175 m off), 1.4 on the mid landing.
+const STAIR = [13.12, 1.6, 15.45, 7.92];
+const stairBase = (X, Y) => { const [a, b, c, d] = STAIR; if (X < a || X > c || Y < b || Y > d || Y >= 5.6) return 0; if (Y <= 3.64) return 1.4; return X >= 14.3 ? 1.4 * (5.6 - Y) / 1.96 : 1.4 + 1.4 * (Y - 3.64) / 1.96; };
+function walkZ(X, Y, Z) { const b = stairBase(X, Y), z = b + FLOOR_HEIGHT * Math.round((Z - b) / FLOOR_HEIGHT), f = state.obsFloor;   // nearest surface of the repeating storeys; null = too far (wall between) or past the 2nd / 30th storey
+  return Math.abs(z - Z) > 0.35 || (z > 0.3 && f >= 30) || (z < -0.3 && f <= 2) || (Math.abs(z) > 0.3 && f < 2) ? null : z; }
+const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && (ringIn(walkRing, X, Y) || inCorr(X, Y)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
+  !unitWalls().some(([x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind]) => kind !== 'stair' && z0 < z + 1.2 && z1 > z + 0.05 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || !furnBlocks(X, Y, r)); };   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
-  if (!state.walk) return; state.walk.X = X; state.walk.Y = Y;
+  if (!state.walk) return; const z = walkZ(X, Y, state.walk.Z || 0); state.walk.X = X; state.walk.Y = Y; state.walk.Z = z === null ? 0 : z;
+  if (state.walk.Z >= 1.4) { state.obsFloor++; state.walk.Z -= FLOOR_HEIGHT; } else if (state.walk.Z < -1.4) { state.obsFloor--; state.walk.Z += FLOOR_HEIGHT; }   // past a mid landing: next storey's frame
   const rm = UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
@@ -2114,12 +2130,12 @@ function walkVec(off, st) {   // move st m along heading + off° (plan frame), s
   const stuck = !walkFree(X, Y, 0.2, true), ok = (x, y) => walkFree(x, y, 0.2, esc) || (stuck && walkFree(x, y, 0, true));
   let to = ok(X + dX, Y + dY) ? [X + dX, Y + dY] : ok(X + dX, Y) && Math.abs(dX) > 1e-4 ? [X + dX, Y] : ok(X, Y + dY) && Math.abs(dY) > 1e-4 ? [X, Y + dY] : null;
   for (const a of [25, -25, 50, -50, 75, -75, 90, -90]) { if (to) break; const c = Math.cos(a * DEG), sn = Math.sin(a * DEG), k = Math.max(c, 0.4), x = X + (dX * c - dY * sn) * k, y = Y + (dX * sn + dY * c) * k; if (ok(x, y)) to = [x, y]; }
-  if (to) walkSet(to[0], to[1]);
-  const sp0 = sp.id; if (state.spot !== sp0) renderAll(); else { renderView(); drawWalkMap(); }
+  const f0 = state.obsFloor; if (to) walkSet(to[0], to[1]); if (Math.abs(state.walk.Z) > 0.3) gpuInteriorPrefetch(state.obsFloor + Math.sign(state.walk.Z));   // on the stairs: build the next storey's interior ahead
+  const sp0 = sp.id; if (state.spot !== sp0 || state.obsFloor !== f0) renderAll(); else { renderView(); drawWalkMap(); }
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); }
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
@@ -2148,7 +2164,7 @@ function drawWalkMap() {
   const g = cv.getContext('2d'), sc = T.sc, P = (X, Y) => walkMapP(T, X, Y), R = (x0, y0, x1, y1) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); return [Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)]; }; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = WALK_MAP.big ? 'rgba(15,23,42,0.96)' : 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, T.w, T.h);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
   UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, w, h); if (x1 === UNIT_PLAN.corr.stop) { const [p, q] = P(x1, y0), [p2, q2] = P(x1, y1); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(p, q); g.lineTo(p2, q2); g.stroke(); } });   // corridor + stop line
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, w), Math.max(1, h)); }
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || z1 <= 0 || z0 >= UNIT_H) continue; const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, w), Math.max(1, h)); }
   FURN.items.forEach(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return; g.beginPath(); const [a, b, c, d] = it._ext || (it._ext = furnExt(it)), cs = Math.cos(it.r * DEG), sn = Math.sin(it.r * DEG); [[a, b], [c, b], [c, d], [a, d]].forEach(([lx, ly], i) => { const [x, y] = P(it.x + cs * lx - sn * ly, it.y + sn * lx + cs * ly); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(251,191,36,0.35)'; g.fill(); });   // furniture footprints
   if (WALK_MAP.big) { g.font = '600 11px -apple-system, Inter, sans-serif'; g.fillStyle = 'rgba(226,232,240,0.7)'; g.textAlign = 'center'; const seen = new Set(); for (const [id, [x0, y0, x1, y1]] of UNIT_ROOMS) { const sp = UNIT_SPOTS.find(q => q.id === id), [cx, cy] = P((x0 + x1) / 2, (y0 + y1) / 2); if (!sp || seen.has(id)) continue; seen.add(id); const tx = (sp.label || id).replace(/ \(.*\)| window/g, ''), [, , rw, rh] = R(x0, y0, x1, y1); const t2 = { mbrS: 'Master', br2: 'BR2', br3: 'BR3', yard: 'Yard', corr: 'Corridor' }[id] || tx, t = g.measureText(tx).width < rw - 4 ? tx : t2; if (rh > 16 && g.measureText(t).width < rw - 4) g.fillText(t, cx, cy + 4); } g.fillStyle = 'rgba(148,163,184,0.75)'; g.font = '600 10px -apple-system, Inter, sans-serif'; for (const [t, X, Y] of MAP_LABELS) { const [lx, ly] = P(X, Y), hw = g.measureText(t).width / 2 + 4; g.fillText(t, clamp(lx, hw, T.w - hw), ly + 4); } g.textAlign = 'left'; }   // room names + storey-plan labels
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
@@ -3133,7 +3149,8 @@ function gpuGarden(A, P) {   // MSCP roof garden (as mscpGarden): lawn, planting
 }
 function gpuInterior(env) {   // #134 unit in world coords (plan → world via the spot), rebuilt when spot/floor/posture/door change; colours as drawInterior
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return 0;
-  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), hsOpen(), state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), hsOpen(), !!state.walk, state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const IC = GPU.icache || (GPU.icache = new Map()), hit = IC.get(key); if (hit) { IC.delete(key); IC.set(key, hit); Object.assign(GPU, hit); GPU.pkey = ''; return GPU.inN; }   // built storeys (LRU 4): floor changes on the stairs / floor strip reuse them
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
   const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
   const Nw = (ax, ay, bx, by) => { const l = Math.hypot(bx - ax, by - ay) || 1, nX = (by - ay) / l, nY = -(bx - ax) / l; return [u[0] * nX - n[0] * nY, 0, u[1] * nX - n[1] * nY]; }, dn0 = [0, -1, 0];   // plan edge (CCW as the box sides) → outward world normal (interior sun term)
@@ -3188,7 +3205,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
       A.quad(W(ax, ay, q.z0), W(bx, by, q.z0), W(bx, by, q.z1), W(ax, ay, q.z1), Nw(ax, ay, bx, by), col.map(c => Math.min(1, c * k)), T(0, 0), T(1, 0), T(1, 1), T(0, 1)); }
     const top = col.map(c => Math.min(1, c * 1.05)); if (m === 4) A.quad(W(P[0][0], P[0][1], q.z1), W(P[1][0], P[1][1], q.z1), W(P[2][0], P[2][1], q.z1), W(P[3][0], P[3][1], q.z1), up0, top, T(0, 0), T(1, 0), T(1, 1), T(0, 1));
     else flat(P, q.z1, top, false, up0, E);
-    if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); } flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
+    if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); }
   for (let [x0, y0b, x1, y1, z0, z1, kind] of WL) { wSelf++;
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
     const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
@@ -3206,9 +3223,16 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
       q([P(hg, 0, o0), P(hg, Wd, o0), P(hg, Wd, o1), P(hg, 0, o1)], true); fr(Wd - Fw, Wd, o0, o1); fr(0, Wd, o0, o0 + Fw); fr(0, Wd, o1 - Fw, o1);
       if (tz.length > 1) { const Rr = hd - tz[1] - M, cs = Math.cos(HOPPER_A), sn = Math.sin(HOPPER_A), Tt = r => [r * sn, hd - r * cs], tp = (sa, sb, r0, r1) => { const [p0, z0] = Tt(r0), [p1, z1] = Tt(r1); return [P(sa, p0, z0), P(sb, p0, z0), P(sb, p1, z1), P(sa, p1, z1)]; };
         q(tp(s0, s1, 0, Rr), true); q(tp(s0, s1, Rr - Fw, Rr)); q(tp(s0, s0 + Fw, 0, Rr)); q(tp(s1 - Fw, s1, 0, Rr)); } } }
-  const gl = GPU.gl; if (GPU.inBuf) gl.deleteBuffer(GPU.inBuf); GPU.inBuf = gpuBuf(new Float32Array(A.a)); if (GPU.tintBuf) gl.deleteBuffer(GPU.tintBuf); tint.push(...fGlass); if (GPU.sheerBuf) gl.deleteBuffer(GPU.sheerBuf); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; if (GPU.frostBuf) gl.deleteBuffer(GPU.frostBuf); GPU.frostBuf = gpuBuf(new Float32Array(fFrost.length ? fFrost : [0])); GPU.frostN = fFrost.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
-  GPU.W = W; GPU.Wm = { o: [sp.x, sp.z], u, n, p: [px, py] }; GPU.pkey = ''; return (GPU.inN = A.n);
+  const gl = GPU.gl; GPU.inBuf = gpuBuf(new Float32Array(A.a)); tint.push(...fGlass); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; GPU.frostBuf = gpuBuf(new Float32Array(fFrost.length ? fFrost : [0])); GPU.frostN = fFrost.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
+  GPU.W = W; GPU.Wm = { o: [sp.x, sp.z], u, n, p: [px, py] }; GPU.pkey = ''; GPU.inN = A.n;
+  IC.set(key, { inBuf: GPU.inBuf, inN: GPU.inN, tintBuf: GPU.tintBuf, tintN: GPU.tintN, sheerBuf: GPU.sheerBuf, sheerN: GPU.sheerN, frostBuf: GPU.frostBuf, frostN: GPU.frostN, W, Wm: GPU.Wm });
+  while (IC.size > 4) { const [k0, e] = IC.entries().next().value; IC.delete(k0); for (const b of [e.inBuf, e.tintBuf, e.sheerBuf, e.frostBuf]) gl.deleteBuffer(b); }   // evict least recently used
+  return GPU.inN;
 }
+function gpuInteriorPrefetch(f) {   // build storey f's interior into the cache in idle time, keep the current one
+  if (!GPU.ok || !GPU.ikey || f < 1 || f > 30 || GPU.pf === f) return; GPU.pf = f; const go = () => { GPU.pf = 0; if (!state.walk || f === state.obsFloor) return; const k0 = GPU.ikey, s0 = state.obsFloor;
+    state.obsFloor = f; try { gpuInterior(); } finally { state.obsFloor = s0; } const e = GPU.icache && GPU.icache.get(k0); if (e) { GPU.icache.delete(k0); GPU.icache.set(k0, e); Object.assign(GPU, e); GPU.ikey = k0; GPU.pkey = ''; } };
+  (window.requestIdleCallback || (cb => setTimeout(cb, 60)))(go); }
 function gpuAttrib(pr, buf, inst) {
   const gl = GPU.gl; gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   const on = (loc, n, stride, off) => { if (loc < 0) return; gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, stride, off); };
