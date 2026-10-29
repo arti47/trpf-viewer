@@ -946,13 +946,17 @@ const UNIT_PLAN = (() => {
     [13.34, 12.24, 13.6, 12.4, 0, H, 'cor'], [13.6, 12.24, 14.6, 12.4, 2.1, H, 'cor'], [13.6, 12.28, 14.6, 12.36, 0, 2.1, 'door'], [14.6, 12.24, 15.4, 12.4, 0, H, 'cor'], [15.1, 11.9, 15.4, 12.24, 0, H, 'cor'],
     [15.4, 11.9, 16.96, 12.2, 0, H, 'cor'],
     // lift lobby (owner storey plan 2026-10-26, ≈16.9 px/m): 2 + 2 lifts facing across a 3.1 m lobby, N end to wash area/refuse chutes (closed off here)
-    [16.96, 11.33, 19.6, 16.7, 0, H, 'cor'], [22.7, 10.8, 25.7, 16.7, 0, H, 'cor'],   // E lift pair: shaft S face Y 11.33 (owner plan 2026-10-29, ≈98.5 px/m)
+    // lift lobby + wash area (owner lobby plan 2026-10-29, ≈80.3 px/m, ±0.2 m): E pair X 16.97–19.96, lobby 19.96–23.07 (3.1 m), W pair 23.07–26.06, shafts Y 11.33–16.91; lobby opens N into the wash area
+    [16.96, 11.33, 19.96, 16.91, 0, H, 'cor'], [23.07, 11.33, 26.06, 16.91, 0, H, 'cor'], [26.06, 11.89, 26.37, 18.5, 0, H, 'cor'],   // E/W lift shafts, #148 E wall
+    // wash area X 20.89–26.37, Y 16.91–20.71 at the block's N tip (site plan): open to air above a 1.0 m parapet to a 2.4 m beam (estimate; typical BTO refuse/wash area is naturally ventilated);
+    // chute shafts X 25.31–26.37 (3 × ≈1 m: recyclables chute N, 2 centralised refuse chutes), stainless hopper doors 0.5 × 0.5 m at 0.8–1.3 m on the wash-area face, recyclables hopper blue (sizes estimates)
+    ...[[20.89, 20.56, 25.31, 20.71], [20.89, 16.91, 21.04, 20.56], [19.96, 16.91, 20.89, 17.06]].flatMap(r => [[...r, 0, 1.0, 'cor'], [...r, 2.4, H, 'cor']]),
+    [25.31, 16.91, 26.37, 20.71, 0, H, 'cor'], [25.27, 19.6, 25.31, 20.1, 0.8, 1.3, 'recyc'], [25.27, 18.57, 25.31, 19.07, 0.8, 1.3, 'steel'], [25.27, 17.54, 25.31, 18.04, 0.8, 1.3, 'steel'],
     // service risers (owner plan 2026-10-29, thin-line outlines ±0.2 m, full height; steel access doors estimate): #132 stepped riser under its shelter + E lift pair, #136 riser N of its shelter (0.3 m back from the corridor line)
     [15.1, 10.64, 18.73, 11.33, 0, H, 'cor'], [15.1, 11.33, 16.96, 11.9, 0, H, 'cor'], [15.5, 10.61, 16.4, 10.64, 0.1, 2.1, 'steel'], [16.8, 10.61, 17.7, 10.64, 0.1, 2.1, 'steel'],
-    [15.76, 8.0, 17.3, 8.75, 0, H, 'cor'], [16.0, 8.75, 16.9, 8.78, 0.1, 2.1, 'steel'], [19.6, 16.7, 22.7, 17.0, 0, H, 'cor'],
-    ...[11.4, 14.0].flatMap(y => [[19.56, y, 19.6, y + 1.1, 0, 2.2, 'steel'], [22.7, y, 22.74, y + 1.1, 0, 2.2, 'steel']]),
+    [15.76, 8.0, 17.3, 8.75, 0, H, 'cor'], [16.0, 8.75, 16.9, 8.78, 0.1, 2.1, 'steel'],     ...[12.18, 14.97].flatMap(y => [[19.96, y, 20.0, y + 1.1, 0, 2.2, 'steel'], [23.03, y, 23.07, y + 1.1, 0, 2.2, 'steel']]),   // lift doors (2 per pair, centred on each car)
     // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
-    [25.7, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
+    [26.06, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
     [15.45, 1.6, 15.76, 9.05, 0, H, 'cor'], [14.45, 8.9, 15.45, 9.05, 2.1, H, 'cor'], [14.45, 8.94, 15.45, 9.01, 0, 2.1, 'door'],   // stair lobby closed off from the corridor: single swing door (fire door, closed; owner plan 2026-10-27, leaf ≈1.0 m hinged at #136 side, position ±0.2 m)
     // service riser enclosures between the shelter and the stair door (owner plan 2026-10-29, thin-line stepped outline ≈59 px/m, ±0.2 m): full height, flush with the corridor line Y 9.05 and the main-door recess side X 11.3
     // (was an open 1.8 × 1.3 m nook); 2 steel access doors on the corridor face (estimate)
@@ -973,7 +977,7 @@ const UNIT_PLAN = (() => {
       [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
-  const corr = { walk: [[9.51, 7.46, 13.26, 10.64], [13.26, 9.05, 19.6, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 19.6, 11.33]], stop: 19.6, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 19.6, 11.33], [19.6, 10.64, 22.7, 16.7], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 19.6, was 13.26) + #132/#136 door recesses + under the E lift pair; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
+  const corr = { walk: [[9.51, 7.46, 13.26, 10.64], [13.26, 9.05, 26.06, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 26.06, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [20.89, 16.91, 25.31, 20.71], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
@@ -1981,7 +1985,7 @@ function roomEyeWorld() {
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 20 && Y > 7.4 && Y < 12.3) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 27 && Y > 7.4 && Y < 21.5) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
 }
 /* ===================== FURNITURE (layout editor) ===================== */
 // Loose furniture in #134 (owner 2026-10-27; visual only, readings stay furniture-free): items in plan metres (X along facade 0 = E → W, Y into the flat), IKEA-style default sizes
@@ -2939,7 +2943,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); } flat(rect(UNIT_PLAN.corr.hole), 0.006, c255([96, 94, 90]));
   for (let [x0, y0b, x1, y1, z0, z1, kind] of WL) { wSelf++;
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
-    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
     if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), ext); }
   const fc = c255([238, 238, 234]), Fw = 0.05, M = 0.03;   // window frames (closed): outer frame, posts, sash joints, transoms; 0.06 m deep at the glass line
   for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { const sh = UNIT_PLAN.sashes[wi]; if (!sh.length) continue;
