@@ -1950,7 +1950,12 @@ const walkStep = k => walkVec(k === 'left' ? -90 : k === 'right' ? 90 : 0, k ===
 function walkVec(off, st) {   // move st m along heading + off° (plan frame), sliding along walls
   const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + off) * DEG;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk, esc = furnBlocks(X, Y);
-  if (walkFree(X + dX, Y + dY, 0.2, esc)) walkSet(X + dX, Y + dY); else if (walkFree(X + dX, Y, 0.2, esc)) walkSet(X + dX, Y); else if (walkFree(X, Y + dY, 0.2, esc)) walkSet(X, Y + dY);   // slide along walls
+  // slide along walls; then try directions turned ±25/50/75/90° (step × max(cos, 0.4)) so a diagonal push still gets through narrow gaps (door leaf ↔ shoe cabinet, TY 2026-10-29 "suddenly stuck");
+  // if the eye already overlaps a wall (door closed on it, wall toggled), any move that doesn't enter a wall box itself is allowed so it can walk out
+  const stuck = !walkFree(X, Y, 0.2, true), ok = (x, y) => walkFree(x, y, 0.2, esc) || (stuck && walkFree(x, y, 0, true));
+  let to = ok(X + dX, Y + dY) ? [X + dX, Y + dY] : ok(X + dX, Y) && Math.abs(dX) > 1e-4 ? [X + dX, Y] : ok(X, Y + dY) && Math.abs(dY) > 1e-4 ? [X, Y + dY] : null;
+  for (const a of [25, -25, 50, -50, 75, -75, 90, -90]) { if (to) break; const c = Math.cos(a * DEG), sn = Math.sin(a * DEG), k = Math.max(c, 0.4), x = X + (dX * c - dY * sn) * k, y = Y + (dX * sn + dY * c) * k; if (ok(x, y)) to = [x, y]; }
+  if (to) walkSet(to[0], to[1]);
   const sp0 = sp.id; if (state.spot !== sp0) renderAll(); else { renderView(); drawWalkMap(); }
 }
 function setWalk(on) {
