@@ -121,6 +121,7 @@
     .hud-full .k { color: var(--muted); font-size: 11.5px; }
     .hud-full .v { font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; }
     .hud-full .r { display: block; color: var(--dim); font-size: 10.5px; font-weight: 500; }
+    #walkMap.big { position: fixed !important; left: 10px !important; top: 10px !important; width: calc(100vw - 20px) !important; height: calc(100vh - 20px) !important; height: calc(100dvh - 20px) !important; z-index: 60 !important; opacity: 1 !important; pointer-events: auto !important; cursor: crosshair; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
     #walkMap { top: 54px !important; left: 10px !important; border-radius: var(--r2) !important; border: 1px solid var(--line) !important; }
     #walkPad { bottom: 74px !important; left: 14px !important; }
     .walking .tape { top: 54px; left: calc(50% + 100px); width: min(420px, calc(100% - 230px)); }
@@ -567,7 +568,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <canvas id="floorStrip" class="fstrip" tabindex="0" role="slider" aria-label="Floor" aria-valuemin="1" aria-valuemax="30"></canvas>
 <div id="roomHud" style="display:none"></div>
 <div id="bldCard" class="bld-card" style="display:none" role="dialog" aria-label="Building"></div>
-<canvas id="walkMap" class="absolute z-10 cursor-crosshair" style="display:none;width:190px;height:140px" title="Tap to jump there"></canvas>
+<canvas id="walkMap" class="absolute z-10 cursor-crosshair" style="display:none;width:190px;height:140px" title="Tap to expand the map"></canvas>
 <div id="walkPad" class="absolute z-10" style="display:none">
 <div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div>
 </div>
@@ -1970,22 +1971,39 @@ function walkVec(off, st) {   // move st m along heading + off° (plan frame), s
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else state.walk = null;
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
-const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6 };   // px per m (canvas css px), plan origin offset
+const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6, big: false, T: null };   // px per m (canvas css px), plan origin offset; big = expanded map (tap the minimap)
+// Map transform: small = 190×140 following the eye; big = whole walkable area fitted to the canvas, turned 90° (plan X down) when the canvas is taller than wide.
+function walkMapT(cv) {
+  if (!WALK_MAP.big) { WALK_MAP.ox = Math.max(-0.25, state.walk.X - 13.5); WALK_MAP.oy = Math.max(-0.6, state.walk.Y - 10.2); return { w: 190, h: 140, sc: WALK_MAP.s, ox: WALK_MAP.ox, oy: WALK_MAP.oy, rot: false }; }   // follow the eye along the corridor
+  const r = cv.getBoundingClientRect(), w = r.width || 300, h = r.height || 300; let X0 = 1e9, Y0 = 1e9, X1 = -1e9, Y1 = -1e9; const add = (X, Y) => { X0 = Math.min(X0, X); X1 = Math.max(X1, X); Y0 = Math.min(Y0, Y); Y1 = Math.max(Y1, Y); };
+  UNIT_PLAN.outline.forEach(([X, Y]) => add(X, Y)); UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { add(x0, y0); add(x1, y1); }); X0 -= 1; Y0 -= 1; X1 += 1; Y1 += 1;
+  const rot = h > w * 1.1, pad = 12, top = 40, bot = 22, aw = w - 2 * pad, ah = h - top - bot, sc = rot ? Math.min(aw / (Y1 - Y0), ah / (X1 - X0)) : Math.min(aw / (X1 - X0), ah / (Y1 - Y0));
+  const ex = rot ? (Y1 - Y0) * sc : (X1 - X0) * sc, ey = rot ? (X1 - X0) * sc : (Y1 - Y0) * sc, l = pad + (aw - ex) / 2, t = top + (ah - ey) / 2;
+  return { w, h, sc, rot, X0, Y0, X1, Y1, l, t };
+}
+const walkMapP = (T, X, Y) => T.l === undefined ? [(X - T.ox) * T.sc, (Y - T.oy) * T.sc] : T.rot ? [T.l + (T.Y1 - Y) * T.sc, T.t + (X - T.X0) * T.sc] : [T.l + (X - T.X0) * T.sc, T.t + (Y - T.Y0) * T.sc];
+const walkMapInv = (T, x, y) => T.l === undefined ? [x / T.sc + T.ox, y / T.sc + T.oy] : T.rot ? [(y - T.t) / T.sc + T.X0, T.Y1 - (x - T.l) / T.sc] : [(x - T.l) / T.sc + T.X0, (y - T.t) / T.sc + T.Y0];
+function walkMapBig(on) {
+  WALK_MAP.big = !!on && !!state.walk; const cv = $('walkMap'); if (WALK_MAP.big && cv.parentNode !== document.body) { WALK_MAP.home = [cv.parentNode, cv.nextSibling]; document.body.appendChild(cv); } else if (!WALK_MAP.big && WALK_MAP.home) { WALK_MAP.home[0].insertBefore(cv, WALK_MAP.home[1]); WALK_MAP.home = null; }   // body child while big: pane ancestors would clip / contain position:fixed
+  cv.classList.toggle('big', WALK_MAP.big); cv.title = WALK_MAP.big ? 'Tap a spot to walk there' : 'Tap to expand the map'; drawWalkMap();
+}
 function drawWalkMap() {
-  const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1; if (cv.width !== 190 * dpr) { cv.width = 190 * dpr; cv.height = 140 * dpr; }
-  WALK_MAP.ox = Math.max(-0.25, state.walk.X - 13.5); WALK_MAP.oy = Math.max(-0.6, state.walk.Y - 10.2);   // follow the eye along the corridor
-  const g = cv.getContext('2d'), sc = WALK_MAP.s, P = (X, Y) => [(X - WALK_MAP.ox) * sc, (Y - WALK_MAP.oy) * sc]; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, 190, 140);
+  const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1, T = WALK_MAP.T = walkMapT(cv), bw = Math.round(T.w * dpr), bh = Math.round(T.h * dpr); if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  const g = cv.getContext('2d'), sc = T.sc, P = (X, Y) => walkMapP(T, X, Y), R = (x0, y0, x1, y1) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); return [Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)]; }; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = WALK_MAP.big ? 'rgba(15,23,42,0.96)' : 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, T.w, T.h);
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill();
-  UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, c - a, d - b); if (x1 === UNIT_PLAN.corr.stop) { g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(c, b); g.lineTo(c, d); g.stroke(); } });   // corridor + stop line
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, w, h); if (x1 === UNIT_PLAN.corr.stop) { const [p, q] = P(x1, y0), [p2, q2] = P(x1, y1); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(p, q); g.lineTo(p2, q2); g.stroke(); } });   // corridor + stop line
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair') continue; const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, w), Math.max(1, h)); }
   FURN.items.forEach(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return; g.beginPath(); const [a, b, c, d] = it._ext || (it._ext = furnExt(it)), cs = Math.cos(it.r * DEG), sn = Math.sin(it.r * DEG); [[a, b], [c, b], [c, d], [a, d]].forEach(([lx, ly], i) => { const [x, y] = P(it.x + cs * lx - sn * ly, it.y + sn * lx + cs * ly); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(251,191,36,0.35)'; g.fill(); });   // furniture footprints
+  if (WALK_MAP.big) { g.font = '600 11px -apple-system, Inter, sans-serif'; g.fillStyle = 'rgba(226,232,240,0.7)'; g.textAlign = 'center'; const seen = new Set(); for (const [id, [x0, y0, x1, y1]] of UNIT_ROOMS) { const sp = UNIT_SPOTS.find(q => q.id === id), [cx, cy] = P((x0 + x1) / 2, (y0 + y1) / 2); if (!sp || seen.has(id)) continue; seen.add(id); const tx = (sp.label || id).replace(/ \(.*\)| window/g, ''), [, , rw, rh] = R(x0, y0, x1, y1); const t2 = { mbrS: 'Master', br2: 'BR2', br3: 'BR3', yard: 'Yard', corr: 'Corridor' }[id] || tx, t = g.measureText(tx).width < rw - 4 ? tx : t2; if (rh > 16 && g.measureText(t).width < rw - 4) g.fillText(t, cx, cy + 4); } g.textAlign = 'left'; }   // room names
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
-  const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = Math.atan2(dY, dX); g.beginPath(); g.moveTo(x, y); g.arc(x, y, 22, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
-  g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '600 10px -apple-system, Inter, sans-serif'; const cap = 'S ▲ windows', cw = g.measureText(cap).width; g.fillStyle = 'rgba(2,6,23,0.75)'; g.fillRect(3, 123, cw + 8, 14); g.fillStyle = '#a3b1c6'; g.fillText(cap, 7, 134);
+  const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = T.rot ? Math.atan2(dX, -dY) : Math.atan2(dY, dX), rw = WALK_MAP.big ? 34 : 22; g.beginPath(); g.moveTo(x, y); g.arc(x, y, rw, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
+  g.beginPath(); g.arc(x, y, WALK_MAP.big ? 5 : 3.5, 0, Math.PI * 2); g.fillStyle = '#34d399'; g.fill(); g.font = '600 10px -apple-system, Inter, sans-serif'; const cap = T.rot ? 'S ▶ windows' : 'S ▲ windows', cw = g.measureText(cap).width; g.fillStyle = 'rgba(2,6,23,0.75)'; g.fillRect(3, T.h - 17, cw + 8, 14); g.fillStyle = '#a3b1c6'; g.fillText(cap, 7, T.h - 6);
+  if (WALK_MAP.big) { g.font = '600 13px -apple-system, Inter, sans-serif'; g.fillStyle = '#e2e8f0'; g.fillText('Tap a spot to walk there', 12, 25); if (WALK_MAP.miss) { g.fillStyle = '#fda4af'; g.fillText("Can't walk there", 12 + g.measureText('Tap a spot to walk there').width + 14, 25); } g.strokeStyle = '#e2e8f0'; g.lineWidth = 2; const bx = T.w - 26, by = 20; g.beginPath(); g.moveTo(bx - 7, by - 7); g.lineTo(bx + 7, by + 7); g.moveTo(bx + 7, by - 7); g.lineTo(bx - 7, by + 7); g.stroke(); }   // close ✕ (top-right 48 px)
+  else { g.fillStyle = 'rgba(2,6,23,0.75)'; g.fillRect(T.w - 21, 3, 18, 18); g.strokeStyle = '#cbd5e1'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(T.w - 17, 11); g.lineTo(T.w - 17, 7); g.lineTo(T.w - 13, 7); g.moveTo(T.w - 7, 13); g.lineTo(T.w - 7, 17); g.lineTo(T.w - 11, 17); g.stroke(); }   // expand hint icon
 }
 // 3D view eye when Room interior is on: the interior eye (stand-back d / walk position), not the window spot, so the outside scene through the glass matches the room.
 // Spot ≈ window centre 0.15 m outside the outer face (outer face = yin − 0.15). Window metrics/masks keep using the spot.
@@ -3414,7 +3432,10 @@ $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen
   J.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (J0.id !== null) return; J0.id = e.pointerId; J.setPointerCapture(e.pointerId); J.classList.add('on'); set(e); J0.t = performance.now(); if (!J0.raf) J0.raf = requestAnimationFrame(tick); });
   J.addEventListener('pointermove', e => { if (e.pointerId === J0.id) { e.stopPropagation(); set(e); } });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => J.addEventListener(ev, end)); }
-$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); const k = 190 / ($('walkMap').getBoundingClientRect().width || 190), { x: x0, y: y0 } = localXY($('walkMap'), e), x = x0 * k, y = y0 * k, X = x / WALK_MAP.s + WALK_MAP.ox, Y = y / WALK_MAP.s + WALK_MAP.oy; if (walkFree(X, Y)) { walkSet(X, Y); renderAll(); } });
+$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); const cv = $('walkMap'), T = WALK_MAP.T; if (!T) return; if (!WALK_MAP.big) { walkMapBig(true); return; }   // small map: tap expands
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (x > T.w - 48 && y < 44) { walkMapBig(false); return; }   // ✕
+  const [X, Y] = walkMapInv(T, x, y); if (walkFree(X, Y)) { WALK_MAP.miss = false; walkSet(X, Y); walkMapBig(false); renderAll(); } else { WALK_MAP.miss = true; drawWalkMap(); clearTimeout(WALK_MAP.mt); WALK_MAP.mt = setTimeout(() => { WALK_MAP.miss = false; if (WALK_MAP.big) drawWalkMap(); }, 1500); } });
+window.addEventListener('resize', () => { if (WALK_MAP.big) drawWalkMap(); });
 // Walk: open/close the internal door nearest in front of the eye (≤1.8 m; ahead weighted over behind); saved per door in the layout
 function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a = (state.heading - 350.3) * DEG, fx = -Math.sin(a), fy = Math.cos(a); let best = null, bs = 1e9;
   const cand = Object.entries(DOORS).filter(([id]) => (UNIT_W.d[id] || 'none') !== 'none' && !(id === 'br3' && !UNIT_W.br3)).map(([id, D]) => [id, D.ax === 'x' ? (D.a0 + D.a1) / 2 : D.g, D.ax === 'x' ? D.g : (D.a0 + D.a1) / 2]);
@@ -3445,7 +3466,7 @@ window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTA
   if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
   if (k) { e.preventDefault(); walkStep(k); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); state.heading = norm360(state.heading + (e.key === 'ArrowLeft' ? -5 : 5)); renderView(); } });
-window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const any = $('roomBar').style.display !== 'none' || $('datePop').style.display !== 'none' || $('hint').style.display !== 'none' || $('feMenu').style.display !== 'none' || !!BLD.P;
+window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (WALK_MAP.big) { walkMapBig(false); return; } const any = $('roomBar').style.display !== 'none' || $('datePop').style.display !== 'none' || $('hint').style.display !== 'none' || $('feMenu').style.display !== 'none' || !!BLD.P;
   roomMenu(false); datePop(false); feMenu(false); if ($('hint').style.display !== 'none') hintShow(false); if (BLD.P) bldSelect(null);
   if (!any) { const k = PNL.open.filter(q => !PNL.pin.includes(q)).pop(); if (k) pnlToggle(k); else if (FURN.open) furnOpen(false); } });   // Esc: close the top popover, else the last unpinned panel / editor
 // Scenarios (all future ones include E1/E2 condos; N/S step down toward Founders' Memorial) change only the world (new developments, date); viewer (floor, room, heading, posture) is never touched.
