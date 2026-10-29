@@ -955,14 +955,15 @@ const UNIT_PLAN = (() => {
     // service risers (owner plan 2026-10-29, thin-line outlines ±0.2 m, full height; steel access doors estimate): #132 stepped riser under its shelter + E lift pair, #136 riser N of its shelter (0.3 m back from the corridor line)
     [15.1, 10.64, 18.73, 11.33, 0, H, 'cor'], [15.1, 11.33, 16.96, 11.9, 0, H, 'cor'], [15.5, 10.61, 16.4, 10.64, 0.1, 2.1, 'steel'], [16.8, 10.61, 17.7, 10.64, 0.1, 2.1, 'steel'],
     [15.76, 8.0, 17.3, 8.75, 0, H, 'cor'], [16.0, 8.75, 16.9, 8.78, 0.1, 2.1, 'steel'],         // corridor W to the end at #142/#144 (X 58.6): N = #148/#146/#144 fronts, S = #136/#138/#140/#142 fronts + #142 stair (X 52–54.7); door leaves positions ±1 m (estimate)
-    [26.06, 10.64, 58.6, 10.95, 0, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
+    [26.06, 10.64, 33.65, 10.95, 0, H, 'cor'], [47.53, 10.64, 58.6, 10.95, 0, H, 'cor'], [33.65, 10.64, 47.53, 10.95, 0, 1.0, 'cor'], [33.65, 10.64, 47.53, 10.95, 2.4, H, 'cor'], [58.6, 8.7, 58.9, 10.95, 0, H, 'cor'],
     [15.45, 1.6, 15.76, 9.05, 0, H, 'cor'], [14.45, 8.9, 15.45, 9.05, 2.1, H, 'cor'], [14.45, 8.94, 15.45, 9.01, 0, 2.1, 'door'],   // stair lobby closed off from the corridor: single swing door (fire door, closed; owner plan 2026-10-27, leaf ≈1.0 m hinged at #136 side, position ±0.2 m)
     // service riser enclosures between the shelter and the stair door (owner plan 2026-10-29, thin-line stepped outline ≈59 px/m, ±0.2 m): full height, flush with the corridor line Y 9.05 and the main-door recess side X 11.3
     // (was an open 1.8 × 1.3 m nook); 2 steel access doors on the corridor face (estimate)
     [11.3, 7.74, 13.22, 9.05, 0, H, 'cor'], [13.22, 8.17, 14.45, 9.05, 0, H, 'cor'], [11.6, 9.05, 12.5, 9.08, 0.1, 2.1, 'steel'], [12.8, 9.05, 13.7, 9.08, 0.1, 2.1, 'steel'],
     [15.76, 7.85, 17.3, 8.0, 0, H, 'cor'], [17.3, 7.85, 18.3, 8.0, 2.1, H, 'cor'], [17.3, 7.89, 18.3, 7.96, 0, 2.1, 'door'], [18.3, 7.85, 18.9, 8.0, 0, H, 'cor'], [18.6, 8.0, 18.9, 8.75, 0, H, 'cor'],
-    [18.6, 8.75, 52, 9.05, 0, H, 'cor'], [54.7, 8.75, 58.6, 9.05, 0, H, 'cor'], [51.7, 6.5, 52, 8.75, 0, H, 'cor'], [54.7, 6.5, 55, 8.75, 0, H, 'cor'], [52, 6.2, 54.7, 6.5, 0, H, 'cor'],
-    ...[26.6, 51.3, 56.6].map(x => [x, 10.6, x + 1.0, 10.64, 0, 2.1, 'door']), ...[33.0, 37.4, 57.0].map(x => [x, 9.05, x + 1.0, 9.09, 0, 2.1, 'door']),
+    [18.6, 8.75, 22.37, 9.05, 0, H, 'cor'], [30.83, 8.75, 42.98, 9.05, 0, H, 'cor'], [51.7, 8.75, 52, 9.05, 0, H, 'cor'],
+    [22.37, 8.75, 30.83, 9.05, 0, 1.0, 'cor'], [22.37, 8.75, 30.83, 9.05, 2.4, H, 'cor'], [42.98, 8.75, 51.7, 9.05, 0, 1.0, 'cor'], [42.98, 8.75, 51.7, 9.05, 2.4, H, 'cor'], [54.7, 8.75, 58.6, 9.05, 0, H, 'cor'], [51.7, 6.5, 52, 8.75, 0, H, 'cor'], [54.7, 6.5, 55, 8.75, 0, H, 'cor'], [52, 6.2, 54.7, 6.5, 0, H, 'cor'],
+    ...[28.4, 52.0, 57.0].map(x => [x, 10.6, x + 1.0, 10.64, 0, 2.1, 'door']), ...[33.6, 37.4, 57.0].map(x => [x, 9.05, x + 1.0, 9.09, 0, 2.1, 'door']),
     [13.12, 1.3, 15.45, 1.6, 0, H, 'cor'], [14.25, 1.6, 14.35, 5.6, 0, H, 'cor'], [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
   // stair flights (0.175 m risers, 0.28 m treads): W half up as steps; E half down drawn as a dark stairwell patch with tread lines (corr.hole) — nothing below
   // floor level (z < 0) may be modelled: interior floors are painted first, so below-floor faces painted over the living floor (owner photos 2026-10-26)
@@ -974,9 +975,17 @@ const UNIT_PLAN = (() => {
   for (let k = -6; k <= 6; k++) { const z = k * 2.8;
     w.push([8.85, 11.08, 9.42, 13.36, z - 0.12, z, 'ext'], [8.85, 11.08, 8.9, 13.36, z, z + 1.0, 'rack'], [8.9, 11.08, 9.42, 11.13, z, z + 1.0, 'rack'], [9.4, 11.3, 9.42, 13.0, z + 1.0, z + 2.4, 'xglass'],
       [8.1, 13.18, 8.8, 13.2, z + 1.6, z + 2.2, 'xglass']); }
+  // open slots off the W corridor (owner plan + facade photo 2026-10-29, ≈23 px/m, ±0.5 m): 1.0 m parapet + 2.4 m beam on the corridor line, open to air above;
+  // neighbours' side walls/bath faces (ext, ground→roof) + per-storey A/C ledges (estimate). N slot between #148 and #146 (open to the N at X 39.07–42.11);
+  // S slots between #136/#138 and #140/#142 stair
+  w.push([33.45, 10.64, 33.65, 13.28, -200, 200, 'ext'], [47.53, 10.64, 47.73, 13.28, -200, 200, 'ext'], [33.45, 13.28, 39.07, 20.0, -200, 200, 'ext'], [42.11, 13.28, 47.73, 20.0, -200, 200, 'ext'],
+    [42.78, 6.34, 42.98, 9.05, -200, 200, 'ext'], [42.98, 6.14, 45.8, 6.34, -200, 200, 'ext'], [45.6, 1.35, 45.8, 6.14, -200, 200, 'ext'], [51.87, 1.35, 52.07, 6.5, -200, 200, 'ext'],
+    [30.83, 1.35, 31.03, 9.05, -200, 200, 'ext'], [22.17, 1.35, 22.37, 8.75, -200, 200, 'ext']);
+  acLedge(43.63, 12.0, 46.23, 13.28, 'swe', [44.4, 12.85, 45.4, 13.23]); acLedge(34.95, 12.0, 37.34, 13.28, 'swe', [35.6, 12.85, 36.6, 13.23]);
+  acLedge(43.6, 6.34, 45.8, 7.43, 'nwe', [44.2, 6.4, 45.2, 6.78]); acLedge(29.8, 5.04, 30.83, 6.34, 'nsw', [29.9, 5.4, 30.28, 6.0]); acLedge(22.37, 5.04, 23.4, 6.34, 'nse', [22.92, 5.4, 23.3, 6.0]);
   w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
-  const corr = { wash: [20.89, 16.91, 25.31, 20.71], walk: [[9.51, 7.46, 13.26, 10.64], [13.26, 9.05, 26.06, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 26.06, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
+  const corr = { wash: [20.89, 16.91, 25.31, 20.71], walk: [[9.51, 7.46, 13.26, 10.64], [13.26, 9.05, 58.4, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 58.4, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 22.37, 10.95], [22.37, 8.75, 58.6, 10.95], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [13.12, 5.6, 15.45, 7.74], [52, 6.5, 54.7, 8.75], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
   const outline = [[0.31, F], [9.2, F], [9.2, 1.68], [12.86, 1.68], [12.86, 7.46], [9.51, 7.46], [9.51, 8.7], [5.75, 8.7], [5.75, 6.42], [1.94, 6.42], [1.94, 4.48], [0.31, 4.48]];
   const floors = [[[0.31, F, 3.2, 4.48], 'wood'], [[3.2, 3.44, 4.22, 4.48], 'wood'], [[3.31, F, 6.2, 3.33], 'wood'], [[6.3, F, 9.29, 3.33], 'wood'],
     [[1.94, 4.58, 4.22, 6.3], 'wet'], [[4.3, 4.58, 6.19, 6.3], 'wet'], [[5.75, 6.42, 7.11, 8.7], 'wet'], [[7.18, 6.42, 9.2, 8.7], 'kitchen']];
@@ -1989,7 +1998,7 @@ function roomEyeWorld() {
 function ownUnitTest() {
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 27 && Y > 7.4 && Y < 21.5) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
+  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 27 && Y > 7.4 && Y < 21.5) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5) || (X > 33.65 && X < 47.53 && Y > 10.6 && Y < 20) || (X > 42.98 && X < 51.87 && Y > 1.35 && Y < 9.05) || (X > 22.37 && X < 30.83 && Y > 1.35 && Y < 9.05); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
 }
 /* ===================== FURNITURE (layout editor) ===================== */
 // Loose furniture in #134 (owner 2026-10-27; visual only, readings stay furniture-free): items in plan metres (X along facade 0 = E → W, Y into the flat), IKEA-style default sizes
