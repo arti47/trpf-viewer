@@ -2251,7 +2251,11 @@ const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
 const furnParts = it => { const C = FURN_CAT[it.t]; if (!C) return []; const P = C.b(it), c = Math.cos(it.r * DEG), s = Math.sin(it.r * DEG), e = it.e || 0;
-  return P.map(q => ({ ...q, z0: q.z0 + e, z1: q.z1 + e, p: q.p.map(([lx, ly]) => [it.x + c * lx - s * ly, it.y + s * lx + c * ly]) })); };
+  const fab = /^(sofa|arm|rug)/.test(it.t), bed = /^(bed|bunk|trundle|platform)/.test(it.t);
+  return P.map(q => { const soft = q.c === FURN_COL.mattress || q.c === FURN_COL.linen || q.c === '#fbfaf6', mat = q.mat || (fab || (bed && soft) ? 1 : furnWoody(q.c) ? 2 : 3);
+    return { mat, soft: q.soft ?? (soft ? (q.c === '#fbfaf6' ? 0.06 : 0.045) : fab && it.t !== 'rug' && q.c !== FURN_COL.leg ? 0.05 : 0.008), ...q, z0: q.z0 + e, z1: q.z1 + e, p: q.p.map(([lx, ly]) => [it.x + c * lx - s * ly, it.y + s * lx + c * ly]) }; }); };
+// material class from colour: brown/orange hue with some saturation → wood grain, else satin (laminate/paint/metal)
+const furnWoody = h => { if (typeof h !== 'string' || !/^#[0-9a-f]{6}$/i.test(h)) return false; const [r, g, b] = hexRgb(h), mx = Math.max(r, g, b), mn = Math.min(r, g, b); return r >= g && g >= b && mx > 60 && (mx - mn) / mx > 0.22; };
 const furnLocal = (it, X, Y) => { const dx = X - it.x, dy = Y - it.y, c = Math.cos(it.r * DEG), s = Math.sin(it.r * DEG); return [c * dx + s * dy, -s * dx + c * dy]; };
 const furnExt = it => { const C = FURN_CAT[it.t]; let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const q of C.b(it)) for (const [x, y] of q.p) { a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); } return [a, b, c, d]; };   // local bbox incl. chairs
 // Walk: furniture standing below 1.2 m blocks the 0.2 m body (rugs and wall-mounted items above 1.2 m don't)
@@ -2667,16 +2671,27 @@ void main() {
     if (uNW > 0 && mode < 3.5) { vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP; float F = 0.0;   // daylight through the windows of this room: form factor of each glazed opening (sky-lit), clipped to its room rect; rest = bounce
       for (int i = 0; i < 8; i++) { if (i >= uNW) break; vec4 R = uWR[i]; float wR = clamp(min(min(pp.x - R.x, R.z - pp.x), min(pp.y - R.y, R.w - pp.y)) / 0.04 + 0.5, 0.0, 1.0); if (wR > 0.0) F += wR * ffRect(vWorld + nrm * 0.01, nrm, uWo[i], uWa[i], uWb[i]); }
       kD += uWD * (3.5 * min(F, 0.5) - 0.3); }
+    float mt = mode < 3.5 && vTex.w < -0.5 ? -vTex.w : 0.0; vec3 p3 = vWorld; float fw3 = length(fwidth(p3));   // furniture materials: 1 fabric, 2 wood, 3 satin
+    if (mt > 0.5 && mt < 1.5) alb *= 0.92 + 0.12 * vn3(p3 * 110.0) * (1.0 - smoothstep(0.003, 0.01, fw3)) + 0.035 * (vn3(p3 * 7.0) - 0.5);   // weave + soft mottling
+    else if (mt > 1.5 && mt < 2.5) { vec2 pq = vec2(dot(p3.xz, uPU), dot(p3.xz, uPN)); float gr = fract(6.0 * vn3(vec3(pq.x * 0.9, pq.y * 14.0, p3.y * 14.0)) + 0.35 * vn3(vec3(pq.x * 6.0, pq.y * 60.0, p3.y * 60.0)));   // grain along plan X
+      alb *= 1.0 - (0.13 * smoothstep(0.55, 0.95, gr) + 0.05 * vn3(p3 * 40.0)) * (1.0 - smoothstep(0.004, 0.02, fw3)); }
+    else if (mt > 2.5) alb *= 0.975 + 0.05 * vn3(p3 * 30.0) * (1.0 - smoothstep(0.003, 0.012, fw3));
+    else if (mode < 3.5 && vTex.w > 0.5 && vTex.w < 1.5) alb *= 0.985 + 0.03 * vn3(p3 * 7.0) * (1.0 - smoothstep(0.01, 0.04, fw3));   // wall plaster (orange-peel tone)
     c = alb * (mode > 4.5 ? max(0.55, uLitK + 0.1) : mode > 3.5 ? uExtK : kD);
+    if (mt > 0.5) { vec3 v = normalize(vWorld - uEye); float cv = abs(dot(v, nrm));
+      if (mt < 1.5) c += alb * kD * 0.35 * pow(1.0 - cv, 4.0);   // fabric sheen at grazing angles
+      else if (uNW > 0) { vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP; float F = 0.04 + 0.96 * pow(1.0 - cv, 5.0);   // satin/varnish: window reflection
+        c += mix(uFog, uSkyMid, 0.6) * min(1.0, uWD * 1.4) * F * (mt > 2.5 ? 0.55 : 0.4) * winRefl(vWorld + nrm * 0.003, reflect(v, nrm), pp); } }
     if (uAO > 0.5 && mode < 3.5) c *= ssao(nrm);
     if (uNW > 0 && mode < 3.5 && vTex.w > 1.5 && vTex.w < 2.5 && nrm.y > 0.7) { vec3 v = normalize(vWorld - uEye); vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP;   // floor sheen: Fresnel (F0 0.04) window/sky reflection
       float F = 0.04 + 0.96 * pow(1.0 - clamp(-v.y, 0.0, 1.0), 5.0); c += mix(uFog, uSkyMid, 0.6) * min(1.0, uWD * 1.4) * F * 0.8 * winRefl(vWorld + vec3(0.0, 0.002, 0.0), reflect(v, vec3(0.0, 1.0, 0.0)), pp); }
     if (vTex.w > 1.5) { bool wl = vTex.w > 2.5; float pt = floor(vTex.w - 3.0 + 0.5); vec2 sz = !wl ? vec2(vTex.w < 2.1 ? 0.6 : 0.3) : pt > 1.5 ? vec2(0.3, 0.075) : vec2(0.6, 0.3), q = wl ? vTex.xy : vTex.xy - vec2(0.31, 0.15);   // tile joints: floors (tex = plan X, Y; 600 / 300 mm), wall tiles (tex = along-wall m, height; 300×600 stacked / offset, 75×300 subway)
       if (wl && pt > 0.5) q.x += 0.5 * sz.x * mod(floor(q.y / sz.y), 2.0);
+      c *= 0.955 + 0.09 * h3(vec3(floor(q / sz + 0.5), pt + 3.0));   // per-tile tone variation
       vec2 f = abs(fract(q / sz + 0.5) - 0.5) * sz / max(fwidth(vTex.xy), vec2(1e-5)); c = mix(c, wl ? c * 0.7 : vec3(90.0, 84.0, 76.0) / 255.0, (wl ? 0.5 : 0.25) * uLitK * (1.0 - smoothstep(0.35, 1.0, min(f.x, f.y)))); }
     else if (vTex.w > 0.5 && mode < 3.5) {   // interior wall faces (tex = face u,v 0..1): contact shading at floor/ceiling junctions + 1 px edge lines (as drawInterior)
       float h = vWorld.y - uSlab; c = mix(c, vec3(0.08, 0.06, 0.05), 0.1 * (1.0 - smoothstep(0.0, 0.3, h)) + 0.08 * smoothstep(uRoomH - 0.25, uRoomH, h));
-      vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.45 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); }
+      vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.16 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); }
     if (uInSun > 0.0) {   // sun through the openings: interior shadow map (walls, frames, furniture; ±12 m) × outdoor near cascade (city + rest of the block) × Lambert
       float lam = max(0.0, dot(nrm, uSun)); if (lam > 0.0) { vec3 r = vWorld + nrm * 0.015 - uLcI, l = vec3(dot(uLr, r) / uLsI.x, dot(uLu, r) / uLsI.x, dot(uLf, r) / uLsI.y);
         float v = max(abs(l.x), abs(l.y)) < 0.99 && abs(l.z) < 0.99 ? pcfI(l) : 1.0; if (v > 0.0) v *= shadowAt(vWorld, nrm);
@@ -2890,10 +2905,26 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
   const fl01 = h => c255(hexRgb(h)).map(c => c * 0.85);   // floor tiles per room (finishes): 600 mm, wet rooms 300 mm (tile code 2.2)
   flat(UNIT_PLAN.outline, 0, fl01(FURN.fin.floor.living), true); FIN_FLOORS.forEach(([id, r]) => flat(rect(r), 0.003, fl01(FURN.fin.floor[id]), id[0] === 'w' || id === 'yard' ? 2.2 : true)); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95), false, dn0);
   UNIT_PLAN.corr.floors.forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85)); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });
-  const fGlass = [], fSheer = [], fFrost = []; for (const it of [{ fixed: 1 }, ...FURN.items]) for (const q of it.fixed ? furnFixed() : furnParts(it)) {   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
+  const softPart = (q, col) => {   // rounded furniture (2026-10-29): plan corners filleted + quarter-round top/bottom edges (radius q.soft), smooth normals, colour shading follows the normal; material code in tex.w (−1 fabric, −2 wood, −3 satin)
+    const P = q.p, m = P.length, h = q.z1 - q.z0; if (m < 3 || h < 0.004) return false; let cx = 0, cy = 0; for (const [x, y] of P) { cx += x / m; cy += y / m; }
+    let sg = 0, ri = Infinity; for (let i = 0; i < m; i++) { const [ax, ay] = P[i], [bx, by] = P[(i + 1) % m], [qx, qy] = P[(i + 2) % m], cr = (bx - ax) * (qy - by) - (by - ay) * (qx - bx); if (Math.abs(cr) > 1e-9) { if (sg && Math.sign(cr) !== sg) return false; sg = Math.sign(cr); }
+      const l = Math.hypot(bx - ax, by - ay); if (l > 1e-6) ri = Math.min(ri, Math.abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) / l); }
+    const b = Math.min(q.soft ?? 0.008, ri * 0.45, h * (q.z0 > 0.01 ? 0.45 : 0.9)); if (!(b > 0.0015)) return false;
+    const on = (ax, ay, bx, by) => { const l = Math.hypot(bx - ax, by - ay) || 1; let nx = (by - ay) / l, ny = -(bx - ax) / l; if (nx * ((ax + bx) / 2 - cx) + ny * ((ay + by) / 2 - cy) < 0) { nx = -nx; ny = -ny; } return [nx, ny]; };
+    const O = []; if (q.cy || m > 8) for (const [x, y] of P) { const l = Math.hypot(x - cx, y - cy) || 1; O.push([x, y, (x - cx) / l, (y - cy) / l]); }
+    else for (let i = 0; i < m; i++) { const pv = P[(i + m - 1) % m], [x, y] = P[i], nx = P[(i + 1) % m], n1 = on(pv[0], pv[1], x, y), n2 = on(x, y, nx[0], nx[1]), dd = 1 + n1[0] * n2[0] + n1[1] * n2[1], ox = x - b * (n1[0] + n2[0]) / dd, oy = y - b * (n1[1] + n2[1]) / dd;
+      for (let k = 0; k <= 3; k++) { const t = k / 3, vx = n1[0] * (1 - t) + n2[0] * t, vy = n1[1] * (1 - t) + n2[1] * t, l = Math.hypot(vx, vy) || 1; O.push([ox + b * vx / l, oy + b * vy / l, vx / l, vy / l]); } }
+    const tx = [0, 0, 0, -q.mat || -3], R = [], c45 = Math.SQRT1_2; if (q.z0 > 0.01) R.push([b, q.z0, 0, -1], [b * (1 - c45), q.z0 + b * (1 - c45), c45, -c45], [0, q.z0 + b, 1, 0]); else R.push([0, q.z0, 1, 0]);
+    R.push([0, q.z1 - b, 1, 0], [b * (1 - c45), q.z1 - b * (1 - c45), c45, c45], [b, q.z1, 0, 1]);
+    const V = (o, r) => { const [x, y, nx, ny] = o, [d, z, wh, wv] = r, wn = [(u[0] * nx - n[0] * ny) * wh, wv, (u[1] * nx - n[1] * ny) * wh], k = wv >= 0 ? (0.87 - 0.13 * ny) * (1 - wv) + 1.05 * wv : (0.87 - 0.13 * ny) * (1 + wv) - 0.8 * wv; return [W(x - nx * d, y - ny * d, z), wn, col.map(c => Math.min(1, c * k))]; };
+    for (let r = 0; r + 1 < R.length; r++) for (let j = 0; j < O.length; j++) { const a = V(O[j], R[r]), bb = V(O[(j + 1) % O.length], R[r]), c2 = V(O[(j + 1) % O.length], R[r + 1]), d = V(O[j], R[r + 1]); for (const v of [a, bb, c2, a, c2, d]) A.v(v[0], v[1], v[2], tx); }
+    const cap = (r) => { const cc = V([cx, cy, 0, 0], [0, r[1], 0, r[3]]); for (let j = 0; j < O.length; j++) { const a = V(O[j], r), bb = V(O[(j + 1) % O.length], r); for (const v of [cc, a, bb]) A.v(v[0], v[1], v[2], tx); } };
+    cap(R[R.length - 1]); if (q.z0 > 0.01) cap(R[0]); return true; };
+  const fGlass = [], fSheer = [], fFrost = []; for (const it of [{ fixed: 1 }, ...FURN.items]) for (let q of it.fixed ? furnFixed() : furnParts(it)) { if (it.fixed && !q.mat) q = { ...q, mat: furnWoody(q.c) ? 2 : 3 };   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
     if (q.glass) { const [p0, , p2] = q.p, a = W(p0[0], p0[1], q.z0), b = W(p2[0], p2[1], q.z0), c2 = W(p2[0], p2[1], q.z1), d = W(p0[0], p0[1], q.z1); fGlass.push(...a, ...b, ...c2, ...a, ...c2, ...d); continue; }   // prism per part, face brightness as the walls (−Y 1.0, ±X 0.86, +Y 0.74), edge lines on box faces (not on round parts)
     if (q.sheer || q.frost) { const [p0, , p2] = q.p; (q.frost ? fFrost : fSheer).push(...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z1)); continue; }
     const col = c255(hexRgb(q.c)), P = q.p, m = P.length, E = q.em ? [0, 0, 11, 0] : null, T = (a, b) => (E || (q.cy ? z4 : [a, b, 0, 1]));   // em: light fitting (mode 11, emissive)
+    if (!E && softPart(q, col)) continue;
     for (let i = 0; i < m; i++) { const [ax, ay] = P[i], [bx, by] = P[(i + 1) % m], l = Math.hypot(bx - ax, by - ay) || 1, k = 0.87 + 0.13 * ((bx - ax) / l);
       A.quad(W(ax, ay, q.z0), W(bx, by, q.z0), W(bx, by, q.z1), W(ax, ay, q.z1), Nw(ax, ay, bx, by), col.map(c => Math.min(1, c * k)), T(0, 0), T(1, 0), T(1, 1), T(0, 1)); }
     const top = col.map(c => Math.min(1, c * 1.05)); if (m === 4) A.quad(W(P[0][0], P[0][1], q.z1), W(P[1][0], P[1][1], q.z1), W(P[2][0], P[2][1], q.z1), W(P[3][0], P[3][1], q.z1), up0, top, T(0, 0), T(1, 0), T(1, 1), T(0, 1));
