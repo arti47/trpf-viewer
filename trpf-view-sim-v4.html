@@ -2575,6 +2575,16 @@ const CORR_FIX = (() => { const P = [], st = '#c9ccce', fr = '#a7abae', dk = '#2
     R(g, s, 0, 0.012, yc - 0.24, yc + 0.24, 1.58, 1.8, rec ? '#2f63a6' : '#3c6e4c'); R(g, s, 0.012, 0.016, yc - 0.18, yc + 0.18, 1.64, 1.68, '#f2f2ee'); }
   R(25.31, -1, 0, 0.12, 20.32, 20.38, 0.55, 0.6, '#b8bbbd', { mat: 3 }); R(25.31, -1, 0.1, 0.13, 20.32, 20.38, 0.47, 0.6, '#b8bbbd', { mat: 3 });   // bib tap
   P.push(fRect(22.95, 18.7, 23.15, 18.9, -0.05, -0.046, '#3a3c3e')); return P; })();
+// corridor privacy panels (TY 2026-10-30, typical new BTO): where the corridor runs past an open slot, the parapet beside each neighbour's yard/kitchen window across the slot
+// carries a framed frosted (fluted) glass screen from the 1.0 m parapet to the 2.4 m beam, 3.6 m from the side wall; middle of the slot stays open (ventilation). Widths/frame estimates.
+// frame ends 2 cm into parapet/beam/side wall (no coplanar faces → no z-fight); current storey only (not on the void deck)
+const PRIV_FIX = (() => { const P = [], fr = '#b9bdc0', t = 0.03;
+  for (const [x0, x1, yc, wl] of [[21.77, 25.4, 8.9, 1], [27.2, 30.83, 8.9, 0], [42.98, 46.6, 8.9, 1], [33.65, 37.3, 10.795, 1], [43.9, 47.53, 10.795, 0]]) {   // wl: side wall at x0 (1) or x1 (0)
+    const n = Math.ceil((x1 - x0) / 1.25), dx = (x1 - x0) / n, y0 = yc - t, y1 = yc + t, e0 = wl ? 0.02 : 0, e1 = wl ? 0 : 0.02;
+    P.push({ ...fRect(x0 - e0, y0, x1 + e1, y1, 0.98, 1.05, fr), mat: 3 }, { ...fRect(x0 - e0, y0, x1 + e1, y1, 2.33, 2.42, fr), mat: 3 });
+    for (let i = 0; i <= n; i++) { const x = x0 + i * dx, a = i === 0 ? x0 - e0 : i === n ? x1 - 0.05 : x - 0.025, b = i === 0 ? x0 + 0.05 : i === n ? x1 + e1 : x + 0.025; P.push({ ...fRect(a, y0, b, y1, 1.05, 2.33, fr), mat: 3 }); }
+    for (let i = 0; i < n; i++) { const a = x0 + i * dx + (i ? 0.025 : 0.05), b = x0 + (i + 1) * dx - (i + 1 < n ? 0.025 : 0.05); for (const d of [-0.006, 0.006]) P.push({ ...fRect(a, yc + d - 0.001, b, yc + d + 0.001, 1.05, 2.33, '#dfe5e8'), frost: 1 }); } }   // 2 frosted layers (laminated, 98% opaque)
+  return P; })();
 const HS_FIX = open => { const st = '#bfc2be', fr = '#a3a6a2', dk = '#4b4e51', P = [fRect(11.26, 5.79, 11.33, 5.85, 0, 2.0, fr), fRect(11.26, 6.51, 11.33, 6.57, 0, 2.0, fr), fRect(11.26, 5.79, 11.33, 6.57, 1.94, 2.0, fr),
     fRect(12.845, 5.55, 12.86, 5.75, 2.25, 2.45, '#9a9d99'), fRect(12.845, 6.75, 12.86, 6.95, 2.25, 2.45, '#9a9d99')];
   if (!open) { P.push(fRect(11.285, 5.85, 11.335, 6.51, 0.01, 1.94, st)); for (const z of [0.3, 1.0, 1.7]) P.push(fRect(11.265, 5.84, 11.285, 5.87, z - 0.07, z + 0.07, fr));
@@ -2743,7 +2753,7 @@ const LIFT_CAR = (() => { const P = [], hs = '#bfc3c6', jt = '#6d7174', kk = '#5
     R(-0.1, 0.02, yc - 0.55, yc + 0.55, 0, 0.01, '#9da1a4'); }   // car door sill
   return P; })();
 const corrParts = () => CORR_FIX.filter(q => q.lift !== LIFT.open || !q.lift).concat(LIFT_CAR);
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv + LIFT.open; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts(), ...corrParts()] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv + LIFT.open; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts(), ...corrParts(), ...PRIV_FIX] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
