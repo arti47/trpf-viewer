@@ -776,14 +776,14 @@ const SITE = { lat: 1.29682, lon: 103.87826, utcOffset: 8 };
 // const GEO = {...}: in geo.js (separate file, cached on its own; loaded before this script)
 const SITE_IMG_SRC = 'site.jpg';   // site plan image, fetched on first Site plan draw
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const getRoofHeight = f => VOID_DECK_HEIGHT + f * FLOOR_HEIGHT;
+const getRoofHeight = f => VOID_DECK_HEIGHT + (f - 1) * FLOOR_HEIGHT;   // top of storey f (HDB: 1st storey = void deck; 30 storeys → 84.7 m)
 // New towers (Marina East, E condos, reserves): one storey height for all, typical new SG condo 3.15m f2f + 4.5m lobby + 3m roof structures (50F ≈ 162m).
 // Heights are above ground; URA height controls are in m SHD (sea level), so add site ground level (~+4m reclaimed) before comparing.
 const NEW_F2F = 3.15, NEW_LOBBY = 4.5, NEW_ROOF = 3, newRoof = f => NEW_LOBBY + (f - 1) * NEW_F2F + NEW_ROOF;
 const FM_XZ = [-1063, -619];   // Founders' Memorial, Bay East Garden (1.29122N, 103.86871E; Wikipedia)
-const slabAt = f => (f < 1 ? 0 : VOID_DECK_HEIGHT + (f - 1) * FLOOR_HEIGHT);   // floor slab above ground; f 0 = void deck (1st storey, ground)
-const storeyH = f => (f < 1 ? VOID_DECK_HEIGHT : FLOOR_HEIGHT);   // storey f → f + 1 (void deck 3.5 m)
-const flTxt = f => (f < 1 ? 'Void deck' : `${f}F`);
+const slabAt = f => (f <= 1 ? 0 : VOID_DECK_HEIGHT + (f - 2) * FLOOR_HEIGHT);   // floor slab above ground; 1st storey = void deck (ground), flats 2nd–30th (TY 2026-10-30; was 30 flat storeys above the void deck)
+const storeyH = f => (f <= 1 ? VOID_DECK_HEIGHT : FLOOR_HEIGHT);   // storey f → f + 1 (void deck 3.5 m)
+const flTxt = f => (f <= 1 ? 'Void deck 1F' : `${f}F`);
 const getEyeHeight = f => slabAt(f) + state.eyeOffset;   // eye above slab depends on posture
 const curvatureDrop = d => (d * d) / (2 * R_EFF);
 const fmtDist = m => (m >= 1000 ? `${(m / 1000).toFixed(2)}km` : `${Math.round(m)}m`);
@@ -1047,8 +1047,11 @@ function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A mo
     const inF = (lx, lz) => B.boxes.some(([x0, z0, x1, z1]) => lx >= x0 && lx <= x1 && lz >= z0 && lz <= z1);
     for (let lx = Math.floor(a / 6) * 6 + 3; lx < b; lx += 6) for (let lz = Math.floor(c / 6) * 6 + 3; lz < d; lz += 6) {
       if (![[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6], [0, 0]].every(([u, v]) => inF(lx + u, lz + v))) continue; const [x, z] = blkToWorld(B, lx, lz);
-      if (near(x, z, 1.2) || Math.hypot(x - sx, z - sz) < 2.5) continue;
-      out.push(vdP(`${B.name} void deck column`, VOID_DECK_HEIGHT, 0, [[-0.3, -0.3], [0.3, -0.3], [0.3, 0.3], [-0.3, 0.3]].flatMap(([u, v]) => blkToWorld(B, lx + u, lz + v)), col)); } });
+      if (near(x, z, 1.2) || Math.hypot(x - sx, z - sz) < 2.5) continue;   // typical new BTO void deck (TY 2026-10-30): white blade columns 0.4 × 1.0 m with a dark 0.3 m base band
+      const bl = (hw, hd) => [[-hd, -hw], [hd, -hw], [hd, hw], [-hd, hw]].flatMap(([u, v]) => blkToWorld(B, lx + u, lz + v));
+      out.push(vdP(`${B.name} void deck column`, VOID_DECK_HEIGHT, 0.3, bl(0.2, 0.5), col), vdP(`${B.name} void deck column base`, 0.3, 0, bl(0.215, 0.515), [74, 76, 80]));
+      const tx = lx + 3, tz = lz + 3; if (hash01(tx, tz + B.ox, 61) < 0.16 && [[-1.4, -1.4], [1.4, -1.4], [1.4, 1.4], [-1.4, 1.4]].every(([u, v]) => inF(tx + u, tz + v))) { const [qx, qz] = blkToWorld(B, tx, tz);   // seating set: round table + 4 stools (granite/concrete, estimate)
+        if (!near(qx, qz, 2) && Math.hypot(qx - sx, qz - sz) > 3) { out.push(vdP('Void deck table', 0.75, 0, blobRing(qx, qz, 0.45, 0.45, 0, 10).map(v => v), [196, 192, 186])); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; out.push(vdP('Void deck stool', 0.45, 0, blobRing(qx + 0.85 * Math.cos(a), qz + 0.85 * Math.sin(a), 0.19, 0.19, 0, 8), [176, 172, 166])); } } } } });
   const roofs = [176, 178, 180], post = [92, 96, 100], sq = (x, z, r) => [x - r, z - r, x + r, z - r, x + r, z + r, x - r, z + r];
   for (const [a, b] of VD.shelters) { const [x, z] = SITE_PX(a, b); out.push(vdP('Shelter', 3.0, 2.6, sq(x, z, 2.2), [226, 226, 222])); for (const [u, v] of [[-1.8, -1.8], [1.8, -1.8], [1.8, 1.8], [-1.8, 1.8]]) out.push(vdP('Shelter post', 2.6, 0, sq(x + u, z + v, 0.08), post)); }
   for (const l of VD_LINKS) for (let i = 0; i + 1 < l.length; i++) { const [ax, az] = l[i], [bx, bz] = l[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = 1.6;   // covered linkway: 3.2 m roof, posts every 6 m both sides
@@ -1213,8 +1216,8 @@ const WALL_GROUPS = { br3: ['9.29,1.69,9.38,3.44', '6.4,3.33,7.36,3.44', '7.36,3
 const stairYT = g => 3.64 + 0.28 * (storeyH(g) / 0.35 - 1);   // top edge of a flight's treads
 function stairWalls(f) {
   const w = [], rails = [], H = UNIT_H, r = 0.175, B = k => slabAt(f + k) - slabAt(f);
-  const ls = (g, b, z0, z1, y1) => { const ye = g >= 1 ? stairYT(g - 1) : 5.6; return ye > 5.61 ? [[14.3, 5.6, 15.45, y1, b + z0, b + z1, 'stair'], [13.12, ye, 14.3, y1, b + z0, b + z1, 'stair']] : [[13.12, 5.6, 15.45, y1, b + z0, b + z1, 'stair']]; };   // landing slab (E half clear of a taller flight below)
-  for (let k = -1; k <= 1; k++) { const g = f + k; if (g < 0) continue; const b = B(k), Hs = storeyH(g), z1 = b + Hs, m = Math.round(Hs / (2 * r)), half = Hs / 2, yt = stairYT(g);
+  const ls = (g, b, z0, z1, y1) => { const ye = g >= 2 ? stairYT(g - 1) : 5.6; return ye > 5.61 ? [[14.3, 5.6, 15.45, y1, b + z0, b + z1, 'stair'], [13.12, ye, 14.3, y1, b + z0, b + z1, 'stair']] : [[13.12, 5.6, 15.45, y1, b + z0, b + z1, 'stair']]; };   // landing slab (E half clear of a taller flight below)
+  for (let k = -1; k <= 1; k++) { const g = f + k; if (g < 1) continue; const b = B(k), Hs = storeyH(g), z1 = b + Hs, m = Math.round(Hs / (2 * r)), half = Hs / 2, yt = stairYT(g);
     for (let i = 1; i < m; i++) w.push([14.35, yt - 0.28 * i, 15.45, yt - 0.28 * (i - 1), b + r * i - 0.45, b + r * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + half + r * i - 0.45, b + half + r * i, 'stair']);
     w.push([13.12, 1.6, 15.45, 3.64, b + half - 0.2, b + half, 'stair']);   // mid landing
     const RA = Y => b + r * ((yt - Y) / 0.28 + 1), RB = Y => b + half + r * ((Y - 3.64) / 0.28 + 1), TA = Y => b + r * Math.min(m - 1, Math.floor((yt - Y) / 0.28) + 1), TB = Y => b + half + r + r * Math.min(m - 2, Math.floor((Y - 3.64) / 0.28));
@@ -1225,18 +1228,18 @@ function stairWalls(f) {
     if (k) { const t = k < 0 ? z1 - 0.02 : z1; w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, t, 'cor'], [15.45, 1.6, 15.76, 7.98, b, t, 'cor'], [13.12, 7.0, 14.32, 7.98, b, t, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, t, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, t, 'cor']); }   // other storeys: landing slab, well walls, riser B, fire door (closed); below: tops 2 cm under this floor (z-fight, TY 2026-10-30)
     else w.push(...ls(g, b, -0.2, -0.04, 7.74), ...(g ? [[12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']] : [])); }   // this storey: landing slab under the floor, well walls up to the slab above (void deck: GROUND_WALLS are full height)
-  { const zb = f >= 1 ? B(-1) - 0.4 : 0; let z = zb;
-    for (const k of [-2, -1, 0, 1]) { const g = f + k; if (g < 0) continue; const s0 = B(k) + storeyH(g) / 2 + 1.0, s1 = s0 + 1.4; if (s1 <= zb) continue; if (s0 > z) w.push([13.12, 1.3, 15.45, 1.6, z, s0, 'cor']); z = s1; } w.push([13.12, 1.3, 15.45, 1.6, z, B(2), 'cor']); }
-  w.push([13.12, 1.3, 15.76, 7.98, B(2) - 0.2, B(2), 'stair']); if (f >= 2) w.push([13.12, 1.3, 15.76, 7.98, B(-1) - 0.4, B(-1) - 0.18, 'stair']);   // well caps beyond the modelled storeys (none under the void deck)
+  { const zb = f >= 2 ? B(-1) - 0.4 : 0; let z = zb;
+    for (const k of [-2, -1, 0, 1]) { const g = f + k; if (g < 1) continue; const s0 = B(k) + storeyH(g) / 2 + 1.0, s1 = s0 + 1.4; if (s1 <= zb) continue; if (s0 > z) w.push([13.12, 1.3, 15.45, 1.6, z, s0, 'cor']); z = s1; } w.push([13.12, 1.3, 15.45, 1.6, z, B(2), 'cor']); }
+  w.push([13.12, 1.3, 15.76, 7.98, B(2) - 0.2, B(2), 'stair']); if (f >= 3) w.push([13.12, 1.3, 15.76, 7.98, B(-1) - 0.4, B(-1) - 0.18, 'stair']);   // well caps beyond the modelled storeys (none under the void deck)
   return { w, rails };
 }
 // Void deck storey (floor 0) around the 32A E stair: core walls full height (3.5 m), fire door (open leaf while walking); the rest of the void deck is world geometry (voidDeckPrisms)
 const GROUND_WALLS = [[12.86, 1.6, 13.12, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [15.45, 1.6, 15.76, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [13.12, 7.0, 14.32, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [14.32, 7.86, 15.23, 7.98, 2.1, VOID_DECK_HEIGHT, 'cor'],
   [14.32, 7.89, 15.23, 7.95, 0, 2.1, 'stairDoor'], [15.17, 6.98, 15.23, 7.89, 0, 2.1, 'stairOpen'], [15.23, 7.86, 15.45, 7.98, 0, VOID_DECK_HEIGHT, 'cor']];
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
-const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + Math.min(Math.max(f, 0), 3);   // stair fire door open while walking (stairs walkable)
-  if (UW_CACHE.key !== key) { const off = new Set([...(W.br3 ? [] : WALL_GROUPS.br3), ...(W.br23 ? [] : WALL_GROUPS.br23)]), S = stairWalls(f);   // floor class 0 / 1 / 2 / ≥3: storey heights around the stair differ only near the void deck
-    UW_CACHE = { key, rails: S.rails, w: (f < 1 ? GROUND_WALLS.filter(q => q[6] !== so) : UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : [])).concat(S.w) }; }
+const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + Math.min(Math.max(f, 1), 4);   // stair fire door open while walking (stairs walkable)
+  if (UW_CACHE.key !== key) { const off = new Set([...(W.br3 ? [] : WALL_GROUPS.br3), ...(W.br23 ? [] : WALL_GROUPS.br23)]), S = stairWalls(f);   // floor class 1 / 2 / 3 / ≥4: storey heights around the stair differ only near the void deck
+    UW_CACHE = { key, rails: S.rails, w: (f <= 1 ? GROUND_WALLS.filter(q => q[6] !== so) : UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : [])).concat(S.w) }; }
   STAIR_RAILS.length = 0; STAIR_RAILS.push(...UW_CACHE.rails); return UW_CACHE.w; };
 const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen' || k === 'stairDoor' || k === 'stairOpen';
 { // service yard + corridor end spots: world position from the 4 window spots (mean of plan → world maps)
@@ -1934,7 +1937,7 @@ function updateDashboard(m) {
   else {
     const diff = m.hEye - b.P.h;
     if (b.slope < 0) setTag(tag, `Over ${b.P.kind === 'new' ? b.P.name : 'roofline'} (${signed(diff.toFixed(1))}m)`, 'ok'); else setTag(tag, `Blocked: ${b.P.kind === 'new' ? b.P.name : (b.P.name || 'building').slice(0, 18)}`, b.P.kind === 'new' ? 'bad' : 'mid');
-    const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - state.eyeOffset) / FLOOR_HEIGHT + 1);
+    const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - state.eyeOffset) / FLOOR_HEIGHT + 2);
     box.innerHTML = `<strong class="text-rose-300">Binding roofline at ${state.heading.toFixed(1)}°:</strong> ${pName(b.P)}, ${b.P.h.toFixed(0)}m at ${fmtDist(b.s)}, elevation <strong>${signed(b.angleDeg.toFixed(2))}°</strong>. ` +
       (b.slope < 0 ? `Ground re-appears beyond <strong>${fmtDist(b.groundS)}</strong>.` : `Your eye (${m.hEye.toFixed(1)}m) is below it${need > 30 ? `; clearing it needs ${need}F (Blk 32A tops at 30F)` : `; need ≥ <strong>${need}F</strong> to clear it`}.`);
   }
@@ -2226,13 +2229,13 @@ const inCorr = (X, Y) => UNIT_PLAN.corr.walk.some(([x0, y0, x1, y1]) => X >= x0 
 const STAIR = [13.12, 1.6, 15.45, 7.92];
 // Walk surfaces near floor f: landing 0, this storey's flights / mid landing (stairRamp f), the storey below's (− its height); nearest within 0.35 m, else null (wall between).
 // Void deck (floor 0, 3.5 m storey, 2026-10-30): 10-riser flights, landing Y ≥ 6.16 on the W half; walking down past 1F reaches the ground. Blocked above 30F.
-const stairRamp = (g, X, Y) => { const [a, b, c, d] = STAIR; if (g < 0 || X < a || X > c || Y < b || Y > d) return null; const h = storeyH(g) / 2, yt = stairYT(g), L = yt - 3.64;
+const stairRamp = (g, X, Y) => { const [a, b, c, d] = STAIR; if (g < 1 || X < a || X > c || Y < b || Y > d) return null; const h = storeyH(g) / 2, yt = stairYT(g), L = yt - 3.64;
   if (Y <= 3.64) return h; if (Y >= yt) return null; return X >= 14.3 ? h * (yt - Y) / L : h + h * (Y - 3.64) / L; };
 function walkZ(X, Y, Z) { const f = state.obsFloor, [a, b, c, d] = STAIR, C = [];
-  if (!(X >= a && X <= c && Y >= b && Y <= d) || (Y >= 5.6 && !(X >= 14.3 && Y < stairYT(f)) && !(X < 14.3 && f >= 1 && Y < stairYT(f - 1)))) C.push(0);
-  if (f < 30) { const q = stairRamp(f, X, Y); if (q !== null) C.push(q); } if (f >= 1) { const q = stairRamp(f - 1, X, Y); if (q !== null) C.push(q - storeyH(f - 1)); }
+  if (!(X >= a && X <= c && Y >= b && Y <= d) || (Y >= 5.6 && !(X >= 14.3 && Y < stairYT(f)) && !(X < 14.3 && f >= 2 && Y < stairYT(f - 1)))) C.push(0);
+  if (f < 30) { const q = stairRamp(f, X, Y); if (q !== null) C.push(q); } if (f >= 2) { const q = stairRamp(f - 1, X, Y); if (q !== null) C.push(q - storeyH(f - 1)); }
   let z = null; for (const v of C) if (Math.abs(v - Z) <= 0.35 && (z === null || Math.abs(v - Z) < Math.abs(z - Z))) z = v; return z; }
-const onGround = () => state.obsFloor < 1;
+const onGround = () => state.obsFloor <= 1;
 // Void deck / grounds walk test: inside the TRPF site, clear of ground-storey prisms (columns, cores, MSCP, ESS, posts, bin centres…) by the body radius
 let GOBS = { t: null, a: [] };
 const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor) }; return GOBS.a; };
@@ -2242,7 +2245,7 @@ const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0
   !unitWalls().some(([x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind]) => kind !== 'stair' && z0 < z + 1.2 && z1 > z + 0.05 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || onGround() || !furnBlocks(X, Y, r)); };   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
   if (!state.walk) return; const z = walkZ(X, Y, state.walk.Z || 0); state.walk.X = X; state.walk.Y = Y; state.walk.Z = z === null ? 0 : z;
-  if (state.walk.Z >= storeyH(state.obsFloor) / 2) { state.walk.Z -= storeyH(state.obsFloor); state.obsFloor++; } else if (state.obsFloor >= 1 && state.walk.Z < -storeyH(state.obsFloor - 1) / 2) { state.obsFloor--; state.walk.Z += storeyH(state.obsFloor); }   // past a mid landing: next storey's frame
+  if (state.walk.Z >= storeyH(state.obsFloor) / 2) { state.walk.Z -= storeyH(state.obsFloor); state.obsFloor++; } else if (state.obsFloor >= 2 && state.walk.Z < -storeyH(state.obsFloor - 1) / 2) { state.obsFloor--; state.walk.Z += storeyH(state.obsFloor); }   // past a mid landing: next storey's frame
   const rm = !onGround() && UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
@@ -3244,7 +3247,7 @@ function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck 
   const rib = (P, w, y, col, closed) => { const n = P.length; for (let i = 0; i < (closed ? n : n - 1); i++) { const a = P[i], b = P[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L * w / 2, nz = (b[0] - a[0]) / L * w / 2, ex = (b[0] - a[0]) / L * w * 0.25, ez = (b[1] - a[1]) / L * w * 0.25;
     X.quad([a[0] + nx - ex, y, a[1] + nz - ez], [b[0] + nx + ex, y, b[1] + nz + ez], [b[0] - nx + ex, y, b[1] - nz + ez], [a[0] - nx - ex, y, a[1] - nz - ez], up, c(col), z4, z4, z4, z4); } };
   poly(GEO.trpf, 0.1, [88, 138, 72]);   // TRPF lawn (site plan; MP2025 residential class drew it beige)
-  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const [x0, z0, x1, z1] of B.boxes) { const p = [[x0 - 1.5, z0 - 1.5], [x1 + 1.5, z0 - 1.5], [x1 + 1.5, z1 + 1.5], [x0 - 1.5, z1 + 1.5]].map(([a, b]) => blkToWorld(B, a, b)); X.quad([p[0][0], 0.12, p[0][1]], [p[1][0], 0.12, p[1][1]], [p[2][0], 0.12, p[2][1]], [p[3][0], 0.12, p[3][1]], up, c([198, 194, 186]), z4, z4, z4, z4); }   // void deck + apron tiles
+  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const [x0, z0, x1, z1] of B.boxes) { const p = [[x0 - 1.5, z0 - 1.5], [x1 + 1.5, z0 - 1.5], [x1 + 1.5, z1 + 1.5], [x0 - 1.5, z1 + 1.5]].map(([a, b]) => blkToWorld(B, a, b)); X.quad([p[0][0], 0.12, p[0][1]], [p[1][0], 0.12, p[1][1]], [p[2][0], 0.12, p[2][1]], [p[3][0], 0.12, p[3][1]], up, c([212, 210, 204]), z4, z4, z4, z4); }   // void deck + apron tiles (light homogeneous tiles, typical new BTO)
   VD_FLAT.drives.forEach(r => poly(r, 0.14, [96, 98, 102])); VD.bins.forEach(q => poly(pxRing(q), 0.15, [176, 178, 180])); VD_FLAT.porches.forEach(r => poly(r, 0.15, [104, 106, 110]));
   VD.plazas.forEach(([a, b, cc, d]) => { const r = pxRing(pxBox([a, b, cc, d])); poly(r, 0.16, [176, 178, 180]);   // wavy white bands (model photos)
     for (let k = 1; k < 5; k++) { const P = []; for (let j = 0; j <= 24; j++) { const t = j / 24, px = a + (cc - a) * t, py = b + (d - b) * (k / 5) + Math.sin(t * Math.PI * 3 + k) * (d - b) * 0.07; P.push(SITE_PX(px, py)); } rib(P, 0.9, 0.17, [236, 236, 232]); } });
@@ -3327,7 +3330,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
   const G0 = onGround();   // void deck: only the stair core (unit, corridor, furniture, windows don't exist on the 1st storey)
   if (G0) flat(rect([13.12, 1.6, 15.45, 7.92]), 0, c255([188, 184, 176]).map(c => c * 0.85), true);
   else { flat(UNIT_PLAN.outline, 0, fl01(FURN.fin.floor.living), true); FIN_FLOORS.forEach(([id, r]) => flat(rect(r), 0.003, fl01(FURN.fin.floor[id]), id[0] === 'w' || id === 'yard' ? 2.2 : true)); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95), false, dn0); }
-  if (!G0) UNIT_PLAN.corr.floors.flatMap(r => state.obsFloor === 1 && r[0] === 13.12 && r[1] === 5.6 ? [[14.3, 5.6, 15.45, r[3]], [13.12, stairYT(0), 14.3, r[3]]] : [r]).forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85), true); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });   // corridor/lobby: 600 mm homogeneous tiles   // 1F: landing floor E half clear of the void-deck flight
+  if (!G0) UNIT_PLAN.corr.floors.flatMap(r => state.obsFloor === 2 && r[0] === 13.12 && r[1] === 5.6 ? [[14.3, 5.6, 15.45, r[3]], [13.12, stairYT(1), 14.3, r[3]]] : [r]).forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85), true); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });   // corridor/lobby: 600 mm homogeneous tiles   // 2F: landing floor E half clear of the void-deck flight
   if (!G0) { const [a, b, c, d] = UNIT_PLAN.corr.wash, wc = c255([142, 146, 148]); flat(rect([a, b, c, d]), -0.05, wc.map(v => v * 0.85), 2.2); flat(rect([a, b, c, d]), H, c255([230, 228, 222]).map(v => v * 0.9), false, dn0);   // wash area: 300 mm anti-slip tiles, 50 mm below the landing (TY 2026-10-29)
     A.quad(W(a, b, -0.05), W(c, b, -0.05), W(c, b, 0), W(a, b, 0), Nw(c, b, a, b), wc, z4, z4, z4, z4); }
   const softPart = (q, col) => {   // rounded furniture (2026-10-29): plan corners filleted + quarter-round top/bottom edges (radius q.soft), smooth normals, colour shading follows the normal; material code in tex.w (−1 fabric, −2 wood, −3 satin)
@@ -3383,7 +3386,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
   return GPU.inN;
 }
 function gpuInteriorPrefetch(f) {   // build storey f's interior into the cache in idle time, keep the current one
-  if (!GPU.ok || !GPU.ikey || f < 0 || f > 30 || GPU.pf === f) return; GPU.pf = f; const go = () => { GPU.pf = 0; if (!state.walk || f === state.obsFloor) return; const k0 = GPU.ikey, s0 = state.obsFloor;
+  if (!GPU.ok || !GPU.ikey || f < 1 || f > 30 || GPU.pf === f) return; GPU.pf = f; const go = () => { GPU.pf = 0; if (!state.walk || f === state.obsFloor) return; const k0 = GPU.ikey, s0 = state.obsFloor;
     state.obsFloor = f; try { gpuInterior(); } finally { state.obsFloor = s0; } const e = GPU.icache && GPU.icache.get(k0); if (e) { GPU.icache.delete(k0); GPU.icache.set(k0, e); Object.assign(GPU, e); GPU.ikey = k0; GPU.pkey = ''; } };
   (window.requestIdleCallback || (cb => setTimeout(cb, 60)))(go); }
 function gpuAttrib(pr, buf, inst) {
@@ -3451,7 +3454,7 @@ function gpuRender(cam, env, pxW, pxH) {
   if (GPU.L) gl.drawArrays(gl.TRIANGLES, GPU.groundN, GPU.recvN);   // building/tree shadows on the ground
   // solids with depth
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN);
-  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && state.obsFloor < 1) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
+  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree);
   if (GPU.newR[1]) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
@@ -3694,7 +3697,7 @@ planCanvas.addEventListener('pointermove', e => { if (planMode) applyPlan(e); })
 ['pointerup', 'pointercancel'].forEach(t => planCanvas.addEventListener(t, () => { planMode = null; }));
 function applyPlan(e) { const { x, y } = localXY(planCanvas, e), [wx, wz] = planXf().W(x, y); if (planMode === 'move') { state.vx = Math.round(wx * 10) / 10; state.vz = Math.round(wz * 10) / 10; state.spot = null; } else state.heading = Math.round(bearingTo(state.vx, state.vz, wx, wz) * 2) / 2; renderAll(); }
 let profDrag = false;
-function applyProf(e) { const { y } = localXY(profileCanvas, e), m = lastMath; if (!m) return; const R = state.profileRange, inR = m.crossings.filter(c => c.sIn < R); const nearLm = m.landmarks.filter(r => angDiff(r.bearing, state.heading) < 4 && r.dist < R); const L = profileLayout(profileCanvas._w, profileCanvas._h, Math.max(120, m.hEye * 1.3, ...inR.map(c => c.h * 1.12), ...nearLm.map(r => r.lm.h * 1.15))); const elev = ((L.padTop + L.plotH - y) / L.plotH) * L.maxElev; state.obsFloor = clamp(Math.round((elev - state.eyeOffset - VOID_DECK_HEIGHT) / FLOOR_HEIGHT) + 1, 1, 30); renderAll(); }
+function applyProf(e) { const { y } = localXY(profileCanvas, e), m = lastMath; if (!m) return; const R = state.profileRange, inR = m.crossings.filter(c => c.sIn < R); const nearLm = m.landmarks.filter(r => angDiff(r.bearing, state.heading) < 4 && r.dist < R); const L = profileLayout(profileCanvas._w, profileCanvas._h, Math.max(120, m.hEye * 1.3, ...inR.map(c => c.h * 1.12), ...nearLm.map(r => r.lm.h * 1.15))); const elev = ((L.padTop + L.plotH - y) / L.plotH) * L.maxElev; state.obsFloor = clamp(Math.round((elev - state.eyeOffset - VOID_DECK_HEIGHT) / FLOOR_HEIGHT) + 2, 2, 30); renderAll(); }
 profileCanvas.addEventListener('pointerdown', e => { if (localXY(profileCanvas, e).x > 90) { profPick(e); return; } profDrag = true; profileCanvas.setPointerCapture(e.pointerId); applyProf(e); });
 profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e); });
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
@@ -3892,16 +3895,16 @@ function drawStrip() {
   const fy = stripY(f); g.fillStyle = 'rgba(56,189,248,0.16)'; rrect(g, cx - 9, fy, 18, h - 2 - fy, 9); g.fill();   // floors below you
   g.font = `600 9px ${UIFONT}`; g.textAlign = 'right';
   for (let q = 1; q <= 30; q++) { const y = stripY(q), five = q % 5 === 0; g.fillStyle = five ? 'rgba(226,232,240,0.55)' : 'rgba(148,163,184,0.25)'; g.fillRect(cx - (five ? 5 : 3), Math.round(y), five ? 10 : 6, 1); if (five && Math.abs(y - fy) > 12) { g.fillStyle = '#8391a7'; g.fillText(String(q), cx - 11, y + 3); } }
-  const b = lastMath && lastMath.binding; if (b && b.slope >= 0) { const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - state.eyeOffset) / FLOOR_HEIGHT + 1); if (need <= 30 && need > f) { const y = stripY(need); g.fillStyle = '#fb7185'; g.beginPath(); g.moveTo(cx + 10, y); g.lineTo(cx + 15, y - 4); g.lineTo(cx + 15, y + 4); g.closePath(); g.fill(); g.fillRect(cx - 9, Math.round(y), 18, 1.5); cv._need = need; } else cv._need = 0; } else cv._need = 0;
+  const b = lastMath && lastMath.binding; if (b && b.slope >= 0) { const need = Math.ceil((b.P.h + 0.5 - VOID_DECK_HEIGHT - state.eyeOffset) / FLOOR_HEIGHT + 2); if (need <= 30 && need > f) { const y = stripY(need); g.fillStyle = '#fb7185'; g.beginPath(); g.moveTo(cx + 10, y); g.lineTo(cx + 15, y - 4); g.lineTo(cx + 15, y + 4); g.closePath(); g.fill(); g.fillRect(cx - 9, Math.round(y), 18, 1.5); cv._need = need; } else cv._need = 0; } else cv._need = 0;
   const yh = stripY(27); g.fillStyle = '#34d399'; g.beginPath(); g.arc(cx + 12, yh, 2.5, 0, Math.PI * 2); g.fill();   // #134 (27F)
   const lab = `${f}F`; g.font = `700 12px ${UIFONT}`; const tw = Math.max(32, g.measureText(lab).width + 12); g.textAlign = 'center';
   g.fillStyle = f === 27 ? '#34d399' : '#38bdf8'; rrect(g, cx - tw / 2, fy - 11, tw, 22, 11); g.fill(); g.fillStyle = '#04111d'; g.fillText(lab, cx, fy + 4);
   const eye = lastMath ? lastMath.hEye.toFixed(1) : ''; cv.setAttribute('aria-valuenow', f); cv.setAttribute('aria-valuetext', `${f}F, eye ${eye} m`); cv.title = `Floor ${f}F (eye ${eye} m): drag to change; green dot = #134 (27F)${cv._need ? `; rose mark = ${cv._need}F clears the binding roofline` : ''}`;
 }
-{ const cv = $('floorStrip'); let on = false; const set = e => { const { y } = localXY(cv, e), f = clamp(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29), 1, 30); if (f !== state.obsFloor) { state.obsFloor = f; renderView(); } };   // fast 3D redraw while dragging; full render on release
+{ const cv = $('floorStrip'); let on = false; const set = e => { const { y } = localXY(cv, e), f = clamp(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29), 2, 30); if (f !== state.obsFloor) { state.obsFloor = f; renderView(); } };   // fast 3D redraw while dragging; full render on release
   cv.addEventListener('pointerdown', e => { e.stopPropagation(); on = true; cv.setPointerCapture(e.pointerId); set(e); });
   cv.addEventListener('pointermove', e => { if (on) set(e); }); ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (on) renderAll(); on = false; }));
-  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); state.obsFloor = clamp(state.obsFloor + d, 1, 30); renderView(); }); }
+  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); state.obsFloor = clamp(state.obsFloor + d, 2, 30); renderView(); }); }
 // Time scrubber track: sky colour by sun elevation over 05–23 h for the selected date, sunrise/sunset + solar-noon ticks, hour labels
 const TT = { key: '' };
 function drawTimeTrack() {
