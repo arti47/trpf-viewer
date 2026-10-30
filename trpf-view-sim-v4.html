@@ -2575,15 +2575,15 @@ const CORR_FIX = (() => { const P = [], st = '#c9ccce', fr = '#a7abae', dk = '#2
     R(g, s, 0, 0.012, yc - 0.24, yc + 0.24, 1.58, 1.8, rec ? '#2f63a6' : '#3c6e4c'); R(g, s, 0.012, 0.016, yc - 0.18, yc + 0.18, 1.64, 1.68, '#f2f2ee'); }
   R(25.31, -1, 0, 0.12, 20.32, 20.38, 0.55, 0.6, '#b8bbbd', { mat: 3 }); R(25.31, -1, 0.1, 0.13, 20.32, 20.38, 0.47, 0.6, '#b8bbbd', { mat: 3 });   // bib tap
   P.push(fRect(22.95, 18.7, 23.15, 18.9, -0.05, -0.046, '#3a3c3e')); return P; })();
-// corridor privacy panels (TY 2026-10-30, typical new BTO): where the corridor runs past an open slot, the parapet beside each neighbour's yard/kitchen window across the slot
-// carries a framed frosted (fluted) glass screen from the 1.0 m parapet to the 2.4 m beam, 3.6 m from the side wall; middle of the slot stays open (ventilation). Widths/frame estimates.
-// frame ends 2 cm into parapet/beam/side wall (no coplanar faces → no z-fight); current storey only (not on the void deck)
-const PRIV_FIX = (() => { const P = [], fr = '#b9bdc0', t = 0.03;
-  for (const [x0, x1, yc, wl] of [[21.77, 25.4, 8.9, 1], [27.2, 30.83, 8.9, 0], [42.98, 46.6, 8.9, 1], [33.65, 37.3, 10.795, 1], [43.9, 47.53, 10.795, 0]]) {   // wl: side wall at x0 (1) or x1 (0)
-    const n = Math.ceil((x1 - x0) / 1.25), dx = (x1 - x0) / n, y0 = yc - t, y1 = yc + t, e0 = wl ? 0.02 : 0, e1 = wl ? 0 : 0.02;
-    P.push({ ...fRect(x0 - e0, y0, x1 + e1, y1, 0.98, 1.05, fr), mat: 3 }, { ...fRect(x0 - e0, y0, x1 + e1, y1, 2.33, 2.42, fr), mat: 3 });
-    for (let i = 0; i <= n; i++) { const x = x0 + i * dx, a = i === 0 ? x0 - e0 : i === n ? x1 - 0.05 : x - 0.025, b = i === 0 ? x0 + 0.05 : i === n ? x1 + e1 : x + 0.025; P.push({ ...fRect(a, y0, b, y1, 1.05, 2.33, fr), mat: 3 }); }
-    for (let i = 0; i < n; i++) { const a = x0 + i * dx + (i ? 0.025 : 0.05), b = x0 + (i + 1) * dx - (i + 1 < n ? 0.025 : 0.05); for (const d of [-0.006, 0.006]) P.push({ ...fRect(a, yc + d - 0.001, b, yc + d + 0.001, 1.05, 2.33, '#dfe5e8'), frost: 1 }); } }   // 2 frosted layers (laminated, 98% opaque)
+// corridor privacy fins (TY 2026-10-30, typical new BTO: rows of slanted vertical blades, each overlapping the next): on the corridor parapet of each open slot beside the
+// neighbours' yard/kitchen windows across the slot, 3.6 m from the side wall; middle of the slot open. Blades 0.26 × 0.025 m at 45° every 0.15 m, from the 1.0 m parapet to the 2.4 m beam,
+// turned square-on to the line of sight from the corridor toward the window (overlap → blocked), see-through looking the other way (sizes/spacing estimates).
+// blade ends 2 cm into parapet/beam (no coplanar faces → no z-fight); current storey only (not on the void deck)
+const PRIV_FIX = (() => { const P = [], c = '#c8cbc9', L = 0.26, t = 0.025, sp = 0.15;
+  for (const [x0, x1, yc, wl] of [[21.77, 25.4, 8.9, 1], [27.2, 30.83, 8.9, 0], [42.98, 46.6, 8.9, 1], [33.65, 37.3, 10.795, 1], [43.9, 47.53, 10.795, 0]]) {   // wl: side wall (window) at x0 (1) or x1 (0)
+    const sx = wl ? -1 : 1, sy = yc < 10 ? -1 : 1, dx = sy * Math.SQRT1_2, dy = -sx * Math.SQRT1_2, nx = -dy, ny = dx, n = Math.floor((x1 - x0 - 0.2) / sp);   // sight (sx, sy) → blade dir ⊥ (dx, dy), normal (nx, ny)
+    for (let i = 0; i <= n; i++) { const cx = x0 + 0.1 + i * sp, a = L / 2, b = t / 2;
+      P.push({ p: [[cx - dx * a - nx * b, yc - dy * a - ny * b], [cx + dx * a - nx * b, yc + dy * a - ny * b], [cx + dx * a + nx * b, yc + dy * a + ny * b], [cx - dx * a + nx * b, yc - dy * a + ny * b]], z0: 0.98, z1: 2.42, c, mat: 3 }); } }
   return P; })();
 const HS_FIX = open => { const st = '#bfc2be', fr = '#a3a6a2', dk = '#4b4e51', P = [fRect(11.26, 5.79, 11.33, 5.85, 0, 2.0, fr), fRect(11.26, 6.51, 11.33, 6.57, 0, 2.0, fr), fRect(11.26, 5.79, 11.33, 6.57, 1.94, 2.0, fr),
     fRect(12.845, 5.55, 12.86, 5.75, 2.25, 2.45, '#9a9d99'), fRect(12.845, 6.75, 12.86, 6.95, 2.25, 2.45, '#9a9d99')];
