@@ -88,6 +88,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Owner move-in: end-2029. Unit #134 is on 27F (owner-confirmed; default `state.obsFloor` 27).
 
 ## Handoff / status
+- Fixed 2026-10-30 (TY "level 2 stairs cannot go to void deck"): a `//` comment added with the roof landing swallowed `walkZ`'s storey-below candidate → walking down any flight was blocked on every floor; also a swallowed `gpuGrounds` call (pavilion floors/porch paving not drawn). Rule: never put a `//` comment before code on the same line (single-line style here makes it easy).
 - Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
 - TRPF facades styled from owner renderings (2026-10-24); roof crown +5.6 m estimated (owner OK'd estimate; owner-confirmed on all 4 residential blocks 31A/31B/32A/33A; replace with real height if known).
 - Pages live from `main` root (`index.html` → app via `location.replace` keeping ?/# (share links), meta refresh fallback). App renders headless with no JS errors.
