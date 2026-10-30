@@ -3309,8 +3309,7 @@ function gpuInit() {
     GPU.groundN = G.n; const rv = [0, 0, -2, 0], blk = [0, 0, 0];   // ground shadow receiver: ±6 km grid, 100 m cells (follows curvature)
     for (let x = -6000; x < 6000; x += 100) for (let z = -6000; z < 6000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv);
     GPU.recvN = G.n - GPU.groundN; GPU.ground = gpuBuf(new Float32Array(G.a));
-    { const nr = [], fr = []; for (let i = 0; i < TREES.n; i++) (Math.hypot(TREES.x[i] - UNIT134[0], TREES.z[i] - UNIT134[1]) < 900 ? nr : fr).push(TREES.x[i], TREES.z[i], TREES.h[i], TREES.g[i]);   // LOD: rounded canopy ≤900 m of #134, 20-face beyond
-      GPU.treeInst = gpuBuf(new Float32Array(nr)); GPU.treeInstF = gpuBuf(new Float32Array(fr)); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; }
+    gpuTreeInst();
     const t = (1 + Math.sqrt(5)) / 2, V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(v => { const l = Math.hypot(...v); return v.map(c => c / l); });
     const F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]], tv = [];
     const nv = v => { const l = Math.hypot(...v); return v.map(c => c / l); }, mid = (a, b) => nv([a[0] + b[0], a[1] + b[1], a[2] + b[2]]);   // one subdivision: 80 faces (rounder canopy)
@@ -3500,7 +3499,16 @@ function gpuAttrib(pr, buf, inst) {
   else if (pr === GPU.tree) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
   else on(pr.a.aPos, 3, 12, 0);
 }
-function gpuTrees(pr) { const gl = GPU.gl; gpuAttrib(pr, GPU.treeGeo, GPU.treeInst); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeN, GPU.treeNn); gpuAttrib(pr, GPU.treeGeoL, GPU.treeInstF); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeNL, GPU.treeNf); }
+function gpuTreeInst() {   // instance buffers from TREES; rebuilt when TREES changes (a render before initApp2 filled TREES left phones with no trees, TY 2026-10-30)
+  const gl = GPU.gl, nr = [], fr = []; for (let i = 0; i < TREES.n; i++) (Math.hypot(TREES.x[i] - UNIT134[0], TREES.z[i] - UNIT134[1]) < 900 ? nr : fr).push(TREES.x[i], TREES.z[i], TREES.h[i], TREES.g[i]);   // LOD: rounded canopy ≤900 m of #134, 20-face beyond
+  if (GPU.treeInst) { gl.deleteBuffer(GPU.treeInst); gl.deleteBuffer(GPU.treeInstF); } GPU.treeInst = gpuBuf(new Float32Array(nr)); GPU.treeInstF = gpuBuf(new Float32Array(fr)); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; GPU.treeSrc = TREES.x; GPU.treeCnt = TREES.n; }
+function gpuTrees(pr) { const gl = GPU.gl; if (GPU.treeSrc !== TREES.x || GPU.treeCnt !== TREES.n) gpuTreeInst(); const d = GL_DIAG && pr === GPU.tree, e0 = d ? gl.getError() : 0; gpuAttrib(pr, GPU.treeGeo, GPU.treeInst); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeN, GPU.treeNn); gpuAttrib(pr, GPU.treeGeoL, GPU.treeInstF); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeNL, GPU.treeNf); if (d) glDiag('trees', e0, gl.getError()); }
+// ?diag in the URL (TY 2026-10-30: trees + cars missing on iPhone): one-time on-screen WebGL readout (errors around the instanced draws, renderer, counts); tap to close
+const GL_DIAG = /[?&]diag/.test(location.search), GL_DIAG_R = {};
+function glDiag(k, e0, e1) { if (!GL_DIAG || GL_DIAG_R[k]) return; const gl = GPU.gl; GL_DIAG_R[k] = `${k}: before ${e0} after ${e1}`; if (Object.keys(GL_DIAG_R).length < 2) return;
+  let el = document.getElementById('glDiag'); if (!el) { el = document.createElement('pre'); el.id = 'glDiag'; el.style.cssText = 'position:fixed;left:8px;right:8px;top:60px;z-index:99;background:#000d;color:#fde68a;font:11px/1.4 monospace;padding:8px;border-radius:8px;white-space:pre-wrap'; el.onclick = () => el.remove(); document.body.appendChild(el); }
+  const ri = gl.getExtension('WEBGL_debug_renderer_info'), tl = [GPU.tree, GPU.sht, GPU.spr].map(q => q && JSON.stringify(Object.fromEntries(Object.entries(q.a).filter(([, v]) => v >= 0))));
+  el.textContent = ['WebGL diag (tap to close)', navigator.userAgent, ri ? gl.getParameter(ri.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), 'trees ' + TREES.n + ' near ' + GPU.treeNn + ' far ' + GPU.treeNf + ' verts ' + GPU.treeN + '/' + GPU.treeNL, 'attribs tree ' + tl[0] + ' sht ' + tl[1] + ' spr ' + tl[2], 'maxAttribs ' + gl.getParameter(gl.MAX_VERTEX_ATTRIBS), ...Object.values(GL_DIAG_R)].join('\n'); }
 function gpuCam(pr, cam, near, far) {
   const gl = GPU.gl, cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   gl.useProgram(pr.p); gl.uniform3f(pr.u.uEye, cam.ex, cam.hEye, cam.ez); gl.uniform3f(pr.u.uR, cy, 0, -sy); gl.uniform3f(pr.u.uU, -sp * sy, cp, -sp * cy); gl.uniform3f(pr.u.uF, cp * sy, sp, cp * cy);
@@ -3519,7 +3527,7 @@ function gpuEnv(pr, env, unlit) {
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
   const s = env.sunVec; if (env.direct <= 0.02 || s[1] < 0.02) { GPU.L = null; return; }
-  const own = ownUnitTest(), key = [s.map(v => v.toFixed(4)), state.vx.toFixed(1), state.vz.toFixed(1), WORLD_VER, !!own, state.spot].join('|'); if (GPU.skey === key && GPU.L) return; GPU.skey = key;
+  const own = ownUnitTest(), key = [s.map(v => v.toFixed(4)), state.vx.toFixed(1), state.vz.toFixed(1), WORLD_VER, !!own, state.spot, TREES.n].join('|'); if (GPU.skey === key && GPU.L) return; GPU.skey = key;
   const f = [-s[0], -s[1], -s[2]], up = Math.abs(s[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0], cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nz = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
   const r = nz(cr(f, up)), u = cr(r, f), L = GPU.L = { r, u, f, c: [[state.vx, 40, state.vz], [state.vx, 0, state.vz]], s: [[350, 700], [3200, 4000]] }, gl = GPU.gl;
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
@@ -3721,7 +3729,7 @@ function gpuSprites(cam, env, buf, n, additive, range) {
   for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   gl.bindBuffer(gl.ARRAY_BUFFER, GPU.corners); gl.enableVertexAttribArray(pr.a.aQ); gl.vertexAttribPointer(pr.a.aQ, 2, gl.FLOAT, false, 8, 0);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (const [k, m, off] of [['aP', 3, 0], ['aS', 4, 12], ['aC', 4, 28], ['aT', 2, 44]]) { const l = pr.a[k]; if (l < 0) continue; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, m, gl.FLOAT, false, 52, off); gl.vertexAttribDivisor(l, 1); }
-  gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n);
+  const e0 = GL_DIAG ? gl.getError() : 0; gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n); if (GL_DIAG) glDiag('sprites', e0, gl.getError());
 }
 function gpuLines(cam, env, buf, n, additive, range = 1e9) {
   const gl = GPU.gl, pr = GPU.line, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0);

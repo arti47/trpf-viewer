@@ -88,6 +88,7 @@ Purpose: physically-based view from Tanjong Rhu Parc Front (TRPF) Blk 32A #134 t
 - Owner move-in: end-2029. Unit #134 is on 27F (owner-confirmed; default `state.obsFloor` 27).
 
 ## Handoff / status
+- Open 2026-10-30 (TY iPhone): trees AND cars (all instanced draws: `gpuTrees`, `gpuSprites`) not drawn on the phone, fine in headless Chrome. Diagnostics: `?diag` URL (`GL_DIAG`/`glDiag`) shows a one-time on-screen readout (UA, renderer, tree counts, attrib locations, gl.getError before/after the tree + sprite draws). Also: tree instance buffers now rebuilt when TREES changes (`gpuTreeInst`, shadow key incl. TREES.n) in case a render ran before initApp2.
 - Fixed 2026-10-30 (TY "why is there a stairs here", 30F roof landing): `unitWalls` cache key used floor class min(f, 4), so 30F reused the 26–29F stair walls (built when walking/prefetching up from 29F) → full flights continuing above 30F; key class 30 for f ≥ 30.
 - Fixed 2026-10-30 (TY "level 2 stairs cannot go to void deck"): a `//` comment added with the roof landing swallowed `walkZ`'s storey-below candidate → walking down any flight was blocked on every floor; also a swallowed `gpuGrounds` call (pavilion floors/porch paving not drawn). Rule: never put a `//` comment before code on the same line (single-line style here makes it easy).
 - Fixed: floors-to-clear eye offset; presets reset date/posture/group params; spec slider wording; Stop hook added (`.claude/settings.json` → `.claude/hooks/spec-sync.sh`).
