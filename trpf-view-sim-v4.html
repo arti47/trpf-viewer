@@ -941,10 +941,12 @@ const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP 
 { const B = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), eq = (a, q) => a.every((v, i) => v === q[i]);
   B.boxes = B.boxes.filter(bx => !eq(bx, [28.5, -2, 31.5, 0.5])).map(bx => (eq(bx, [25.5, -4, 28.5, 0.5]) ? [25.5, -4, 28.5, -1.5] : bx)); }
 // Outline of a block's raster boxes (block-local m): 0.5 m cells, dilated by `dil` cells, boundary loops (interior on the left), outer loops only, Douglas–Peucker to `tol` m → straight edges (diagonal wings were 0.5 m staircases)
-function blkOutline(B, dil, tol) { const c = 0.5, xs = B.boxes.flatMap(b => [b[0], b[2]]), zs = B.boxes.flatMap(b => [b[1], b[3]]), x0 = Math.min(...xs) - (dil + 1) * c, z0 = Math.min(...zs) - (dil + 1) * c;
-  const W = Math.round((Math.max(...xs) - x0) / c) + dil + 2, H = Math.round((Math.max(...zs) - z0) / c) + dil + 2, g = new Uint8Array(W * H), G = new Uint8Array(W * H);
+function blkOutline(B, dil, tol, cl = 0) { const c = 0.5, xs = B.boxes.flatMap(b => [b[0], b[2]]), zs = B.boxes.flatMap(b => [b[1], b[3]]), x0 = Math.min(...xs) - (dil + cl + 1) * c, z0 = Math.min(...zs) - (dil + cl + 1) * c;
+  const W = Math.round((Math.max(...xs) - x0) / c) + dil + cl + 2, H = Math.round((Math.max(...zs) - z0) / c) + dil + cl + 2, g = new Uint8Array(W * H), G = new Uint8Array(W * H);
   for (const [a0, b0, a1, b1] of B.boxes) for (let j = Math.round((b0 - z0) / c); j < Math.round((b1 - z0) / c); j++) for (let i = Math.round((a0 - x0) / c); i < Math.round((a1 - x0) / c); i++) g[j * W + i] = 1;
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (g[j * W + i]) for (let dj = -dil; dj <= dil; dj++) for (let di = -dil; di <= dil; di++) { const a = i + di, b = j + dj; if (a >= 0 && a < W && b >= 0 && b < H) G[b * W + a] = 1; }
+  if (cl) { const mo = (src, v) => { const o = new Uint8Array(W * H); for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let r = !v; for (let dj = -cl; dj <= cl && r !== v; dj++) for (let di = -cl; di <= cl; di++) { const a = i + di, b = j + dj, q = a >= 0 && a < W && b >= 0 && b < H && src[b * W + a]; if (!!q === v) { r = v; break; } } o[j * W + i] = r ? 1 : 0; } return o; };   // closing: dilate then erode (fills notches/gaps < 2·cl cells)
+    const Cg = mo(mo(G, true), false); G.set(Cg); }
   const f = (i, j) => i >= 0 && i < W && j >= 0 && j < H && G[j * W + i], E = new Map(), k = (i, j) => i + ',' + j, add = (a, b, p, q) => { const K = k(a, b); (E.get(K) || E.set(K, []).get(K)).push([p, q]); };
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (f(i, j)) { if (!f(i, j - 1)) add(i, j, i + 1, j); if (!f(i + 1, j)) add(i + 1, j, i + 1, j + 1); if (!f(i, j + 1)) add(i + 1, j + 1, i, j + 1); if (!f(i - 1, j)) add(i, j + 1, i, j); }
   const out = []; for (const [K0, L0] of E) while (L0.length) { const [si, sj] = K0.split(',').map(Number), loop = [[si, sj]]; let cur = L0.pop();
@@ -967,7 +969,7 @@ function rebuildTRPF() {
   SITE_BLOCKS.forEach(B => B.boxes.forEach(([x0, z0, x1, z1]) => {
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
     const res = B.h > BLK_TOP, [cx, cz] = blkToWorld(B, (x0 + x1) / 2, (z0 + z1) / 2), fac = res && VD.fac.some(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz));
-    const ms = B.name.startsWith('MSCP'), P = makePrism(B.name, 'trpf', B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (res) P.botc = [226, 224, 218]; TRPF.push(P);   // residential: on the void deck (white soffit)
+    const ms = B.name.startsWith('MSCP'), P = makePrism(B.name, 'trpf', B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // residential: on the void deck (white soffit)
     if (ms) TRPF.push(vdP('Blk 32 preschool (8) + utility centre, 1st storey', VOID_DECK_HEIGHT, 0, pts, [188, 168, 132]));   // MSCP 1st storey (owner Blk 32 1st-storey plan 2026-10-30: preschool (8) + UC rooms + stair cores; finish estimate); car decks above
     if (fac) { const F = VD.fac.find(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz)); TRPF.push(vdP(F[2], VOID_DECK_HEIGHT, 0, pts, F[3])); }   // 1st-storey facility under it: glazed shopfront / centre (colour per VD.fac)
   }));
@@ -986,7 +988,7 @@ function rebuildTRPF() {
     const T = makePrism(`MSCP ${nm}`, 'trpf', M.h + dh, M.h, pts, 0); T.tank = true; T.alb = alb; TRPF.push(T); });
   { const T = makePrism('Shelter (below 32A)', 'trpf', 3, 2.6, [29.5, -4.9, 33.5, -4.9, 33.5, -0.9, 29.5, -0.9], 0); T.tank = true; T.alb = [226, 226, 222]; TRPF.push(T);   // roof on 4 posts (walk under)
     for (const [x, z] of [[29.9, -4.5], [33.1, -4.5], [33.1, -1.3], [29.9, -1.3]]) TRPF.push(vdP('Shelter post', 2.6, 0, [x - 0.08, z - 0.08, x + 0.08, z - 0.08, x + 0.08, z + 0.08, x - 0.08, z + 0.08], [92, 96, 100])); }
-  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
+  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3, 4)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
@@ -1056,6 +1058,9 @@ function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A mo
   const out = [], col = [228, 226, 220], core = [232, 228, 220], B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A'), facW = VD.fac.map(([n, r, l]) => [n, pxRing(pxBox(r)), l]);
   const cores = VD.core32.map(r => planRing(r)).concat(VD.coresPx.map(([n, r]) => { const B = SITE_BLOCKS.find(b => b.name === n); return pxBox(r).flatMap(([a, b]) => VD_W(n === 'Blk 31A' ? B : null, SITE_PX(a, b))); }));
   VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', i === 2 ? VOID_DECK_HEIGHT / 2 + 1.0 : VOID_DECK_HEIGHT, 0, cores[i], core, i >= 5 && i <= 7 ? { wlift: 1 } : {})));   // lift shafts + refuse chamber: hidden while walking in the lift lobby (interior copy has the car cavities)
+  { const B32 = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), top = B32 ? B32.h : VOID_DECK_HEIGHT + 80;   // lift shafts + chute stack run solid to the roof (the raster has a notch there: looking up from the void-deck lobby showed the upper storeys' faces, TY 2026-10-30)
+    for (const r of [VD.core32[5], VD.core32[6], [25.31, 16.91, 26.37, 20.71]]) out.push(vdP('Blk 32A lift core', top, VOID_DECK_HEIGHT, planRing(r), core));
+    const lc = vdP('Blk 32A void-deck ceiling (lobby)', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, planRing([16.96, 10.64, 26.37, 20.71]), [236, 234, 228]); lc.botc = [330, 338, 346]; lc.soffit = 1; out.push(lc); }
   VD.coresPx.forEach(([n], i) => out.push(vdP(`${n} void deck core`, VOID_DECK_HEIGHT, 0, cores[VD.core32.length + i], core)));
   out.push(vdP('Blk 32A stair lintel', VOID_DECK_HEIGHT, 2.1, planRing([14.32, 7.86, 15.23, 7.98]), core), vdP('Blk 32A stair door', 2.1, 0, planRing([14.32, 7.89, 15.23, 7.95]), [128, 94, 64], { wdoor: 1 }));
   out.push(vdP('Blk 32A letterboxes', 1.9, 0, planRing([16.96, 10.98, 19.96, 11.33]), [150, 156, 162], { wlift: 1 }));
@@ -1250,12 +1255,13 @@ function stairWalls(f) {
     if (g > 30) { w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, top, 'cor'], [15.45, 1.6, 15.76, 7.98, b, top, 'cor'], [13.12, 7.0, 14.32, 7.98, b, top, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, top, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'roofDoor'], [15.23, 7.86, 15.45, 7.98, b, top, 'cor'],
       [14.4, 7.87, 14.46, 7.89, b + 0.95, b + 1.15, 'rail'], [14.74, 7.885, 14.98, 7.89, b + 1.5, b + 1.66, 'roofSign'], [14.25, 5.56, 15.45, 5.61, b + 0.96, b + 1.0, 'rail']); for (let x = 14.33; x < 15.44; x += 0.14) w.push([x, 5.575, x + 0.02, 5.595, b, b + 0.96, 'rail']); continue; }   // roof storey: landing, well walls, roof access door (locked: closed, not tappable) + pull handle + sign
-    for (let i = 1; i < m; i++) w.push([14.35, yt - 0.28 * i, 15.45, yt - 0.28 * (i - 1), b + r * i - 0.45, b + r * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + half + r * i - 0.45, b + half + r * i, 'stair']);
+    for (let i = 1; i < m; i++) w.push([14.35, yt - 0.28 * i, 15.45, yt - 0.28 * (i - 1), b + r * i - 0.2, b + r * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + half + r * i - 0.2, b + half + r * i, 'stair']);
     w.push([13.12, 1.6, 15.45, 3.64, b + half - 0.2, b + half, 'stair']);   // mid landing
     const RA = Y => b + r * ((yt - Y) / 0.28 + 1), RB = Y => b + half + r * ((Y - 3.64) / 0.28 + 1), TA = Y => b + r * Math.min(m - 1, Math.floor((yt - Y) / 0.28) + 1), TB = Y => b + half + r + r * Math.min(m - 2, Math.floor((Y - 3.64) / 0.28));
     for (let j = 0, nj = Math.round((yt - 3.64) / 0.07); j < nj; j++) { const y0 = 3.64 + 0.07 * j;
       if (j % 2) { const y = y0 + 0.025; w.push([14.32, y, 14.34, y + 0.02, TA(y + 0.01), RA(y) + 0.87, 'rail'], [14.26, y, 14.28, y + 0.02, TB(y + 0.01), RB(y) + 0.87, 'rail']); } }
     rails.push([14.3, 14.35, yt, RA(yt) + 0.9, 3.64, RA(3.64) + 0.9], [14.25, 14.3, 3.64, RB(3.64) + 0.9, yt, RB(yt) + 0.9]);
+    rails.push([14.345, 15.455, yt, RA(yt) - 0.18, 3.64, RA(3.64) - 0.18, 0.22, 1], [13.115, 14.255, 3.64, RB(3.64) - 0.18, yt, RB(yt) - 0.18, 0.22, 1]);   // smooth inclined waist slab under each flight (RC stair soffit; hides the stepped tread-box undersides, TY 2026-10-30)
     w.push([14.25, 3.6, 14.35, 3.64, b + half + 0.86, b + half + 0.9, 'rail'], [14.25, yt, 14.35, yt + 0.04, b + 0.9, b + 0.9 + r, 'rail']);
     if (k) { const t = k < 0 ? z1 - 0.02 : z1; w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, t, 'cor'], [15.45, 1.6, 15.76, 7.98, b, t, 'cor'], [13.12, 7.0, 14.32, 7.98, b, t, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, t, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, t, 'cor']); }   // other storeys: landing slab, well walls, riser B, fire door (closed); below: tops 2 cm under this floor (z-fight, TY 2026-10-30)
@@ -3477,9 +3483,10 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'liftDoor' ? [196, 199, 201] : kind === 'liftCeil' ? [120, 124, 127] : kind === 'roofDoor' ? [112, 118, 122] : kind === 'roofSign' ? [178, 38, 30] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
     if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), kind === 'rail' ? 5 : ext, kind === 'lobby' ? 0 : null); }
   { const rc = c255([62, 66, 70]), t = [0, 0, 5, 0];   // stair handrails: sloped prisms (unitWalls boxes are axis-aligned)
-    for (const [x0, x1, ya, za, yb, zb] of STAIR_RAILS) { const P = (x, y, z) => W(x, y, z), q = (a, b, c, d, nn, k) => A.quad(a, b, c, d, nn, rc.map(v => v * k), t, t, t, t), h = 0.04;
+    const sc = c255([196, 192, 184]); for (const [x0, x1, ya, za, yb, zb, hh, so] of STAIR_RAILS) { const P = (x, y, z) => W(x, y, z), tt = so ? [0, 0, 0, 0] : t, q = (a, b, c, d, nn, k) => A.quad(a, b, c, d, nn, (so ? sc : rc).map(v => v * k), tt, tt, tt, tt), h = hh || 0.04;
       q(P(x0, ya, za), P(x1, ya, za), P(x1, yb, zb), P(x0, yb, zb), up0, 1.05); q(P(x0, ya, za - h), P(x1, ya, za - h), P(x1, yb, zb - h), P(x0, yb, zb - h), dn0, 0.8);
-      q(P(x0, ya, za - h), P(x0, yb, zb - h), P(x0, yb, zb), P(x0, ya, za), Nw(x0, yb, x0, ya), 0.86); q(P(x1, ya, za - h), P(x1, yb, zb - h), P(x1, yb, zb), P(x1, ya, za), Nw(x1, ya, x1, yb), 0.86); } }
+      q(P(x0, ya, za - h), P(x0, yb, zb - h), P(x0, yb, zb), P(x0, ya, za), Nw(x0, yb, x0, ya), 0.86); q(P(x1, ya, za - h), P(x1, yb, zb - h), P(x1, yb, zb), P(x1, ya, za), Nw(x1, ya, x1, yb), 0.86);
+      if (so) { q(P(x0, ya, za - h), P(x1, ya, za - h), P(x1, ya, za), P(x0, ya, za), Nw(x0, ya, x1, ya), 0.9); q(P(x0, yb, zb - h), P(x1, yb, zb - h), P(x1, yb, zb), P(x0, yb, zb), Nw(x1, yb, x0, yb), 0.9); } } }
   const fc = c255([238, 238, 234]), Fw = 0.05, M = 0.03;   // window frames (closed): outer frame, posts, sash joints, transoms; 0.06 m deep at the glass line
   for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { const sh = UNIT_PLAN.sashes[wi]; if (!sh.length || G0) continue;
     const bar = (a0, a1, t0, t1) => box(ax === 'y' ? [g - 0.03, a0, g + 0.03, a1] : [a0, g - 0.03, a1, g + 0.03], t0, t1, fc, 5);
@@ -3601,6 +3608,10 @@ function liftDynGeo() { const L = LIFT.open && LIFTS.find(q => q.id === LIFT.ope
   const st = [201 / 255, 204 / 255, 206 / 255], cs = [190 / 255, 194 / 255, 197 / 255], g = L.g, s = L.s, yc = L.yc;
   for (const [da, db, c] of [[-0.03, -0.012, st], [-0.08, -0.062, cs]]) { bx(g + s * da, g + s * db, yc - 0.55 - o, yc - 0.004 - o, 0, 2.1, c); bx(g + s * da, g + s * db, yc + 0.004 + o, yc + 0.55 + o, 0, 2.1, c); }   // landing leaves 1 cm behind the lobby face, car leaves at the car front
   return A; }
+function gpuSoffit() {   // depth-only undersides of the 1F ceiling plates (P.soffit), rebuilt when TRPF changes
+  if (GPU.sof && GPU.sof.t === TRPF) return GPU.sof; const A = glArr(), dn = [0, -1, 0], z4 = [0, 0, 0, 0];
+  for (const P of TRPF) if (P.soffit) { const pts = []; for (let i = 0; i < P.n; i++) pts.push([P.xs[i], P.zs[i]]); const tri = earClip(pts); for (const q of tri) A.v([pts[q][0], P.base, pts[q][1]], dn, [1, 1, 1], z4); }
+  if (GPU.sof) GPU.gl.deleteBuffer(GPU.sof.buf); return (GPU.sof = A.n ? { t: TRPF, buf: gpuBuf(new Float32Array(A.a)), n: A.n } : null); }
 function gpuRenderInterior(cam, env, kIn) {
   if (!GPU.ok) return false; if (onGround() && !groundIndoor()) return false;   // void deck: interior pass only in / at the stair core (else it would paint over columns in front)
   const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
@@ -3616,6 +3627,7 @@ function gpuRenderInterior(cam, env, kIn) {
     if (D > 0.005) { gl.uniform3fv(M.u['uWo[0]'], WLt.o); gl.uniform3fv(M.u['uWa[0]'], WLt.a); gl.uniform3fv(M.u['uWb[0]'], WLt.b); gl.uniform4fv(M.u['uWR[0]'], WLt.r); } }
   if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
   const ao = gpuDepth(cam, n); gpuCam(M, cam, 0.02, 400); gl.uniform1f(M.u.uAO, ao ? 1 : 0); if (ao) { gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, 0.02, 400); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
+  if (onGround() && !(state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10)) { const sb = gpuSoffit(); if (sb) { gl.colorMask(false, false, false, false); gpuAttrib(M, sb.buf); gl.drawArrays(gl.TRIANGLES, 0, sb.n); gl.colorMask(true, true, true, true); } }   // void deck outside the stair core: 1F ceiling plates in depth first, so upper-storey interior (2F corridor slab, shafts, stair well) can't paint over the ceiling (TY 2026-10-30)
   gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n); gl.uniform1f(M.u.uAO, 0);
   { const LD = liftDynGeo(); if (LD && LD.n) { gpuAttrib(M, gpuDyn('liftDoor', LD.a)); gl.drawArrays(gl.TRIANGLES, 0, LD.n); } }   // animated lift doors
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
