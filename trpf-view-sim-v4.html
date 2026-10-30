@@ -1026,7 +1026,11 @@ const VD_LINKS = VD.links.map(l => l.map(([a, b]) => SITE_PX(a, b)));
 const VD_FLAT = { pads: [], plazas: [], drives: [], court: pxRing(VD.court), porches: VD.porches.map(pxRing) };   // ground polygons (world flat rings) for drawing, trees, walk map
 VD.play.forEach(([a, b, rx, ry], i) => { const [x, z] = SITE_PX(a, b); VD_FLAT.pads.push({ r: blobRing(x, z, rx * 0.225, ry * 0.225, 31 + i), c: [86, 150, 206], play: [x, z] }); });
 VD.pads.forEach(([a, b, rx, ry, c], i) => { const [x, z] = SITE_PX(a, b); VD_FLAT.pads.push({ r: blobRing(x, z, rx * 0.225, ry * 0.225, 41 + i), c, fit: [x, z, Math.min(rx, ry) * 0.225] }); });
-VD_FLAT.plazas = VD.plazas.map(r => pxRing(pxBox(r))).concat(VD.bins.map(pxRing));   // + pavilion floors VD_FLAT.drives = VD.drives.map(pxRing);
+VD_FLAT.plazas = VD.plazas.map(r => pxRing(pxBox(r))).concat(VD.bins.map(pxRing));   // + pavilion floors
+VD_FLAT.drives = VD.drives.map(pxRing);   // (was swallowed by the comment above: drives never reached trees / walk map)
+// Site-plan roads (GEO.siteRoads trapezoids, site px → world rings): public roads (Tanjong Rhu Rd / Close, ECP slips) + internal drives / drop-off loops; replace the OSM ribbons inside the plan image
+const SITE_ROADS = (GEO.siteRoads || []).map(([ya, yb, a0, a1, b0, b1]) => pxRing([[a0, ya], [a1, ya], [b1, yb], [b0, yb]]));
+const SITE_IMG = pxRing([[0, 0], [1284, 0], [1284, 1009], [0, 1009]]);
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
 const VD_NLAWN = pxRing([[170, 230], [1110, 130], [1110, 318], [930, 335], [880, 342], [600, 362], [300, 418], [170, 425]]);   // N lawn between Tanjong Rhu Rd and the blocks (site px)
 const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.length - (T.open ? 1 : 0); i++) { const a = T[i], b = T[(i + 1) % T.length]; if (segD(x, z, a[0], a[1], b[0], b[1]) < 2.8) return true; }
@@ -1217,7 +1221,11 @@ const stairYT = g => 3.64 + 0.28 * (storeyH(g) / 0.35 - 1);   // top edge of a f
 function stairWalls(f) {
   const w = [], rails = [], H = UNIT_H, r = 0.175, B = k => slabAt(f + k) - slabAt(f);
   const ls = (g, b, z0, z1, y1) => { const ye = g >= 2 ? stairYT(g - 1) : 5.6; return ye > 5.61 ? [[14.3, 5.6, 15.45, y1, b + z0, b + z1, 'stair'], [13.12, ye, 14.3, y1, b + z0, b + z1, 'stair']] : [[13.12, 5.6, 15.45, y1, b + z0, b + z1, 'stair']]; };   // landing slab (E half clear of a taller flight below)
+  const top = f >= 30 ? B(1) + 2.6 : B(2);   // staircase roof soffit over the roof landing (TY 2026-10-30: last flight from 30F ends at a locked roof door, no stairs above)
   for (let k = -1; k <= 1; k++) { const g = f + k; if (g < 1) continue; const b = B(k), Hs = storeyH(g), z1 = b + Hs, m = Math.round(Hs / (2 * r)), half = Hs / 2, yt = stairYT(g);
+    if (g > 30) { w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, top, 'cor'], [15.45, 1.6, 15.76, 7.98, b, top, 'cor'], [13.12, 7.0, 14.32, 7.98, b, top, 'cor'],
+      [14.32, 7.86, 15.23, 7.98, b + 2.1, top, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'roofDoor'], [15.23, 7.86, 15.45, 7.98, b, top, 'cor'],
+      [14.4, 7.87, 14.46, 7.89, b + 0.95, b + 1.15, 'rail'], [14.74, 7.885, 14.98, 7.89, b + 1.5, b + 1.66, 'roofSign']); continue; }   // roof storey: landing, well walls, roof access door (locked: closed, not tappable) + pull handle + sign
     for (let i = 1; i < m; i++) w.push([14.35, yt - 0.28 * i, 15.45, yt - 0.28 * (i - 1), b + r * i - 0.45, b + r * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + half + r * i - 0.45, b + half + r * i, 'stair']);
     w.push([13.12, 1.6, 15.45, 3.64, b + half - 0.2, b + half, 'stair']);   // mid landing
     const RA = Y => b + r * ((yt - Y) / 0.28 + 1), RB = Y => b + half + r * ((Y - 3.64) / 0.28 + 1), TA = Y => b + r * Math.min(m - 1, Math.floor((yt - Y) / 0.28) + 1), TB = Y => b + half + r + r * Math.min(m - 2, Math.floor((Y - 3.64) / 0.28));
@@ -1229,8 +1237,8 @@ function stairWalls(f) {
       [14.32, 7.86, 15.23, 7.98, b + 2.1, t, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, t, 'cor']); }   // other storeys: landing slab, well walls, riser B, fire door (closed); below: tops 2 cm under this floor (z-fight, TY 2026-10-30)
     else w.push(...ls(g, b, -0.2, -0.04, 7.74), ...(g ? [[12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']] : [])); }   // this storey: landing slab under the floor, well walls up to the slab above (void deck: GROUND_WALLS are full height)
   { const zb = f >= 2 ? B(-1) - 0.4 : 0; let z = zb;
-    for (const k of [-2, -1, 0, 1]) { const g = f + k; if (g < 1) continue; const s0 = B(k) + storeyH(g) / 2 + 1.0, s1 = s0 + 1.4; if (s1 <= zb) continue; if (s0 > z) w.push([13.12, 1.3, 15.45, 1.6, z, s0, 'cor']); z = s1; } w.push([13.12, 1.3, 15.45, 1.6, z, B(2), 'cor']); }
-  w.push([13.12, 1.3, 15.76, 7.98, B(2) - 0.2, B(2), 'stair']); if (f >= 3) w.push([13.12, 1.3, 15.76, 7.98, B(-1) - 0.4, B(-1) - 0.18, 'stair']);   // well caps beyond the modelled storeys (none under the void deck)
+    for (const k of [-2, -1, 0, 1]) { const g = f + k; if (g < 1 || g > 30) continue; const s0 = B(k) + storeyH(g) / 2 + 1.0, s1 = s0 + 1.4; if (s1 <= zb) continue; if (s0 > z) w.push([13.12, 1.3, 15.45, 1.6, z, s0, 'cor']); z = s1; } w.push([13.12, 1.3, 15.45, 1.6, z, top, 'cor']); }
+  w.push([13.12, 1.3, 15.76, 7.98, top - (f >= 30 ? 0 : 0.2), top + (f >= 30 ? 0.2 : 0), 'stair']); if (f >= 3) w.push([13.12, 1.3, 15.76, 7.98, B(-1) - 0.4, B(-1) - 0.18, 'stair']);   // well caps beyond the modelled storeys (none under the void deck)
   return { w, rails };
 }
 // Void deck storey (floor 0) around the 32A E stair: core walls full height (3.5 m), fire door (open leaf while walking); the rest of the void deck is world geometry (voidDeckPrisms)
@@ -1238,16 +1246,16 @@ const GROUND_WALLS = [[12.86, 1.6, 13.12, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [15
   [14.32, 7.89, 15.23, 7.95, 0, 2.1, 'stairDoor'], [15.17, 6.98, 15.23, 7.89, 0, 2.1, 'stairOpen'], [15.23, 7.86, 15.45, 7.98, 0, VOID_DECK_HEIGHT, 'cor']];
 // Lifts (TY 2026-10-30 "standard HDB BTO lift"; sizes estimates): 4 cars, E pair door face X 19.96 / W pair 23.07, centres Y 12.73 / 15.52 (owner lobby plan);
 // car 1.6 m wide × 1.7 m deep, 2.4 m ceiling, stainless lining; centre-opening doors 1.1 m (CORR_FIX leaves) open when you walk within 1.6 m or stand in the car;
-// in the car a floor panel (#liftPanel, 1 = void deck … 30) moves you to that storey (same car, doors open). Serves every storey; no ride animation.
+// in the car a floor panel (#liftPanel, 1 = void deck … 30): doors close (landing + car leaves slide, LIFT.o), ride at 2.5 m/s (0.8 m/s² ramps) with the floor counter, arrive, doors open; doors auto-close after 6 s in the car / when you walk away.
 const LIFTS = [['E1', 19.96, 1, 12.73], ['E2', 19.96, 1, 15.52], ['W1', 23.07, -1, 12.73], ['W2', 23.07, -1, 15.52]].map(([id, g, s, yc]) => ({ id, g, s, yc, car: s > 0 ? [g - 1.8, yc - 0.8, g - 0.1, yc + 0.8] : [g + 0.1, yc - 0.8, g + 1.8, yc + 0.8], area: s > 0 ? [g - 1.8, yc - 0.8, g + 0.02, yc + 0.8] : [g - 0.02, yc - 0.8, g + 1.8, yc + 0.8] }));   // area = car + doorway (walkable)
-const LIFT = { open: '', car: '' };
+const LIFT = { open: '', car: '', o: 0, tgt: 0, busy: 0, pos: 0, v: 0, sig: '', dest: 0, dir: 0, raf: 0, idle: 0, pend: null };   // open = car whose leaves are animated (dynamic geometry), o = open fraction
 const inLiftCar = (X, Y) => LIFTS.find(L => X > L.car[0] && X < L.car[2] && Y > L.car[1] && Y < L.car[3]);
 function liftWalls(z1) {   // shafts minus car cavities, current storey (0 … z1); closed doors = thin steel leaf in the opening (walk blocking; visible leaves are CORR_FIX)
   const w = [[16.96, 11.33, 18.16, 16.91, 0, z1, 'lobby'], [24.87, 11.33, 26.06, 16.91, 0, z1, 'lobby']];
   for (const [a, b] of [[18.16, 19.96], [23.07, 24.87]]) w.push([a, 11.33, b, 11.93, 0, z1, 'lobby'], [a, 13.53, b, 14.72, 0, z1, 'lobby'], [a, 16.32, b, 16.91, 0, z1, 'lobby']);
   for (const L of LIFTS) { const [x0, y0, x1, y1] = L.car, f0 = L.s > 0 ? x1 : L.g, f1 = L.s > 0 ? L.g : x0, d = L.s > 0 ? x0 : x1;
     w.push([f0, y0, f1, L.yc - 0.55, 0, z1, 'lobby'], [f0, L.yc + 0.55, f1, y1, 0, z1, 'lobby'], [f0, L.yc - 0.55, f1, L.yc + 0.55, 2.1, z1, 'lobby'], [x0, y0, x1, y1, 2.4, z1, 'lobby'],   // door jambs, transom, car roof
-      [Math.min(d, d + L.s * 0.04), y0, Math.max(d, d + L.s * 0.04), y1, 0, 2.4, 'steel'], [x0, y0, x1, y0 + 0.04, 0, 2.4, 'steel'], [x0, y1 - 0.04, x1, y1, 0, 2.4, 'steel'], [x0, y0, x1, y1, 2.36, 2.4, 'liftLight']);   // stainless lining + ceiling light panel
+      [Math.min(d, d + L.s * 0.04), y0, Math.max(d, d + L.s * 0.04), y1, 0, 2.4, 'steel'], [x0, y0, x1, y0 + 0.04, 0, 2.4, 'steel'], [x0, y1 - 0.04, x1, y1, 0, 2.4, 'steel'], [x0, y0, x1, y1, 2.36, 2.4, 'liftCeil']);   // stainless lining + ceiling (downlights = LIFT_CAR)
     if (LIFT.open !== L.id) w.push([Math.min(f0, f1) + 0.03, L.yc - 0.55, Math.max(f0, f1) - 0.03, L.yc + 0.55, 0, 2.1, 'liftDoor']); }
   return w; }
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
@@ -2242,36 +2250,58 @@ const inCorr = (X, Y) => UNIT_PLAN.corr.walk.some(([x0, y0, x1, y1]) => X >= x0 
 // Walk surface = plan height mod FLOOR_HEIGHT: 0 outside the stair, continuous ramps through the flights (eye smooth; drawn steps ≤0.175 m off), 1.4 on the mid landing.
 const STAIR = [13.12, 1.6, 15.45, 7.92];
 // Walk surfaces near floor f: landing 0, this storey's flights / mid landing (stairRamp f), the storey below's (− its height); nearest within 0.35 m, else null (wall between).
-// Void deck (floor 0, 3.5 m storey, 2026-10-30): 10-riser flights, landing Y ≥ 6.16 on the W half; walking down past 1F reaches the ground. Blocked above 30F.
+// Void deck (floor 0, 3.5 m storey, 2026-10-30): 10-riser flights, landing Y ≥ 6.16 on the W half; walking down past 1F reaches the ground. Above 30F only the roof landing (Z 2.8 on 30F, locked roof door).
 const stairRamp = (g, X, Y) => { const [a, b, c, d] = STAIR; if (g < 1 || X < a || X > c || Y < b || Y > d) return null; const h = storeyH(g) / 2, yt = stairYT(g), L = yt - 3.64;
   if (Y <= 3.64) return h; if (Y >= yt) return null; return X >= 14.3 ? h * (yt - Y) / L : h + h * (Y - 3.64) / L; };
 function walkZ(X, Y, Z) { const f = state.obsFloor, [a, b, c, d] = STAIR, C = [];
   if (!(X >= a && X <= c && Y >= b && Y <= d) || (Y >= 5.6 && !(X >= 14.3 && Y < stairYT(f)) && !(X < 14.3 && f >= 2 && Y < stairYT(f - 1)))) C.push(0);
-  if (f < 30) { const q = stairRamp(f, X, Y); if (q !== null) C.push(q); } if (f >= 2) { const q = stairRamp(f - 1, X, Y); if (q !== null) C.push(q - storeyH(f - 1)); }
+  { const q = stairRamp(f, X, Y); if (q !== null) C.push(q); } if (f === 30 && X >= a && X <= c && Y >= 5.6 && Y <= d) C.push(storeyH(30));   // 30F: last flight up to the roof landing (no storey above) if (f >= 2) { const q = stairRamp(f - 1, X, Y); if (q !== null) C.push(q - storeyH(f - 1)); }
   let z = null; for (const v of C) if (Math.abs(v - Z) <= 0.35 && (z === null || Math.abs(v - Z) < Math.abs(z - Z))) z = v; return z; }
 const onGround = () => state.obsFloor <= 1;
 // void deck: interior pass (and hidden world copies of the lift core) only at the 32A stair core or lift lobby; elsewhere the world draws them (interior would paint over columns in front)
 const groundIndoor = () => !!state.walk && ((state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10) || (state.walk.X > 16.3 && state.walk.X < 27.2 && state.walk.Y > 9.2 && state.walk.Y < 21.5));
-function liftUpdate(X, Y) {   // doors open for the car you stand in or walk up to (≤1.6 m from its door); floor panel while in a car
-  const c = inLiftCar(X, Y), near = c || LIFTS.find(L => Math.hypot(X - (L.g + L.s * 0.6), Y - L.yc) < 1.6), o = near ? near.id : '';
-  if (o !== LIFT.open) { LIFT.open = o; UW_CACHE.key = ''; FIX_CACHE.key = ''; } LIFT.car = c ? c.id : ''; liftPanel(); }
-function liftGo(f) { if (!state.walk || !LIFT.car) return; state.obsFloor = f; state.walk.Z = 0; UW_CACHE.key = ''; renderAll(); liftPanel(); }
+function liftUpdate(X, Y) {   // doors open for the car you walk up to (≤1.6 m from its door); in the car they stay as they are (auto-close after 6 s); walking away closes them
+  const c = inLiftCar(X, Y), near = c || LIFTS.find(L => Math.hypot(X - (L.g + L.s * 0.6), Y - L.yc) < 1.6); LIFT.car = c ? c.id : '';
+  if (!LIFT.busy) { if (near && near.id !== LIFT.open) { liftSet(near.id, 0); liftDoor(1); } else if (near && !c) liftDoor(1); else if (!near && LIFT.open) liftDoor(0); if (c) liftIdle(); }
+  liftPanel(); }
+function liftSet(id, o) { if (id !== LIFT.open) { LIFT.open = id; UW_CACHE.key = ''; FIX_CACHE.key = ''; } LIFT.o = LIFT.tgt = o; }
+function liftIdle() { clearTimeout(LIFT.idle); LIFT.idle = setTimeout(() => { if (LIFT.car && !LIFT.busy) liftDoor(0); }, 6000); }
+function liftDoor(t, done) { LIFT.tgt = t; if (done) LIFT.pend = done; liftRun(); }
+function liftRun() { if (LIFT.raf) return; let t0 = performance.now();
+  const step = now => { const dt = Math.min(0.4, (now - t0) / 1000); t0 = now; let more = false, draw = false;
+    if (LIFT.o !== LIFT.tgt) { LIFT.o = LIFT.tgt > LIFT.o ? Math.min(LIFT.tgt, LIFT.o + dt / 1.6) : Math.max(LIFT.tgt, LIFT.o - dt / 1.6); more = draw = true; }   // 1.6 s full stroke
+    else if (LIFT.pend) { const f = LIFT.pend; LIFT.pend = null; f(); more = true; }
+    if (LIFT.dir) { const d = Math.abs(LIFT.dest - LIFT.pos), v = Math.min(2.5, Math.sqrt(2 * 0.8 * d) + 0.05, LIFT.v + 0.8 * dt); LIFT.v = v; LIFT.pos += LIFT.dir * Math.min(d, v * dt); more = true;   // trapezoid speed profile
+      if (Math.abs(LIFT.dest - LIFT.pos) < 0.002) { LIFT.dir = 0; LIFT.v = 0; liftArrive(); } else liftPanel(); }
+    if (LIFT.o === 0 && LIFT.tgt === 0 && LIFT.open && !LIFT.car && !LIFT.busy) { liftSet('', 0); draw = true; }   // closed and walked away: static closed leaves again
+    if (draw) renderView(); LIFT.raf = more ? requestAnimationFrame(step) : 0; };
+  LIFT.raf = requestAnimationFrame(step); }
+const liftFloorAt = z => { let b = 1; for (let f = 1; f <= 30; f++) if (Math.abs(slabAt(f) - z) < Math.abs(slabAt(b) - z)) b = f; return b; };
+function liftGo(f) { if (!state.walk || !LIFT.car || LIFT.busy) return; clearTimeout(LIFT.idle);
+  if (f === state.obsFloor) { liftDoor(1, liftIdle); return; }
+  LIFT.busy = 1; LIFT.goal = f; liftPanel(); liftDoor(0, () => { LIFT.pos = slabAt(state.obsFloor); LIFT.dest = slabAt(f); LIFT.dir = Math.sign(LIFT.dest - LIFT.pos); LIFT.v = 0; }); }
+function liftArrive() { const f = LIFT.goal; state.obsFloor = f; state.walk.Z = 0; UW_CACHE.key = ''; renderAll(); liftPanel(); setTimeout(() => liftDoor(1, () => { LIFT.busy = 0; LIFT.goal = 0; liftPanel(); liftIdle(); }), 500); }
 function liftPanel() {
   let el = $('liftPanel'); const on = !!(state.walk && LIFT.car); if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'liftPanel'; perspectiveCanvas.parentNode.appendChild(el);
     el.style.cssText = 'position:absolute;right:64px;top:50%;transform:translateY(-50%);z-index:17;padding:8px;border-radius:12px;background:rgba(13,20,36,.86);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:repeat(5,30px);gap:4px;font:600 11px -apple-system,Inter,sans-serif;color:#e2e8f0';
-    el.addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) liftGo(+b.dataset.f); }); }
-  el.style.display = on ? 'grid' : 'none'; if (!on) return; const f = state.obsFloor;
-  el.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:2px 0 4px;color:#94a3b8">Lift ${LIFT.car} · ${flTxt(f)}</div>` + Array.from({ length: 30 }, (_, i) => 30 - i).map(q => `<button data-f="${q}" title="${flTxt(q)}" style="height:30px;border-radius:15px;border:1px solid ${q === f ? '#fbbf24' : 'rgba(255,255,255,.14)'};background:${q === f ? 'rgba(251,191,36,.25)' : 'rgba(255,255,255,.04)'};color:inherit;font:inherit">${q === 1 ? '1' : q}</button>`).join(''); }
+    el.addEventListener('click', e => { const b = e.target.closest('[data-f],[data-d]'); if (!b) return; if (b.dataset.f) liftGo(+b.dataset.f); else if (!LIFT.busy) { clearTimeout(LIFT.idle); if (+b.dataset.d) liftDoor(1, liftIdle); else liftDoor(0); } }); }
+  el.style.display = on ? 'grid' : 'none'; if (!on) { LIFT.sig = ''; return; } const cur = LIFT.dir ? liftFloorAt(LIFT.pos) : state.obsFloor, g = LIFT.goal, arw = LIFT.dir > 0 ? '▲' : LIFT.dir < 0 ? '▼' : '', sig = [LIFT.car, cur, g, arw, LIFT.busy].join();
+  if (sig === LIFT.sig) return; LIFT.sig = sig;
+  const bs = 'height:30px;border-radius:15px;color:inherit;font:inherit;border:1px solid ';
+  el.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:2px 0 2px;color:#94a3b8">Lift ${LIFT.car}</div><div style="grid-column:1/-1;text-align:center;margin-bottom:4px;padding:4px 0;border-radius:6px;background:#0a0a0a;color:#ffb347;font:700 20px ui-monospace,monospace;letter-spacing:1px">${arw}${cur === 1 ? '1' : cur}</div>` +
+    Array.from({ length: 30 }, (_, i) => 30 - i).map(q => `<button data-f="${q}" title="${flTxt(q)}" style="${bs}${q === g ? '#fbbf24' : 'rgba(255,255,255,.14)'};background:${q === g ? 'rgba(251,191,36,.35)' : q === cur && !LIFT.busy ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.04)'}">${q}</button>`).join('') +
+    `<button data-d="1" title="Open doors" style="${bs}rgba(255,255,255,.14);background:rgba(255,255,255,.04);grid-column:span 2">◀|▶</button><button data-d="0" title="Close doors" style="${bs}rgba(255,255,255,.14);background:rgba(255,255,255,.04);grid-column:span 2">▶|◀</button>`; }
 // Void deck / grounds walk test: inside the TRPF site, clear of ground-storey prisms (columns, cores, MSCP, ESS, posts, bin centres…) by the body radius
 let GOBS = { t: null, a: [] };
 const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor && !P.wlift) }; return GOBS.a; };   // lift core: plan walls (GROUND_WALLS + liftWalls) collide instead
 const groundFree = (X, Y, r) => { const [x, z] = P2W(X, Y); if (!ringIn(GEO.trpf, x, z)) return false; r = r ? Math.max(r, 0.25) : 0;
   for (const P of groundObs()) { if (x < P.minx - r || x > P.maxx + r || z < P.minz - r || z > P.maxz + r) continue; if (pointIn(P, x, z)) return false; if (r > 0) { for (let i = 0, j = P.n - 1; i < P.n; j = i++) if (segD(x, z, P.xs[j], P.zs[j], P.xs[i], P.zs[i]) < r) return false; } } return true; };
-const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && (onGround() ? groundFree(X, Y, r) : ringIn(walkRing, X, Y) || inCorr(X, Y) || LIFTS.some(({ area: [a, b, c, d] }) => X > a && X < c && Y > b && Y < d)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
+const liftBlock = (X, Y) => { if (LIFT.busy) return true; const L = LIFT.open && LIFT.o < 0.8 && LIFTS.find(q => q.id === LIFT.open); if (!L || !state.walk) return false; const sd = (x, y) => y > L.yc - 0.8 && y < L.yc + 0.8 && L.s * (x - L.g) < -0.02; return sd(X, Y) !== sd(state.walk.X, state.walk.Y); };   // closed/closing doors block the door plane; riding: no walking
+const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && !liftBlock(X, Y) && (onGround() ? groundFree(X, Y, r) : ringIn(walkRing, X, Y) || inCorr(X, Y) || LIFTS.some(({ area: [a, b, c, d] }) => X > a && X < c && Y > b && Y < d)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
   !unitWalls().some(([x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind]) => kind !== 'stair' && z0 < z + 1.2 && z1 > z + 0.05 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || onGround() || !furnBlocks(X, Y, r)); };   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
   if (!state.walk) return; const z = walkZ(X, Y, state.walk.Z || 0); state.walk.X = X; state.walk.Y = Y; state.walk.Z = z === null ? 0 : z;
-  if (state.walk.Z >= storeyH(state.obsFloor) / 2) { state.walk.Z -= storeyH(state.obsFloor); state.obsFloor++; } else if (state.obsFloor >= 2 && state.walk.Z < -storeyH(state.obsFloor - 1) / 2) { state.obsFloor--; state.walk.Z += storeyH(state.obsFloor); }   // past a mid landing: next storey's frame
+  if (state.walk.Z >= storeyH(state.obsFloor) / 2 && state.obsFloor < 30) { state.walk.Z -= storeyH(state.obsFloor); state.obsFloor++; } else if (state.obsFloor >= 2 && state.walk.Z < -storeyH(state.obsFloor - 1) / 2) { state.obsFloor--; state.walk.Z += storeyH(state.obsFloor); }   // past a mid landing: next storey's frame
   liftUpdate(X, Y);
   const rm = !onGround() && UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
@@ -2290,7 +2320,7 @@ function walkVec(off, st) {   // move st m along heading + off° (plan frame), s
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); LIFT.open = LIFT.car = ''; UW_CACHE.key = ''; liftPanel(); }
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
@@ -2316,7 +2346,8 @@ function walkMapBig(on) {
 }
 function drawGroundMap(g, P) {   // walk map on the void deck: TRPF site, ground features, blocks overhead (faint), ground-storey obstacles
   const path = (r, fill) => { g.beginPath(); for (let i = 0; i < r.length; i += 2) { const [x, y] = P(...P2W.inv(r[i], r[i + 1])); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); g.fillStyle = fill; g.fill(); };
-  path(GEO.trpf, 'rgba(74,124,72,0.35)'); VD_FLAT.drives.forEach(r => path(r, 'rgba(148,163,184,0.3)')); [...VD_FLAT.plazas, VD_FLAT.court, ...VD_FLAT.porches].forEach(r => path(r, 'rgba(203,213,225,0.3)')); VD_FLAT.pads.forEach(q => path(q.r, q.play ? 'rgba(96,165,250,0.55)' : 'rgba(251,191,36,0.4)'));
+  const road = r => { path(r, '#475569'); g.strokeStyle = '#475569'; g.lineWidth = 1; g.stroke(); };   // opaque + 1 px stroke: no seams between the trapezoid strips
+  SITE_ROADS.forEach(road); path(GEO.trpf, 'rgba(74,124,72,0.35)'); SITE_ROADS.forEach(r => ringIn(GEO.trpf, (r[0] + r[4]) / 2, (r[1] + r[5]) / 2) && road(r)); [...VD_FLAT.plazas, VD_FLAT.court, ...VD_FLAT.porches].forEach(r => path(r, 'rgba(203,213,225,0.3)')); VD_FLAT.pads.forEach(q => path(q.r, q.play ? 'rgba(96,165,250,0.55)' : 'rgba(251,191,36,0.4)'));
   g.strokeStyle = 'rgba(96,165,250,0.8)'; g.lineWidth = 2; for (const T of VD_TRACKS) { g.beginPath(); T.forEach(([x, z], i) => { const [a, b] = P(...P2W.inv(x, z)); i ? g.lineTo(a, b) : g.moveTo(a, b); }); if (!T.open) g.closePath(); g.stroke(); }
   for (const Pp of TRPF) { if (Pp.base >= 1.25 && Pp.base < 5 && Pp.h > 10 || Pp.name === 'Covered linkway') { const r = []; for (let i = 0; i < Pp.n; i++) r.push(Pp.xs[i], Pp.zs[i]); path(r, Pp.name === 'Covered linkway' ? 'rgba(161,98,7,0.35)' : 'rgba(148,163,184,0.14)'); } }
   for (const Pp of groundObs()) { const r = []; for (let i = 0; i < Pp.n; i++) r.push(Pp.xs[i], Pp.zs[i]); path(r, '#cbd5e1'); }
@@ -2346,7 +2377,7 @@ function roomEyeWorld() {
 // Room interior on: Blk 32A raster boxes whose centre lies in #134's own plan footprint are skipped in the 3D view (the traced interior + ext walls replace them;
 // their 0.5 m staircase edges otherwise stood up to ~0.5 m proud of the true facade and filled the glass once the eye moved inside, owner report 2026-10-25).
 function ownUnitTest() {
-  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return null;
+  const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S || onGround()) return null;   // void deck: the lifted 32A boxes are the void-deck ceiling (skipping them left the lift lobby open to the sky, TY 2026-10-30)
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S);
   // corridor spot: also skip raster boxes whose plan bbox reaches into the open slots / W end (coarse raster boxes span the slots and the corridor end, TY 2026-10-29)
   const OPEN = sp.id === 'corr' ? [[21.92, -3, 30.68, 8.75], [43.13, -3, 51.55, 8.75], [33.8, 10.95, 47.38, 24], [57, 9.15, 66, 10.5]] : null, T = (x, z) => { const rx = x - sp.x, rz = z - sp.z; return [px + rx * u[0] + rz * u[1], py - (rx * n[0] + rz * n[1])]; };
@@ -2637,7 +2668,28 @@ function cvParts() {   // curtains / blinds per window at the inner face (rail 0
   return P; }
 const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), lt: LT_DEF(), cv: CV_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const corrParts = () => CORR_FIX.filter(q => q.lift !== LIFT.open || !q.lift);
+// Lift car fit-out (typical new HDB BTO car; TY 2026-10-30; sizes/colours estimates): hairline stainless wall panels with joints, dark kick plates, handrails (back + one side),
+// car operating panel on the front return (floor buttons, open/close, alarm, intercom, amber display), indicator over the door, dark ceiling + 4 LED downlights + vent + CCTV dome, notice board, door sill.
+const LIFT_CAR = (() => { const P = [], hs = '#bfc3c6', jt = '#6d7174', kk = '#55595c', rl = '#e2e4e5';
+  for (const L of LIFTS) { const [x0, y0, x1, y1] = L.car, s = L.s, fx = s > 0 ? x1 : x0, ya = y0 + 0.04, yb = y1 - 0.04, yc = L.yc, B = 1.66;
+    const R = (da, db, ya_, yb_, z0, z1, c, x = {}) => P.push({ ...fRect(Math.min(fx - s * da, fx - s * db), ya_, Math.max(fx - s * da, fx - s * db), yb_, z0, z1, c), mat: 3, ...x });
+    for (const y of [yc - 0.27, yc + 0.27]) R(B - 0.003, B, y - 0.003, y + 0.003, 0.12, 2.36, jt);   // back wall: 3 panels
+    for (const d of [0.55, 1.1]) { R(d - 0.003, d + 0.003, ya, ya + 0.003, 0.12, 2.36, jt); R(d - 0.003, d + 0.003, yb - 0.003, yb, 0.12, 2.36, jt); }   // side walls
+    R(B - 0.006, B, ya, yb, 0, 0.12, kk); R(0.04, B, ya, ya + 0.006, 0, 0.12, kk); R(0.04, B, yb - 0.006, yb, 0, 0.12, kk);   // kick plates
+    R(B - 0.075, B - 0.035, ya + 0.12, yb - 0.12, 0.875, 0.915, rl, { soft: 0.018 }); for (const y of [ya + 0.2, yb - 0.2]) R(B - 0.035, B, y - 0.012, y + 0.012, 0.885, 0.905, rl);   // back handrail + standoffs
+    R(0.3, 1.45, ya + 0.035, ya + 0.075, 0.875, 0.915, rl, { soft: 0.018 }); for (const d of [0.4, 1.35]) R(d - 0.012, d + 0.012, ya, ya + 0.035, 0.885, 0.905, rl);   // side handrail
+    const c0 = ya + 0.025, c1 = yc - 0.59, cm = (c0 + c1) / 2; R(0, 0.012, c0, c1, 0.85, 1.78, '#d3d6d8');   // car operating panel
+    R(0.012, 0.016, cm - 0.05, cm + 0.05, 1.66, 1.74, '#101214'); R(0.016, 0.017, cm - 0.032, cm + 0.032, 1.68, 1.72, '#ffb347', { em: 1 });   // display
+    for (let i = 0; i < 30; i++) { const col = i % 2, row = Math.floor(i / 2), z = 1.6 - row * 0.036, y = cm + (col ? 0.025 : -0.025); R(0.012, 0.018, y - 0.01, y + 0.01, z - 0.01, z + 0.01, '#eceeef'); }   // 30 floor buttons (2 × 15)
+    for (const [y, z, c] of [[cm - 0.025, 1.0, '#eceeef'], [cm + 0.025, 1.0, '#eceeef'], [cm - 0.025, 0.95, '#f2c230'], [cm + 0.025, 0.95, '#3a7d44']]) R(0.012, 0.019, y - 0.012, y + 0.012, z - 0.012, z + 0.012, c);   // open / close, alarm (yellow), intercom (green)
+    for (let k = 0; k < 4; k++) R(0.012, 0.014, cm - 0.04, cm + 0.04, 0.88 + k * 0.012, 0.885 + k * 0.012, '#3b3f42');   // intercom grille
+    R(0, 0.015, yc - 0.2, yc + 0.2, 2.13, 2.3, '#101214'); R(0.015, 0.017, yc - 0.09, yc + 0.09, 2.17, 2.26, '#ffb347', { em: 1 });   // indicator over the door
+    for (const [d, y] of [[0.5, yc - 0.42], [0.5, yc + 0.42], [1.2, yc - 0.42], [1.2, yc + 0.42]]) P.push({ ...fCyl(fx - s * d, y, 0.06, 2.345, 2.36, '#fffbe8'), em: 1 });   // LED downlights
+    R(0.75, 0.95, yc - 0.15, yc + 0.15, 2.352, 2.36, '#3e4245'); P.push({ ...fCyl(fx - s * (B - 0.1), ya + 0.1, 0.045, 2.3, 2.36, '#202224'), mat: 3 });   // vent grille, CCTV dome
+    R(0.5, 1.1, yb - 0.012, yb, 1.3, 1.9, '#8d9194'); R(0.53, 1.07, yb - 0.014, yb - 0.012, 1.33, 1.87, '#f1f0ea', { mat: 0 });   // notice board
+    R(-0.1, 0.02, yc - 0.55, yc + 0.55, 0, 0.01, '#9da1a4'); }   // car door sill
+  return P; })();
+const corrParts = () => CORR_FIX.filter(q => q.lift !== LIFT.open || !q.lift).concat(LIFT_CAR);
 const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv + LIFT.open; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts(), ...corrParts()] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -3232,6 +3284,7 @@ function gpuInit() {
     [[-12000, -5200, -3300, 9000], [-12000, 12000, 1800, 12000], [2600, 12000, -1200, 1800]].forEach(([x0, x1, z0, z1]) => { const nx = 12, nz = 12; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const a = x0 + (x1 - x0) * i / nx, b = x0 + (x1 - x0) * (i + 1) / nx, c = z0 + (z1 - z0) * j / nz, d = z0 + (z1 - z0) * (j + 1) / nz; G.quad([a, 0, c], [b, 0, c], [b, 0, d], [a, 0, d], up, fl, z4, z4, z4, z4); } });
     GPU.farN = G.n; const asph = [70, 72, 78].map(c => c / 255);
     for (const R of ROADS) { const p = R.pts, hw = R.w / 2; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / L * hw, pz = (bx - ax) / L * hw;
+      if (ringIn(SITE_IMG, (ax + bx) / 2, (az + bz) / 2)) continue;   // inside the site plan: plan roads (gpuGrounds) instead
       G.quad([ax - px, 0, az - pz], [bx - px, 0, bz - pz], [bx + px, 0, bz + pz], [ax + px, 0, az + pz], up, asph, z4, z4, z4, z4); } }
     GPU.groundN = G.n; const rv = [0, 0, -2, 0], blk = [0, 0, 0];   // ground shadow receiver: ±6 km grid, 100 m cells (follows curvature)
     for (let x = -6000; x < 6000; x += 100) for (let z = -6000; z < 6000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv);
@@ -3276,7 +3329,7 @@ function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck 
     X.quad([a[0] + nx - ex, y, a[1] + nz - ez], [b[0] + nx + ex, y, b[1] + nz + ez], [b[0] - nx + ex, y, b[1] - nz + ez], [a[0] - nx - ex, y, a[1] - nz - ez], up, c(col), z4, z4, z4, z4); } };
   poly(GEO.trpf, 0.1, [88, 138, 72]);   // TRPF lawn (site plan; MP2025 residential class drew it beige)
   for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const [x0, z0, x1, z1] of B.boxes) { const p = [[x0 - 1.5, z0 - 1.5], [x1 + 1.5, z0 - 1.5], [x1 + 1.5, z1 + 1.5], [x0 - 1.5, z1 + 1.5]].map(([a, b]) => blkToWorld(B, a, b)); X.quad([p[0][0], 0.12, p[0][1]], [p[1][0], 0.12, p[1][1]], [p[2][0], 0.12, p[2][1]], [p[3][0], 0.12, p[3][1]], up, c([212, 210, 204]), z4, z4, z4, z4); }   // void deck + apron tiles (light homogeneous tiles, typical new BTO)
-  VD_FLAT.drives.forEach(r => poly(r, 0.14, [96, 98, 102])); VD.bins.forEach(q => poly(pxRing(q), 0.15, [176, 178, 180])); VD_FLAT.porches.forEach(r => poly(r, 0.15, [104, 106, 110]));
+  for (const r of SITE_ROADS) X.quad([r[0], 0.13, r[1]], [r[2], 0.13, r[3]], [r[4], 0.13, r[5]], [r[6], 0.13, r[7]], up, c([70, 72, 78]), z4, z4, z4, z4);   // site-plan roads (asphalt as OSM roads) VD.bins.forEach(q => poly(pxRing(q), 0.15, [176, 178, 180])); VD_FLAT.porches.forEach(r => poly(r, 0.15, [104, 106, 110]));
   VD.plazas.forEach(([a, b, cc, d]) => { const r = pxRing(pxBox([a, b, cc, d])); poly(r, 0.16, [176, 178, 180]);   // wavy white bands (model photos)
     for (let k = 1; k < 5; k++) { const P = []; for (let j = 0; j <= 24; j++) { const t = j / 24, px = a + (cc - a) * t, py = b + (d - b) * (k / 5) + Math.sin(t * Math.PI * 3 + k) * (d - b) * 0.07; P.push(SITE_PX(px, py)); } rib(P, 0.9, 0.17, [236, 236, 232]); } });
   poly(VD_FLAT.court, 0.16, [236, 236, 230]); { const r = VD_FLAT.court, m = [0, 0]; for (let i = 0; i < r.length; i += 2) { m[0] += r[i] / (r.length / 2); m[1] += r[i + 1] / (r.length / 2); } poly(r.map((v, i) => m[i % 2] + (v - m[i % 2]) * 0.94), 0.17, [92, 128, 108]); }   // hard court: white line + green surface
@@ -3389,7 +3442,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); }
   for (let [x0, y0b, x1, y1, z0, z1, kind] of WL) { wSelf++;
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
-    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'liftDoor' ? [196, 199, 201] : kind === 'liftLight' ? [250, 250, 244] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'liftDoor' ? [196, 199, 201] : kind === 'liftCeil' ? [120, 124, 127] : kind === 'roofDoor' ? [112, 118, 122] : kind === 'roofSign' ? [178, 38, 30] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
     if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), kind === 'rail' ? 5 : ext, kind === 'lobby' ? 0 : null); }
   { const rc = c255([62, 66, 70]), t = [0, 0, 5, 0];   // stair handrails: sloped prisms (unitWalls boxes are axis-aligned)
     for (const [x0, x1, ya, za, yb, zb] of STAIR_RAILS) { const P = (x, y, z) => W(x, y, z), q = (a, b, c, d, nn, k) => A.quad(a, b, c, d, nn, rc.map(v => v * k), t, t, t, t), h = 0.04;
@@ -3498,6 +3551,15 @@ function gpuRender(cam, env, pxW, pxH) {
   return true;
 }
 // #134 interior (second render into the same canvas, transparent elsewhere): drawn over the composited outside scene + rain + pins, as drawInterior.
+// Animated lift doors (LIFT.open car): landing + car leaves (2 × 0.55 m each, centre opening) slide into the jamb pockets by LIFT.o; tiny per-frame buffer, main program
+function liftDynGeo() { const L = LIFT.open && LIFTS.find(q => q.id === LIFT.open); if (!L || !GPU.W || !GPU.Wm) return null; const A = glArr(), W = GPU.W, { u, n } = GPU.Wm, t = [0, 0, 0, -3], o = LIFT.o * 0.55;
+  const Nw = (nX, nY) => [u[0] * nX - n[0] * nY, 0, u[1] * nX - n[1] * nY], up = [0, 1, 0];
+  const bx = (xa, xb, y0, y1, z0, z1, c) => { const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), sd = [[x0, y0, x1, y0, 0, -1, 1], [x1, y0, x1, y1, 1, 0, 0.86], [x1, y1, x0, y1, 0, 1, 0.74], [x0, y1, x0, y0, -1, 0, 0.86]];
+    for (const [ax, ay, ex, ey, nX, nY, k] of sd) A.quad(W(ax, ay, z0), W(ex, ey, z0), W(ex, ey, z1), W(ax, ay, z1), Nw(nX, nY), c.map(v => v * k), t, t, t, t);
+    A.quad(W(x0, y0, z1), W(x1, y0, z1), W(x1, y1, z1), W(x0, y1, z1), up, c, t, t, t, t); };
+  const st = [201 / 255, 204 / 255, 206 / 255], cs = [190 / 255, 194 / 255, 197 / 255], g = L.g, s = L.s, yc = L.yc;
+  for (const [da, db, c] of [[-0.03, -0.012, st], [-0.08, -0.062, cs]]) { bx(g + s * da, g + s * db, yc - 0.55 - o, yc - 0.004 - o, 0, 2.1, c); bx(g + s * da, g + s * db, yc + 0.004 + o, yc + 0.55 + o, 0, 2.1, c); }   // landing leaves 1 cm behind the lobby face, car leaves at the car front
+  return A; }
 function gpuRenderInterior(cam, env, kIn) {
   if (!GPU.ok) return false; if (onGround() && !groundIndoor()) return false;   // void deck: interior pass only in / at the stair core (else it would paint over columns in front)
   const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
@@ -3514,6 +3576,7 @@ function gpuRenderInterior(cam, env, kIn) {
   if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
   const ao = gpuDepth(cam, n); gpuCam(M, cam, 0.02, 400); gl.uniform1f(M.u.uAO, ao ? 1 : 0); if (ao) { gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, 0.02, 400); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
   gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n); gl.uniform1f(M.u.uAO, 0);
+  { const LD = liftDynGeo(); if (LD && LD.n) { gpuAttrib(M, gpuDyn('liftDoor', LD.a)); gl.drawArrays(gl.TRIANGLES, 0, LD.n); } }   // animated lift doors
   gpuCam(F, cam, 0.02, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
   if (GPU.sheerN) { const k = clamp((0.12 + (lit0 - 0.12) * LS.kCov) * kIn + (LS.on ? 0.35 : 0), 0.25, 1) * 0.6; gl.uniform4f(F.u.uColor, 0.97 * k, 0.96 * k, 0.93 * k, 0.6); gpuAttrib(F, GPU.sheerBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.sheerN); }   // sheer curtains (premultiplied)
