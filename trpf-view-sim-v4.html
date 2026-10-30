@@ -1055,7 +1055,7 @@ const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.
 function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A moves with the gap slider)
   const out = [], col = [228, 226, 220], core = [214, 210, 202], B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A'), facW = VD.fac.map(([n, r, l]) => [n, pxRing(pxBox(r)), l]);
   const cores = VD.core32.map(r => planRing(r)).concat(VD.coresPx.map(([n, r]) => { const B = SITE_BLOCKS.find(b => b.name === n); return pxBox(r).flatMap(([a, b]) => VD_W(n === 'Blk 31A' ? B : null, SITE_PX(a, b))); }));
-  VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', VOID_DECK_HEIGHT, 0, cores[i], core, i >= 5 && i <= 7 ? { wlift: 1 } : {})));   // lift shafts + refuse chamber: hidden while walking in the lift lobby (interior copy has the car cavities)
+  VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', i === 2 ? VOID_DECK_HEIGHT / 2 + 1.0 : VOID_DECK_HEIGHT, 0, cores[i], core, i >= 5 && i <= 7 ? { wlift: 1 } : {})));   // lift shafts + refuse chamber: hidden while walking in the lift lobby (interior copy has the car cavities)
   VD.coresPx.forEach(([n], i) => out.push(vdP(`${n} void deck core`, VOID_DECK_HEIGHT, 0, cores[VD.core32.length + i], core)));
   out.push(vdP('Blk 32A stair lintel', VOID_DECK_HEIGHT, 2.1, planRing([14.32, 7.86, 15.23, 7.98]), core), vdP('Blk 32A stair door', 2.1, 0, planRing([14.32, 7.89, 15.23, 7.95]), [128, 94, 64], { wdoor: 1 }));
   out.push(vdP('Blk 32A letterboxes', 1.9, 0, planRing([16.96, 10.98, 19.96, 11.33]), [150, 156, 162], { wlift: 1 }));
