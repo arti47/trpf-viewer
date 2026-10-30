@@ -986,7 +986,7 @@ function rebuildTRPF() {
     const T = makePrism(`MSCP ${nm}`, 'trpf', M.h + dh, M.h, pts, 0); T.tank = true; T.alb = alb; TRPF.push(T); });
   { const T = makePrism('Shelter (below 32A)', 'trpf', 3, 2.6, [29.5, -4.9, 33.5, -4.9, 33.5, -0.9, 29.5, -0.9], 0); T.tank = true; T.alb = [226, 226, 222]; TRPF.push(T);   // roof on 4 posts (walk under)
     for (const [x, z] of [[29.9, -4.5], [33.1, -4.5], [33.1, -1.3], [29.9, -1.3]]) TRPF.push(vdP('Shelter post', 2.6, 0, [x - 0.08, z - 0.08, x + 0.08, z - 0.08, x + 0.08, z + 0.08, x - 0.08, z + 0.08], [92, 96, 100])); }
-  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 1, 0.35)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [530, 545, 560]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
+  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [530, 545, 560]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
@@ -1275,7 +1275,7 @@ function liftWalls(z1) {   // shafts minus car cavities, current storey (0 … z
     if (LIFT.open !== L.id) w.push([Math.min(f0, f1) + 0.03, L.yc - 0.55, Math.max(f0, f1) - 0.03, L.yc + 0.55, 0, 2.1, 'liftDoor']); }
   return w; }
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
-const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + Math.min(Math.max(f, 1), 4) + LIFT.open;   // stair fire door open while walking (stairs walkable)
+const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + (f >= 30 ? 30 : Math.min(Math.max(f, 1), 4)) + LIFT.open;   // stair fire door open while walking (stairs walkable)
   if (UW_CACHE.key !== key) { const off = new Set([...(W.br3 ? [] : WALL_GROUPS.br3), ...(W.br23 ? [] : WALL_GROUPS.br23)]), S = stairWalls(f);   // floor class 1 / 2 / 3 / ≥4: storey heights around the stair differ only near the void deck
     UW_CACHE = { key, rails: S.rails, w: (f <= 1 ? GROUND_WALLS.filter(q => q[6] !== so).concat(liftWalls(VOID_DECK_HEIGHT), [[16.96, 10.98, 19.96, 11.33, 0, 1.9, 'steel'], [24.3, 16.91, 26.37, 20.71, 0, VOID_DECK_HEIGHT, 'lobby']]) : liftWalls(UNIT_H).concat( UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : []))).concat(S.w) }; }
   STAIR_RAILS.length = 0; STAIR_RAILS.push(...UW_CACHE.rails); return UW_CACHE.w; };
