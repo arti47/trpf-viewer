@@ -986,6 +986,7 @@ const WIN_HEAD = 2.2;
 // Unit #134 interior, traced from the HDB 4-Room Type 1 plan (owner upload 2026-10-25; dims = wall centre-lines, rest scaled ≈96.7 px/m).
 // Plan metres: X along facade (0 = E/master side → W/living), Y into the flat (0 = bedroom facade outer face). Walls [x0,y0,x1,y1,z0,z1,kind]; visual only.
 const UNIT_H = 2.6, YARD = { sill: 1.0, head: 2.4 };
+const STAIR_RAILS = [];   // sloped stair handrails [x0, x1, ya, za (top), yb, zb] in plan m, filled with the corridor walls
 const UNIT_PLAN = (() => {
   const H = UNIT_H, F = 0.15, w = [], wins = [], win = (x0, x1, y0, y1) => { w.push([x0, y0, x1, y1, 0, 0.55], [x0, y0, x1, y1, WIN_HEAD, H]); wins.push([x0, x1, y0, 'x', 0.55, WIN_HEAD]); };   // glass at the outer face: reveals/sill/soffit stay wholly indoors (a mid-wall glass line let the window pane erase their outer half)
   win(0.695, 2.7, 0, F); win(3.62, 5.58, 0, F); win(6.78, 8.75, 0, F); win(9.99, 12.51, 1.53, 1.68);   // W1 glazing (plan double lines): master, BR2, BR3, living
@@ -1048,15 +1049,22 @@ const UNIT_PLAN = (() => {
     ...recS(57.0, 58.6, 7.85, 57.3), [55.3, 7.74, 57.0, 9.05, 0, H, 'cor'], [55.7, 9.05, 56.6, 9.065, 0.1, 2.1, 'steel'],      // #142 entrance + riser A
     [54.1, 7.0, 55.3, 7.92, 0, H, 'cor'], [54.25, 7.92, 55.15, 7.95, 0.1, 2.1, 'steel'], [53.3, 7.86, 54.1, 7.98, 0, H, 'cor'], [52.3, 7.86, 53.3, 7.98, 2.1, H, 'cor'], [52.3, 7.89, 53.3, 7.95, 0, 2.1, 'door'], [52, 7.86, 52.3, 7.98, 0, H, 'cor'],   // #142 stair alcove: riser B + fire door
     [12.86, 1.6, 13.12, 1.68, 0, H, 'cor']);
+  STAIR_RAILS.length = 0;
   // walkable dog-leg stair (TY 2026-10-29 "walk up and down the stairs"; was a single 14-step flight + dark stairwell patch): 16 × 0.175 m risers per 2.8 m storey, 0.28 m treads (STAIR);
   // flight A (W half, X 14.35–15.45) from the floor landing (Y 5.6) S up to the mid landing (Y 1.6–3.64, +1.4 m), flight B (E half, X 13.12–14.25) N up to the next floor's landing.
-  // Built for the storeys below / at / above (k −1..1) with the well walls, divider and other floors' fire doors (closed), so the well is continuous while climbing; depth-buffered GPU → below-floor parts are fine.
+  // Built for the storeys below / at / above (k −1..1) with the well walls, railings and other floors' fire doors (closed), so the well is continuous while climbing; depth-buffered GPU → below-floor parts are fine.
   for (let k = -1; k <= 1; k++) { const b = k * FLOOR_HEIGHT, z1 = b + FLOOR_HEIGHT;
     for (let i = 1; i <= 7; i++) w.push([14.35, 5.6 - 0.28 * i, 15.45, 5.6 - 0.28 * (i - 1), b + 0.175 * i - 0.45, b + 0.175 * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + 1.575 + 0.175 * (i - 1) - 0.45, b + 1.575 + 0.175 * (i - 1), 'stair']);
-    w.push([13.12, 1.6, 15.45, 3.64, b + 1.2, b + 1.4, 'stair'], [14.25, 3.64, 14.35, 5.6, b, z1, 'cor']);   // mid landing, divider wall between the flights
+    w.push([13.12, 1.6, 15.45, 3.64, b + 1.2, b + 1.4, 'stair']);   // mid landing
+    // metal railings on the inner edge of each flight (typical HDB: open 0.1 m gap between the flights, no wall; TY 2026-10-30): 0.9 m above the nosing line, sloped 50 × 40 mm handrails (`STAIR_RAILS`, drawn in gpuInterior; balusters block walking), 20 mm balusters every 0.14 m, U-turn caps at the landings (sizes estimates)
+    const RA = Y => b + 0.175 * ((5.6 - Y) / 0.28 + 1), RB = Y => b + 1.4 + 0.175 * ((Y - 3.64) / 0.28 + 1), TA = Y => b + 0.175 * Math.min(7, Math.floor((5.6 - Y) / 0.28) + 1), TB = Y => b + 1.575 + 0.175 * Math.min(6, Math.floor((Y - 3.64) / 0.28));
+    for (let j = 0; j < 28; j++) { const y0 = 3.64 + 0.07 * j;
+      if (j % 2) { const y = y0 + 0.025; w.push([14.32, y, 14.34, y + 0.02, TA(y + 0.01), RA(y) + 0.87, 'rail'], [14.26, y, 14.28, y + 0.02, TB(y + 0.01), RB(y) + 0.87, 'rail']); } }
+    STAIR_RAILS.push([14.3, 14.35, 5.6, RA(5.6) + 0.9, 3.64, RA(3.64) + 0.9], [14.25, 14.3, 3.64, RB(3.64) + 0.9, 5.6, RB(5.6) + 0.9]);
+    w.push([14.25, 3.6, 14.35, 3.64, b + 2.26, b + 2.3, 'rail'], [14.25, 5.6, 14.35, 5.64, b + 0.9, b + 1.075, 'rail']);
     if (k) w.push([13.12, 5.6, 15.45, 7.86, b - 0.18, b, 'stair'], [12.86, 1.6, 13.12, 7.86, b, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, b, z1, 'cor'], [13.12, 7.0, 14.32, 7.98, b, z1, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, z1, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, z1, 'cor']);   // other storeys' landing slab, well walls, riser B, fire door (closed)
-    else w.push([12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']); }   // this storey: well walls up to the slab above
+    else w.push([13.12, 5.6, 15.45, 7.86, -0.2, -0.005, 'stair'], [12.86, 1.6, 13.12, 7.86, H, z1, 'cor'], [15.45, 1.6, 15.76, 7.98, H, z1, 'cor'], [14.32, 7.86, 15.23, 7.98, H, z1, 'cor']); }   // this storey: landing slab under the floor flat (it had no thickness → the storey below showed through at the landing edge, TY 2026-10-30), well walls up to the slab above
   // outer stair wall (Y 1.3–1.6): open above each mid landing like the corridor end (TY 2026-10-29: "same type of parapet as the one outside the unit"):
   // 1.0 m parapet, open to a beam soffit 2.4 m above the landing, full landing width, no glass (heights as the corridor end)
   { const z0 = -FLOOR_HEIGHT - 0.4, z1 = 2 * FLOOR_HEIGHT; let z = z0;
@@ -2636,7 +2644,7 @@ function furnDrawPlan() {
     FIN_ZONES.forEach(([id, [x0, y0, x1, y1]]) => { if (id !== FE.room) return; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.strokeRect(a, b, c - a, d - b); }); }
   g.font = `600 10px ${UIFONT}`; g.fillStyle = '#a3b1c6'; g.textAlign = 'center';
   [['Master', 1.75, 0.7], ['Bedroom 2', 4.75, 0.7], ['Bedroom 3', 7.8, 0.7], ['Living', 11.1, 2.15], ['Dining', 8.0, 3.85], ['Kitchen', 8.2, 7.6], ['Yard', 6.4, 7.6], ['Bath', 3.1, 5.4], ['WC', 5.25, 5.4], ['Shelter', 12.2, 6.3]].forEach(([t, X, Y]) => { const [x, y] = P(X, Y); g.fillText(t, x, y); });
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'lobby' || kind === 'doorOpen') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'rail' || kind === 'lobby' || kind === 'doorOpen') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
   for (const q of [...furnFixed()].sort((p, q) => p.z1 - q.z1)) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = (q.glass || q.frost) ? 0.8 : q.z0 >= 1.2 ? 0.25 : 0.75; g.fillStyle = (q.glass || q.frost) ? '#7dd3fc' : q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = 'rgba(15,23,42,0.5)'; g.lineWidth = 0.5; g.stroke(); }   // fixed: bath fittings, kitchen
   const col = fcOn(); FURN.items.forEach((it, i) => { const parts = furnParts(it).sort((p, q) => p.z1 - q.z1), on = i === FURN.sel, wall = (it.e || 0) >= 1.2, bad = col && furnClash(i, it.x, it.y, it.r);
     for (const q of parts) { g.beginPath(); q.p.forEach(([X, Y], k) => { const [x, y] = P(X, Y); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.globalAlpha = wall ? 0.45 : 0.9; g.fillStyle = q.c; g.fill(); g.globalAlpha = 1; g.strokeStyle = bad ? '#f43f5e' : on ? '#fbbf24' : 'rgba(15,23,42,0.55)'; g.lineWidth = on || bad ? 1.4 : 0.6; g.stroke(); }
@@ -3212,8 +3220,12 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); }
   for (let [x0, y0b, x1, y1, z0, z1, kind] of WL) { wSelf++;
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
-    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : [232, 226, 214];
-    if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), ext, kind === 'lobby' ? 0 : null); }
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
+    if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), kind === 'rail' ? 5 : ext, kind === 'lobby' ? 0 : null); }
+  { const rc = c255([62, 66, 70]), t = [0, 0, 5, 0];   // stair handrails: sloped prisms (unitWalls boxes are axis-aligned)
+    for (const [x0, x1, ya, za, yb, zb] of STAIR_RAILS) { const P = (x, y, z) => W(x, y, z), q = (a, b, c, d, nn, k) => A.quad(a, b, c, d, nn, rc.map(v => v * k), t, t, t, t), h = 0.04;
+      q(P(x0, ya, za), P(x1, ya, za), P(x1, yb, zb), P(x0, yb, zb), up0, 1.05); q(P(x0, ya, za - h), P(x1, ya, za - h), P(x1, yb, zb - h), P(x0, yb, zb - h), dn0, 0.8);
+      q(P(x0, ya, za - h), P(x0, yb, zb - h), P(x0, yb, zb), P(x0, ya, za), Nw(x0, yb, x0, ya), 0.86); q(P(x1, ya, za - h), P(x1, yb, zb - h), P(x1, yb, zb), P(x1, ya, za), Nw(x1, ya, x1, yb), 0.86); } }
   const fc = c255([238, 238, 234]), Fw = 0.05, M = 0.03;   // window frames (closed): outer frame, posts, sash joints, transoms; 0.06 m deep at the glass line
   for (const [wi, [w0, w1, g, ax, sl, hd]] of UNIT_PLAN.wins.entries()) { const sh = UNIT_PLAN.sashes[wi]; if (!sh.length) continue;
     const bar = (a0, a1, t0, t1) => box(ax === 'y' ? [g - 0.03, a0, g + 0.03, a1] : [a0, g - 0.03, a1, g + 0.03], t0, t1, fc, 5);
@@ -3787,7 +3799,7 @@ function drawRoomPlan() {
   const s = Math.min(w / (RP.x1 - RP.x0), h / (RP.y1 - RP.y0)), ox = (w - s * (RP.x1 - RP.x0)) / 2, oy = (h - s * (RP.y1 - RP.y0)) / 2, P = (X, Y) => [ox + (X - RP.x0) * s, oy + (Y - RP.y0) * s]; RP.s = s; RP.ox = ox; RP.oy = oy;
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fill();
   UNIT_ROOMS.forEach(([id, [a, b, c, d]]) => { const [x0, y0] = P(a, b), [x1, y1] = P(c, d), on = id === state.spot; g.fillStyle = on ? 'rgba(52,211,153,0.28)' : 'rgba(56,189,248,0.07)'; g.fillRect(x0, y0, x1 - x0, y1 - y0); });
-  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'lobby') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.2)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
+  for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'rail' || kind === 'lobby') continue; const [a, b] = P(x0, y0), [c, d] = P(x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.2)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, c - a), Math.max(1, d - b)); }
   const seen = new Set(); g.textAlign = 'center'; g.font = `600 10.5px ${UIFONT}`;
   UNIT_ROOMS.forEach(([id, [a, b, c, d]]) => { if (seen.has(id) || !RP.short[id]) return; seen.add(id); const [x0, y0] = P(a, b), [x1, y1] = P(c, d); g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = 'rgba(2,6,23,0.85)'; const ly = (y0 + y1) / 2 + 4 + (id === 'yard' ? -3 : 0); g.strokeText(RP.short[id], (x0 + x1) / 2, ly); g.fillStyle = id === state.spot ? '#a7f3d0' : '#e6edf6'; g.fillText(RP.short[id], (x0 + x1) / 2, ly); });
   g.font = `600 9.5px ${UIFONT}`; g.fillStyle = '#7dd3fc'; g.textAlign = 'right'; g.fillText('▲ windows face S (170°)', w - 6, h - 5);
@@ -3940,7 +3952,7 @@ function heroMaps(m) { const H = heroCv('maps'); if (!H) return; const { g, w, h
 function heroHome() { const H = heroCv('home'); if (!H) return; const { g, w, h, cv } = H, x0 = -0.4, y0 = -0.7, x1 = 13.9, y1 = 10.9, s = Math.min((w - 150) / (x1 - x0), (h - 6) / (y1 - y0)), ox = 6, oy = (h - s * (y1 - y0)) / 2, P = (X, Y) => [ox + (X - x0) * s, oy + (Y - y0) * s];
   g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.14)'; g.fill();
   UNIT_ROOMS.forEach(([id, [a, b, c, d]]) => { if (id !== state.spot) return; const [p0, q0] = P(a, b), [p1, q1] = P(c, d); g.fillStyle = 'rgba(45,212,191,0.4)'; g.fillRect(p0, q0, p1 - p0, q1 - q0); });
-  for (const [a, b, c, d, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'lobby' || z1 <= 0.6 || z0 > 1.5) continue; const [p, q] = P(a, b), [r, t] = P(c, d); g.fillStyle = isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(p, q, Math.max(1, r - p), Math.max(1, t - q)); }
+  for (const [a, b, c, d, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || kind === 'cor' || kind === 'rail' || kind === 'lobby' || z1 <= 0.6 || z0 > 1.5) continue; const [p, q] = P(a, b), [r, t] = P(c, d); g.fillStyle = isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(p, q, Math.max(1, r - p), Math.max(1, t - q)); }
   const sp = curSpot(); hTxt(g, sp ? sp.room : 'Custom spot', ox + s * (x1 - x0) + 12, h / 2 - 2, '700 14px', '#e6edf6'); hTxt(g, `${state.obsFloor}F · ${POSTURES[state.posture].label}${state.walk ? ' · walking' : ''}`, ox + s * (x1 - x0) + 12, h / 2 + 14, '500 11px', '#5eead4');
   cv._rp = { s, ox, oy, x0, y0 }; }
 function drawHeroes(m) { if (!PNL.open.length) return; heroView(m); heroTime(m); heroFuture(m); heroLight(); heroMaps(m); heroHome(); }
