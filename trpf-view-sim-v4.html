@@ -1241,7 +1241,7 @@ function stairWalls(f) {
   for (let k = -1; k <= 1; k++) { const g = f + k; if (g < 1) continue; const b = B(k), Hs = storeyH(g), z1 = b + Hs, m = Math.round(Hs / (2 * r)), half = Hs / 2, yt = stairYT(g);
     if (g > 30) { w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, top, 'cor'], [15.45, 1.6, 15.76, 7.98, b, top, 'cor'], [13.12, 7.0, 14.32, 7.98, b, top, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, top, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'roofDoor'], [15.23, 7.86, 15.45, 7.98, b, top, 'cor'],
-      [14.4, 7.87, 14.46, 7.89, b + 0.95, b + 1.15, 'rail'], [14.74, 7.885, 14.98, 7.89, b + 1.5, b + 1.66, 'roofSign']); continue; }   // roof storey: landing, well walls, roof access door (locked: closed, not tappable) + pull handle + sign
+      [14.4, 7.87, 14.46, 7.89, b + 0.95, b + 1.15, 'rail'], [14.74, 7.885, 14.98, 7.89, b + 1.5, b + 1.66, 'roofSign'], [14.25, 5.56, 15.45, 5.61, b + 0.96, b + 1.0, 'rail']); for (let x = 14.33; x < 15.44; x += 0.14) w.push([x, 5.575, x + 0.02, 5.595, b, b + 0.96, 'rail']); continue; }   // roof storey: landing, well walls, roof access door (locked: closed, not tappable) + pull handle + sign
     for (let i = 1; i < m; i++) w.push([14.35, yt - 0.28 * i, 15.45, yt - 0.28 * (i - 1), b + r * i - 0.45, b + r * i, 'stair'], [13.12, 3.64 + 0.28 * (i - 1), 14.25, 3.64 + 0.28 * i, b + half + r * i - 0.45, b + half + r * i, 'stair']);
     w.push([13.12, 1.6, 15.45, 3.64, b + half - 0.2, b + half, 'stair']);   // mid landing
     const RA = Y => b + r * ((yt - Y) / 0.28 + 1), RB = Y => b + half + r * ((Y - 3.64) / 0.28 + 1), TA = Y => b + r * Math.min(m - 1, Math.floor((yt - Y) / 0.28) + 1), TB = Y => b + half + r + r * Math.min(m - 2, Math.floor((Y - 3.64) / 0.28));
