@@ -940,6 +940,21 @@ const SITE_BLOCKS = GEO.blocks.map(b => ({ ...b, h: b.h === 'BLK_TOP' ? BLK_TOP 
 // but the 0.5 m raster filled it as full-height block → drop box [28.5,-2,31.5,0.5] (plan X 3.18–6.18, Y 8.56–11.06) and trim [25.5,-4,28.5,0.5] at the kitchen N face (v −1.5 ≈ Y 9.06).
 { const B = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), eq = (a, q) => a.every((v, i) => v === q[i]);
   B.boxes = B.boxes.filter(bx => !eq(bx, [28.5, -2, 31.5, 0.5])).map(bx => (eq(bx, [25.5, -4, 28.5, 0.5]) ? [25.5, -4, 28.5, -1.5] : bx)); }
+// Outline of a block's raster boxes (block-local m): 0.5 m cells, dilated by `dil` cells, boundary loops (interior on the left), outer loops only, Douglas–Peucker to `tol` m → straight edges (diagonal wings were 0.5 m staircases)
+function blkOutline(B, dil, tol) { const c = 0.5, xs = B.boxes.flatMap(b => [b[0], b[2]]), zs = B.boxes.flatMap(b => [b[1], b[3]]), x0 = Math.min(...xs) - (dil + 1) * c, z0 = Math.min(...zs) - (dil + 1) * c;
+  const W = Math.round((Math.max(...xs) - x0) / c) + dil + 2, H = Math.round((Math.max(...zs) - z0) / c) + dil + 2, g = new Uint8Array(W * H), G = new Uint8Array(W * H);
+  for (const [a0, b0, a1, b1] of B.boxes) for (let j = Math.round((b0 - z0) / c); j < Math.round((b1 - z0) / c); j++) for (let i = Math.round((a0 - x0) / c); i < Math.round((a1 - x0) / c); i++) g[j * W + i] = 1;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (g[j * W + i]) for (let dj = -dil; dj <= dil; dj++) for (let di = -dil; di <= dil; di++) { const a = i + di, b = j + dj; if (a >= 0 && a < W && b >= 0 && b < H) G[b * W + a] = 1; }
+  const f = (i, j) => i >= 0 && i < W && j >= 0 && j < H && G[j * W + i], E = new Map(), k = (i, j) => i + ',' + j, add = (a, b, p, q) => { const K = k(a, b); (E.get(K) || E.set(K, []).get(K)).push([p, q]); };
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (f(i, j)) { if (!f(i, j - 1)) add(i, j, i + 1, j); if (!f(i + 1, j)) add(i + 1, j, i + 1, j + 1); if (!f(i, j + 1)) add(i + 1, j + 1, i, j + 1); if (!f(i - 1, j)) add(i, j + 1, i, j); }
+  const out = []; for (const [K0, L0] of E) while (L0.length) { const [si, sj] = K0.split(',').map(Number), loop = [[si, sj]]; let cur = L0.pop();
+    while (cur) { const [p, q] = cur; if (p === si && q === sj) break; loop.push([p, q]); const L = E.get(k(p, q)); cur = L && L.pop(); }
+    let A = 0; for (let i = 0; i < loop.length; i++) { const [a, b] = loop[i], [d, e] = loop[(i + 1) % loop.length]; A += a * e - d * b; } if (A <= 0) continue;   // holes (cw) dropped
+    const P = loop.map(([i, j]) => [x0 + i * c, z0 + j * c]), dp = (pts, t) => { if (pts.length < 3) return pts; const [a, b] = [pts[0], pts[pts.length - 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9; let m = 0, mi = 0;
+      for (let i = 1; i < pts.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - pts[i][1]) - (a[0] - pts[i][0]) * (b[1] - a[1])) / L; if (d > m) { m = d; mi = i; } } return m > t ? dp(pts.slice(0, mi + 1), t).slice(0, -1).concat(dp(pts.slice(mi), t)) : [a, b]; };
+    let far = 0, fd = 0; P.forEach((p, i) => { const d = Math.hypot(p[0] - P[0][0], p[1] - P[0][1]); if (d > fd) { fd = d; far = i; } });
+    out.push(dp(P.slice(0, far + 1), tol).slice(0, -1).concat(dp(P.slice(far).concat([P[0]]), tol).slice(0, -1))); }
+  return out; }
 const blkToWorld = (B, lx, lz) => [B.ox + B.c * lx - B.s * lz, B.oz + B.s * lx + B.c * lz];
 const GAP_FITTED = GEO.gapFitted, GAP_DIR = [Math.sin(GEO.normal32 * DEG), Math.cos(GEO.normal32 * DEG)];
 let gap3132 = GAP_FITTED;
@@ -971,6 +986,7 @@ function rebuildTRPF() {
     const T = makePrism(`MSCP ${nm}`, 'trpf', M.h + dh, M.h, pts, 0); T.tank = true; T.alb = alb; TRPF.push(T); });
   { const T = makePrism('Shelter (below 32A)', 'trpf', 3, 2.6, [29.5, -4.9, 33.5, -4.9, 33.5, -0.9, 29.5, -0.9], 0); T.tank = true; T.alb = [226, 226, 222]; TRPF.push(T);   // roof on 4 posts (walk under)
     for (const [x, z] of [[29.9, -4.5], [33.1, -4.5], [33.1, -1.3], [29.9, -1.3]]) TRPF.push(vdP('Shelter post', 2.6, 0, [x - 0.08, z - 0.08, x + 0.08, z - 0.08, x + 0.08, z + 0.08, x - 0.08, z + 0.08], [92, 96, 100])); }
+  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 1, 0.35)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [530, 545, 560]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
@@ -2233,9 +2249,13 @@ function generateTrees() {
     if (ringIn(SH_PAVE, jx, jz) && groundName(jx, jz) === 'Park / open space' && nearWaterSH(jx, jz, 14)) add(jx, jz, 4); }
   for (const Rd of ROADS) { if (Rd.c > 3 || Rd.maxx < -R2 || Rd.minx > R2 || Rd.maxz < -R2 || Rd.minz > R2) continue; const p = Rd.pts; let carry = 0;
     for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L2 = Math.hypot(bx - ax, bz - az); if (L2 < 0.1) continue; const ux = (bx - ax) / L2, uz = (bz - az) / L2, off = Rd.w / 2 + 2.5;
-      for (let t = 16 - carry; t < L2; t += 16) { const x = ax + ux * t, z = az + uz * t; add(x - uz * off, z + ux * off, 2); add(x + uz * off, z - ux * off, 2); } carry = (carry + L2) % 16; } }
+      for (let t = 16 - carry; t < L2; t += 16) { const x = ax + ux * t, z = az + uz * t; if (ringIn(SITE_IMG, x, z)) continue; add(x - uz * off, z + ux * off, 2); add(x + uz * off, z - ux * off, 2); } carry = (carry + L2) % 16; } }   // inside the site plan: its own trees (below)
   const tr = GEO.trpf; let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity; for (let i = 0; i < tr.length; i += 2) { mnx = Math.min(mnx, tr[i]); mxx = Math.max(mxx, tr[i]); mnz = Math.min(mnz, tr[i + 1]); mxz = Math.max(mxz, tr[i + 1]); }
-  for (let x = mnx; x <= mxx; x += 14) for (let z = mnz; z <= mxz; z += 14) { const jx = x + (hash01(x, z, 11) - 0.5) * 8, jz = z + (hash01(z, x, 13) - 0.5) * 8; if (hash01(jx, jz, 17) < 0.45 || !ringIn(tr, jx, jz) || ringIn(VD_NLAWN, jx, jz) || groundBusy(jx, jz)) continue;
+  const onRoad = (x, z) => SITE_ROADS.some(r => ringIn(r, x, z)), inBld = (x, z) => TRPF.some(P => pointIn(P, x, z) || Math.hypot(P.cx - x, P.cz - z) < 4), free = (x, z) => !groundBusy(x, z) && !onRoad(x, z) && !inBld(x, z);
+  for (const [px, py] of GEO.siteTrees || []) { const [x, z] = SITE_PX(px, py); if (free(x, z)) add(x, z, 3); }   // site-plan canopy circles (incl. verges outside the boundary)
+  for (let i = 0, n = tr.length / 2; i < n; i++) { const ax = tr[2 * i], az = tr[2 * i + 1], bx = tr[(2 * i + 2) % tr.length], bz = tr[(2 * i + 3) % tr.length], L2 = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L2, uz = (bz - az) / L2;   // perimeter planting band (developer model: continuous canopy along all site edges)
+    for (let t = 2.5; t < L2; t += 5) for (const o of [2.5, 6.5]) for (const sg of [1, -1]) { const x = ax + ux * t - uz * o * sg + (hash01(t, o, 51) - 0.5) * 2, z = az + uz * t + ux * o * sg + (hash01(o, t, 53) - 0.5) * 2; if (ringIn(tr, x, z) && free(x, z)) add(x, z, 3); } }
+  for (let x = mnx; x <= mxx; x += 9) for (let z = mnz; z <= mxz; z += 9) { const jx = x + (hash01(x, z, 11) - 0.5) * 6, jz = z + (hash01(z, x, 13) - 0.5) * 6; if (hash01(jx, jz, 17) < 0.3 || !ringIn(tr, jx, jz) || ringIn(VD_NLAWN, jx, jz) || groundBusy(jx, jz) || onRoad(jx, jz)) continue;   // rest of the grounds: 9 m (model: courtyards wooded; was 14 m)
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
   for (let x = mnx; x <= mxx; x += 6) for (let z = mnz; z <= mxz; z += 6) { const jx = x + (hash01(x, z, 41) - 0.5) * 4, jz = z + (hash01(z, x, 43) - 0.5) * 4; if (hash01(jx, jz, 47) < 0.12 || !ringIn(VD_NLAWN, jx, jz) || !ringIn(tr, jx, jz) || groundBusy(jx, jz)) continue;   // N lawn densely wooded like the developer model (TY 2026-10-30)
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
