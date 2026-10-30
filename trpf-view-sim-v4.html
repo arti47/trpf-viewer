@@ -2359,8 +2359,24 @@ function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
   if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
-  $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
+  walkUI(on); renderAll();
 }
+function walkUI(on) { $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); }
+// Resume after refresh (TY 2026-10-30 "remain in the previous spot"): viewer state (spot/position, floor, heading, tilt, lens, posture, room interior, windows, walk X/Y/Z, time, date) in localStorage `trpf134.view`;
+// saved every 2 s when changed + on pagehide/hidden; restored in initApp2 before the first render. Date saved as 'today' when it was today (a later visit opens on its own today). World/scenario not saved.
+const VIEW_KEYS = ['spot', 'vx', 'vz', 'obsFloor', 'heading', 'pitchDeg', 'focalLength', 'standDist', 'eyeOffset', 'posture', 'showBalcony', 'winOpen', 'hour'];
+function viewSave() { if (!initialized || LIFT.busy) return; const o = {}; VIEW_KEYS.forEach(k => { o[k] = state[k]; }); o.date = state.dateStr === todayISO() ? 'today' : state.dateStr; o.walk = state.walk ? { X: state.walk.X, Y: state.walk.Y, Z: state.walk.Z || 0 } : null;
+  const j = JSON.stringify(o); if (j !== viewSave.j) { viewSave.j = j; try { localStorage.setItem('trpf134.view', j); } catch (_) {} } }
+function viewLoad() { let o; try { o = JSON.parse(localStorage.getItem('trpf134.view') || 'null'); } catch (_) { return; } if (!o || typeof o !== 'object') return;
+  const num = (k, a, b) => { const v = o[k]; if (typeof v === 'number' && isFinite(v) && v >= a && v <= b) state[k] = v; };
+  if (o.spot === null || UNIT_SPOTS.some(q => q.id === o.spot)) state.spot = o.spot; num('vx', -6000, 6000); num('vz', -6000, 6000); if (state.spot) { const sp = curSpot(); state.vx = sp.x; state.vz = sp.z; }
+  num('obsFloor', 1, 30); state.obsFloor = Math.round(state.obsFloor); num('heading', 0, 360); num('pitchDeg', -85, 30); num('focalLength', 13, 300); num('standDist', 0, 10); num('eyeOffset', 0.3, 3); num('hour', 0, 24);
+  if (POSTURES[o.posture]) state.posture = o.posture; if (typeof o.showBalcony === 'boolean') state.showBalcony = o.showBalcony; if (typeof o.winOpen === 'boolean') state.winOpen = o.winOpen;
+  if (typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) state.dateStr = o.date;
+  const w = o.walk; if (w && state.spot && [w.X, w.Y, w.Z].every(v => typeof v === 'number' && isFinite(v))) { state.walk = { X: w.X, Y: w.Y, Z: clamp(w.Z, -1.4, 1.39) };
+    if (walkFree(w.X, w.Y, 0, true)) { state.showBalcony = true; walkUI(true); liftUpdate(w.X, w.Y); } else state.walk = null; }
+  if (state.obsFloor < 2 && !state.walk) state.obsFloor = 2;
+  viewSave.j = JSON.stringify(o); }
 // big-map labels (plan m) from the HDB storey plan (TY 2026-10-29, ≈16.5 px/m): neighbouring units placed beside their entrances, common areas
 const MAP_LABELS = [['#132', 10.5, 13.6], ['#136', 18.2, 6.8], ['#148', 31.5, 13.0], ['#138', 32.8, 6.8], ['#140', 40.8, 6.8], ['#146', 50.3, 13.0], ['#144', 57.6, 13.4], ['#142', 57.6, 6.6], ['#134', 6.5, -0.5],
   ['Lifts', 18.46, 14.1], ['Lifts', 24.56, 14.1], ['Lobby', 21.5, 15.6], ['Wash', 23.1, 19.6], ['Chutes', 25.84, 21.3], ['Stair', 14.3, 3.8], ['Stair', 53.6, 6.6]];
@@ -4326,7 +4342,8 @@ function initApp() {
   buildGroupRows(); generateTowers(); rebuildIndex(); wcLoad().then(initApp2); }
 function initApp2() { const E = WC.e;
   if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees();
-  furnBindUI(); furnInit(); resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
+  furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
+  setInterval(viewSave, 2000); addEventListener('pagehide', viewSave); document.addEventListener('visibilitychange', () => { if (document.hidden) viewSave(); });
   const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); }
   let pending = false; const sz = () => [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement, planCanvas].map(e => `${e.clientWidth}x${e.clientHeight}`).join() + FURN.open, last = { k: sz() };
   const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; const k = sz(); if (k !== last.k) { last.k = k; resizeCanvases(); return; }   // observers fire once on observe: no full re-render unless a main pane changed size
