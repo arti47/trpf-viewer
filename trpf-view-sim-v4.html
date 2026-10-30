@@ -1035,12 +1035,12 @@ const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.
 function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A moves with the gap slider)
   const out = [], col = [228, 226, 220], core = [214, 210, 202], B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A'), facW = VD.fac.map(([n, r, l]) => [n, pxRing(pxBox(r)), l]);
   const cores = VD.core32.map(r => planRing(r)).concat(VD.coresPx.map(([n, r]) => { const B = SITE_BLOCKS.find(b => b.name === n); return pxBox(r).flatMap(([a, b]) => VD_W(n === 'Blk 31A' ? B : null, SITE_PX(a, b))); }));
-  VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', VOID_DECK_HEIGHT, 0, cores[i], core)));
+  VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', VOID_DECK_HEIGHT, 0, cores[i], core, i >= 5 && i <= 7 ? { wlift: 1 } : {})));   // lift shafts + refuse chamber: hidden while walking in the lift lobby (interior copy has the car cavities)
   VD.coresPx.forEach(([n], i) => out.push(vdP(`${n} void deck core`, VOID_DECK_HEIGHT, 0, cores[VD.core32.length + i], core)));
   out.push(vdP('Blk 32A stair lintel', VOID_DECK_HEIGHT, 2.1, planRing([14.32, 7.86, 15.23, 7.98]), core), vdP('Blk 32A stair door', 2.1, 0, planRing([14.32, 7.89, 15.23, 7.95]), [128, 94, 64], { wdoor: 1 }));
-  out.push(vdP('Blk 32A letterboxes', 1.9, 0, planRing([16.96, 10.98, 19.96, 11.33]), [150, 156, 162]));
-  for (const [g, s] of [[19.96, 1], [23.07, -1]]) for (const yc of [12.73, 15.52]) out.push(vdP('Blk 32A lift door', 2.23, 0, planRing([Math.min(g, g + s * 0.02), yc - 0.68, Math.max(g, g + s * 0.02), yc + 0.68]), [167, 171, 174]),
-    vdP('Blk 32A lift door', 2.1, 0, planRing([Math.min(g, g + s * 0.04), yc - 0.55, Math.max(g, g + s * 0.04), yc + 0.55]), [201, 204, 206]));
+  out.push(vdP('Blk 32A letterboxes', 1.9, 0, planRing([16.96, 10.98, 19.96, 11.33]), [150, 156, 162], { wlift: 1 }));
+  for (const [g, s] of [[19.96, 1], [23.07, -1]]) for (const yc of [12.73, 15.52]) out.push(vdP('Blk 32A lift door', 2.23, 0, planRing([Math.min(g, g + s * 0.02), yc - 0.68, Math.max(g, g + s * 0.02), yc + 0.68]), [167, 171, 174], { wlift: 1 }),
+    vdP('Blk 32A lift door', 2.1, 0, planRing([Math.min(g, g + s * 0.04), yc - 0.55, Math.max(g, g + s * 0.04), yc + 0.55]), [201, 204, 206], { wlift: 1 }));
   const near = (x, z, m) => cores.some(r => ringIn(r, x, z) || polyD(r, x, z) < m) || facW.some(([, r]) => ringIn(r, x, z) || polyD(r, x, z) < m);
   const [sx, sz] = P2W(14.8, 9.0);   // keep the 32A stair door + approach clear
   SITE_BLOCKS.filter(B => B.h > BLK_TOP).forEach(B => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; B.boxes.forEach(([x0, z0, x1, z1]) => { a = Math.min(a, x0); b = Math.max(b, x1); c = Math.min(c, z0); d = Math.max(d, z1); });
@@ -1119,7 +1119,7 @@ const UNIT_PLAN = (() => {
     [15.4, 11.9, 16.96, 12.2, 0, H, 'cor'],
     // lift lobby (owner storey plan 2026-10-26, ≈16.9 px/m): 2 + 2 lifts facing across a 3.1 m lobby, N end to wash area/refuse chutes (closed off here)
     // lift lobby + wash area (owner lobby plan 2026-10-29, ≈80.3 px/m, ±0.2 m): E pair X 16.97–19.96, lobby 19.96–23.07 (3.1 m), W pair 23.07–26.06, shafts Y 11.33–16.91; lobby opens N into the wash area
-    [16.96, 11.33, 19.96, 16.91, 0, H, 'lobby'], [23.07, 11.33, 26.06, 16.91, 0, H, 'lobby'], [26.06, 11.89, 26.37, 18.5, 0, H, 'cor'],   // E/W lift shafts, #148 E wall
+    [26.06, 11.89, 26.37, 18.5, 0, H, 'cor'],   // #148 E wall (E/W lift shafts with car cavities: liftWalls, built in unitWalls)
     // wash area X 20.89–26.37, Y 16.91–20.71 at the block's N tip (site plan): open to air above a 1.0 m parapet to a 2.4 m beam (estimate; typical BTO refuse/wash area is naturally ventilated);
     // chute shafts X 25.31–26.37 (3 × ≈1 m: recyclables chute N, 2 centralised refuse chutes), stainless hopper doors 0.5 × 0.5 m at 0.8–1.3 m on the wash-area face, recyclables hopper blue (sizes estimates)
     ...[[20.89, 20.56, 25.31, 20.71], [20.89, 16.91, 21.04, 20.56], [19.96, 16.91, 20.89, 17.06]].flatMap(r => [[...r, -0.05, 1.0, 'cor'], [...r, 2.4, H, 'cor']]),
@@ -1236,10 +1236,24 @@ function stairWalls(f) {
 // Void deck storey (floor 0) around the 32A E stair: core walls full height (3.5 m), fire door (open leaf while walking); the rest of the void deck is world geometry (voidDeckPrisms)
 const GROUND_WALLS = [[12.86, 1.6, 13.12, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [15.45, 1.6, 15.76, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [13.12, 7.0, 14.32, 7.98, 0, VOID_DECK_HEIGHT, 'cor'], [14.32, 7.86, 15.23, 7.98, 2.1, VOID_DECK_HEIGHT, 'cor'],
   [14.32, 7.89, 15.23, 7.95, 0, 2.1, 'stairDoor'], [15.17, 6.98, 15.23, 7.89, 0, 2.1, 'stairOpen'], [15.23, 7.86, 15.45, 7.98, 0, VOID_DECK_HEIGHT, 'cor']];
+// Lifts (TY 2026-10-30 "standard HDB BTO lift"; sizes estimates): 4 cars, E pair door face X 19.96 / W pair 23.07, centres Y 12.73 / 15.52 (owner lobby plan);
+// car 1.6 m wide × 1.7 m deep, 2.4 m ceiling, stainless lining; centre-opening doors 1.1 m (CORR_FIX leaves) open when you walk within 1.6 m or stand in the car;
+// in the car a floor panel (#liftPanel, 1 = void deck … 30) moves you to that storey (same car, doors open). Serves every storey; no ride animation.
+const LIFTS = [['E1', 19.96, 1, 12.73], ['E2', 19.96, 1, 15.52], ['W1', 23.07, -1, 12.73], ['W2', 23.07, -1, 15.52]].map(([id, g, s, yc]) => ({ id, g, s, yc, car: s > 0 ? [g - 1.8, yc - 0.8, g - 0.1, yc + 0.8] : [g + 0.1, yc - 0.8, g + 1.8, yc + 0.8], area: s > 0 ? [g - 1.8, yc - 0.8, g + 0.02, yc + 0.8] : [g - 0.02, yc - 0.8, g + 1.8, yc + 0.8] }));   // area = car + doorway (walkable)
+const LIFT = { open: '', car: '' };
+const inLiftCar = (X, Y) => LIFTS.find(L => X > L.car[0] && X < L.car[2] && Y > L.car[1] && Y < L.car[3]);
+function liftWalls(z1) {   // shafts minus car cavities, current storey (0 … z1); closed doors = thin steel leaf in the opening (walk blocking; visible leaves are CORR_FIX)
+  const w = [[16.96, 11.33, 18.16, 16.91, 0, z1, 'lobby'], [24.87, 11.33, 26.06, 16.91, 0, z1, 'lobby']];
+  for (const [a, b] of [[18.16, 19.96], [23.07, 24.87]]) w.push([a, 11.33, b, 11.93, 0, z1, 'lobby'], [a, 13.53, b, 14.72, 0, z1, 'lobby'], [a, 16.32, b, 16.91, 0, z1, 'lobby']);
+  for (const L of LIFTS) { const [x0, y0, x1, y1] = L.car, f0 = L.s > 0 ? x1 : L.g, f1 = L.s > 0 ? L.g : x0, d = L.s > 0 ? x0 : x1;
+    w.push([f0, y0, f1, L.yc - 0.55, 0, z1, 'lobby'], [f0, L.yc + 0.55, f1, y1, 0, z1, 'lobby'], [f0, L.yc - 0.55, f1, L.yc + 0.55, 2.1, z1, 'lobby'], [x0, y0, x1, y1, 2.4, z1, 'lobby'],   // door jambs, transom, car roof
+      [Math.min(d, d + L.s * 0.04), y0, Math.max(d, d + L.s * 0.04), y1, 0, 2.4, 'steel'], [x0, y0, x1, y0 + 0.04, 0, 2.4, 'steel'], [x0, y1 - 0.04, x1, y1, 0, 2.4, 'steel'], [x0, y0, x1, y1, 2.36, 2.4, 'liftLight']);   // stainless lining + ceiling light panel
+    if (LIFT.open !== L.id) w.push([Math.min(f0, f1) + 0.03, L.yc - 0.55, Math.max(f0, f1) - 0.03, L.yc + 0.55, 0, 2.1, 'liftDoor']); }
+  return w; }
 const UNIT_W = WALL_DEF(); let UW_CACHE = { key: '', w: [] };
-const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + Math.min(Math.max(f, 1), 4);   // stair fire door open while walking (stairs walkable)
+const unitWalls = () => { const o = doorOpen() ? 'mainDoor' : 'doorOpen', so = state.walk ? 'stairDoor' : 'stairOpen', W = UNIT_W, f = state.obsFloor, key = o + so + W.br3 + W.br23 + W.kit + '|' + Math.min(Math.max(f, 1), 4) + LIFT.open;   // stair fire door open while walking (stairs walkable)
   if (UW_CACHE.key !== key) { const off = new Set([...(W.br3 ? [] : WALL_GROUPS.br3), ...(W.br23 ? [] : WALL_GROUPS.br23)]), S = stairWalls(f);   // floor class 1 / 2 / 3 / ≥4: storey heights around the stair differ only near the void deck
-    UW_CACHE = { key, rails: S.rails, w: (f <= 1 ? GROUND_WALLS.filter(q => q[6] !== so) : UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : [])).concat(S.w) }; }
+    UW_CACHE = { key, rails: S.rails, w: (f <= 1 ? GROUND_WALLS.filter(q => q[6] !== so).concat(liftWalls(VOID_DECK_HEIGHT), [[16.96, 10.98, 19.96, 11.33, 0, 1.9, 'steel'], [24.3, 16.91, 26.37, 20.71, 0, VOID_DECK_HEIGHT, 'lobby']]) : liftWalls(UNIT_H).concat( UNIT_PLAN.walls.filter(q => q[6] !== o && q[6] !== so && !off.has(q.slice(0, 4).join(','))).concat(W.kit ? [[7.18, 6.36, 9.2, 6.42, 2.1, UNIT_H]] : []))).concat(S.w) }; }
   STAIR_RAILS.length = 0; STAIR_RAILS.push(...UW_CACHE.rails); return UW_CACHE.w; };
 const isDoorKind = k => k === 'door' || k === 'mainDoor' || k === 'doorOpen' || k === 'stairDoor' || k === 'stairOpen';
 { // service yard + corridor end spots: world position from the 4 window spots (mean of plan → world maps)
@@ -2236,16 +2250,29 @@ function walkZ(X, Y, Z) { const f = state.obsFloor, [a, b, c, d] = STAIR, C = []
   if (f < 30) { const q = stairRamp(f, X, Y); if (q !== null) C.push(q); } if (f >= 2) { const q = stairRamp(f - 1, X, Y); if (q !== null) C.push(q - storeyH(f - 1)); }
   let z = null; for (const v of C) if (Math.abs(v - Z) <= 0.35 && (z === null || Math.abs(v - Z) < Math.abs(z - Z))) z = v; return z; }
 const onGround = () => state.obsFloor <= 1;
+// void deck: interior pass (and hidden world copies of the lift core) only at the 32A stair core or lift lobby; elsewhere the world draws them (interior would paint over columns in front)
+const groundIndoor = () => !!state.walk && ((state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10) || (state.walk.X > 16.3 && state.walk.X < 27.2 && state.walk.Y > 9.2 && state.walk.Y < 21.5));
+function liftUpdate(X, Y) {   // doors open for the car you stand in or walk up to (≤1.6 m from its door); floor panel while in a car
+  const c = inLiftCar(X, Y), near = c || LIFTS.find(L => Math.hypot(X - (L.g + L.s * 0.6), Y - L.yc) < 1.6), o = near ? near.id : '';
+  if (o !== LIFT.open) { LIFT.open = o; UW_CACHE.key = ''; FIX_CACHE.key = ''; } LIFT.car = c ? c.id : ''; liftPanel(); }
+function liftGo(f) { if (!state.walk || !LIFT.car) return; state.obsFloor = f; state.walk.Z = 0; UW_CACHE.key = ''; renderAll(); liftPanel(); }
+function liftPanel() {
+  let el = $('liftPanel'); const on = !!(state.walk && LIFT.car); if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'liftPanel'; perspectiveCanvas.parentNode.appendChild(el);
+    el.style.cssText = 'position:absolute;right:64px;top:50%;transform:translateY(-50%);z-index:17;padding:8px;border-radius:12px;background:rgba(13,20,36,.86);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:repeat(5,30px);gap:4px;font:600 11px -apple-system,Inter,sans-serif;color:#e2e8f0';
+    el.addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) liftGo(+b.dataset.f); }); }
+  el.style.display = on ? 'grid' : 'none'; if (!on) return; const f = state.obsFloor;
+  el.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:2px 0 4px;color:#94a3b8">Lift ${LIFT.car} · ${flTxt(f)}</div>` + Array.from({ length: 30 }, (_, i) => 30 - i).map(q => `<button data-f="${q}" title="${flTxt(q)}" style="height:30px;border-radius:15px;border:1px solid ${q === f ? '#fbbf24' : 'rgba(255,255,255,.14)'};background:${q === f ? 'rgba(251,191,36,.25)' : 'rgba(255,255,255,.04)'};color:inherit;font:inherit">${q === 1 ? '1' : q}</button>`).join(''); }
 // Void deck / grounds walk test: inside the TRPF site, clear of ground-storey prisms (columns, cores, MSCP, ESS, posts, bin centres…) by the body radius
 let GOBS = { t: null, a: [] };
-const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor) }; return GOBS.a; };
+const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor && !P.wlift) }; return GOBS.a; };   // lift core: plan walls (GROUND_WALLS + liftWalls) collide instead
 const groundFree = (X, Y, r) => { const [x, z] = P2W(X, Y); if (!ringIn(GEO.trpf, x, z)) return false; r = r ? Math.max(r, 0.25) : 0;
   for (const P of groundObs()) { if (x < P.minx - r || x > P.maxx + r || z < P.minz - r || z > P.maxz + r) continue; if (pointIn(P, x, z)) return false; if (r > 0) { for (let i = 0, j = P.n - 1; i < P.n; j = i++) if (segD(x, z, P.xs[j], P.zs[j], P.xs[i], P.zs[i]) < r) return false; } } return true; };
-const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && (onGround() ? groundFree(X, Y, r) : ringIn(walkRing, X, Y) || inCorr(X, Y)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
+const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && (onGround() ? groundFree(X, Y, r) : ringIn(walkRing, X, Y) || inCorr(X, Y) || LIFTS.some(({ area: [a, b, c, d] }) => X > a && X < c && Y > b && Y < d)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
   !unitWalls().some(([x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind]) => kind !== 'stair' && z0 < z + 1.2 && z1 > z + 0.05 && X > x0 - r && X < x1 + r && Y > y0 - r && Y < y1 + r) && (esc || onGround() || !furnBlocks(X, Y, r)); };   // esc: already inside furniture → may walk out
 function walkSet(X, Y) {
   if (!state.walk) return; const z = walkZ(X, Y, state.walk.Z || 0); state.walk.X = X; state.walk.Y = Y; state.walk.Z = z === null ? 0 : z;
   if (state.walk.Z >= storeyH(state.obsFloor) / 2) { state.walk.Z -= storeyH(state.obsFloor); state.obsFloor++; } else if (state.obsFloor >= 2 && state.walk.Z < -storeyH(state.obsFloor - 1) / 2) { state.obsFloor--; state.walk.Z += storeyH(state.obsFloor); }   // past a mid landing: next storey's frame
+  liftUpdate(X, Y);
   const rm = !onGround() && UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
@@ -2263,7 +2290,7 @@ function walkVec(off, st) {   // move st m along heading + off° (plan frame), s
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); }
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); LIFT.open = LIFT.car = ''; UW_CACHE.key = ''; liftPanel(); }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); renderAll();
 }
@@ -2455,7 +2482,7 @@ const BATH_FIX = [...fWC(4.22, 5.65, 90), ...fBasin(4.22, 5.15, 90), ...fShower(
 // stainless architrave + threshold + floor indicator (amber, emissive) per car, up/down call panel between each pair; chute hoppers = framed stainless bottom-hung
 // hopper doors with pull bar + sign plate (recyclables blue), bib tap; wash floor trap. Plan parts on a wall face at g, s = side of the face (+1 → +X).
 const CORR_FIX = (() => { const P = [], st = '#c9ccce', fr = '#a7abae', dk = '#26282b', R = (g, s, a, b, y0, y1, z0, z1, c, x = {}) => P.push({ ...fRect(Math.min(g + s * a, g + s * b), y0, Math.max(g + s * a, g + s * b), y1, z0, z1, c), ...x });
-  for (const [g, s] of [[19.96, 1], [23.07, -1]]) { for (const yc of [12.73, 15.52]) { R(g, s, 0, 0.012, yc - 0.006, yc + 0.006, 0, 2.1, dk); R(g, s, 0, 0.02, yc - 0.55, yc - 0.004, 0, 2.1, st, { mat: 3 }); R(g, s, 0, 0.02, yc + 0.004, yc + 0.55, 0, 2.1, st, { mat: 3 });
+  for (const [g, s] of [[19.96, 1], [23.07, -1]]) { for (const yc of [12.73, 15.52]) { const lift = (s > 0 ? 'E' : 'W') + (yc < 14 ? 1 : 2); R(g, s, 0, 0.012, yc - 0.006, yc + 0.006, 0, 2.1, dk, { lift }); R(g, s, 0, 0.02, yc - 0.55, yc - 0.004, 0, 2.1, st, { mat: 3, lift }); R(g, s, 0, 0.02, yc + 0.004, yc + 0.55, 0, 2.1, st, { mat: 3, lift });   // leaves tagged: hidden while that car is open
       R(g, s, 0, 0.045, yc - 0.68, yc - 0.55, 0, 2.23, fr, { mat: 3 }); R(g, s, 0, 0.045, yc + 0.55, yc + 0.68, 0, 2.23, fr, { mat: 3 }); R(g, s, 0, 0.045, yc - 0.68, yc + 0.68, 2.1, 2.23, fr, { mat: 3 }); R(g, s, 0, 0.07, yc - 0.6, yc + 0.6, 0, 0.012, '#8d9093');
       R(g, s, 0, 0.03, yc - 0.2, yc + 0.2, 2.32, 2.46, dk); R(g, s, 0.03, 0.034, yc - 0.07, yc + 0.07, 2.35, 2.43, '#ffb347', { em: 1 }); }
     R(g, s, 0, 0.015, 14.05, 14.2, 1.0, 1.32, st, { mat: 3 }); R(g, s, 0.015, 0.03, 14.1, 14.15, 1.18, 1.23, '#e9f2f8', { em: 1 }); R(g, s, 0.015, 0.03, 14.1, 14.15, 1.08, 1.13, '#e9f2f8', { em: 1 }); }
@@ -2610,7 +2637,8 @@ function cvParts() {   // curtains / blinds per window at the inner face (rail 0
   return P; }
 const FURN = { name: 'Bare flat', items: [], kit: { c: 'none', top: 1 }, fin: FIN_DEF(), lt: LT_DEF(), cv: CV_DEF(), fv: 0, ver: 0, sel: -1, open: false, saved: {} };
 let FIX_CACHE = { key: '', P: [] };
-const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts(), ...CORR_FIX] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
+const corrParts = () => CORR_FIX.filter(q => q.lift !== LIFT.open || !q.lift);
+const furnFixed = () => { const key = FURN.kit.c + FURN.kit.top + doorOpen() + hsOpen() + FURN.fv + LIFT.open; if (FIX_CACHE.key !== key) { const col = [...BATH_FIX, ...HS_FIX(hsOpen()), ...kitParts(FURN.kit)]; FIX_CACHE = { key, col, P: [...col, ...doorParts(), ...ltCached().P, ...cvParts(), ...corrParts()] }; } return FIX_CACHE.P; };   // plan-coordinate parts (no item frame)
 const FURN_LS = 'trpf134.layouts', FURN_LS_CUR = 'trpf134.layoutCur';
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: layout kept for this session only */ } };
@@ -3227,10 +3255,10 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
-  for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
+  for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
-  for (const P of ALL) if ((P.wdoor || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
+  for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
@@ -3299,7 +3327,7 @@ function gpuGarden(A, P) {   // MSCP roof garden (as mscpGarden): lawn, planting
 }
 function gpuInterior(env) {   // #134 unit in world coords (plan → world via the spot), rebuilt when spot/floor/posture/door change; colours as drawInterior
   const sp = curSpot(), S = sp && UNIT_PLAN.spots[sp.id]; if (!state.showBalcony || !S) return 0;
-  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), hsOpen(), !!state.walk, state.winOpen, FURN.ver].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
+  const key = [sp.id, state.obsFloor, state.eyeOffset, doorOpen(), hsOpen(), !!state.walk, state.winOpen, FURN.ver, LIFT.open].join('|'); if (GPU.ikey === key) return GPU.inN; GPU.ikey = key;
   const IC = GPU.icache || (GPU.icache = new Map()), hit = IC.get(key); if (hit) { IC.delete(key); IC.set(key, hit); Object.assign(GPU, hit); GPU.pkey = ''; return GPU.inN; }   // built storeys (LRU 4): floor changes on the stairs / floor strip reuse them
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
   const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
@@ -3328,6 +3356,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
   const flat = (r, h, col, tile, nn = up0, tx = null) => { const tri = earClip(r); for (let k = 0; k < tri.length; k++) { const [x, y] = r[tri[k]]; A.v(W(x, y, h), nn, col, tx || (tile ? [x, y, 0, tile === true ? 2 : tile] : z4)); } }, rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
   const fl01 = h => c255(hexRgb(h)).map(c => c * 0.85);   // floor tiles per room (finishes): 600 mm, wet rooms 300 mm (tile code 2.2)
   const G0 = onGround();   // void deck: only the stair core (unit, corridor, furniture, windows don't exist on the 1st storey)
+  LIFTS.forEach(L => flat(rect(L.car), 0.002, c255([112, 114, 118]), false));   // lift car floors (dark rubber/granite, estimate)
   if (G0) flat(rect([13.12, 1.6, 15.45, 7.92]), 0, c255([188, 184, 176]).map(c => c * 0.85), true);
   else { flat(UNIT_PLAN.outline, 0, fl01(FURN.fin.floor.living), true); FIN_FLOORS.forEach(([id, r]) => flat(rect(r), 0.003, fl01(FURN.fin.floor[id]), id[0] === 'w' || id === 'yard' ? 2.2 : true)); flat(UNIT_PLAN.outline, H, c255([238, 236, 230]).map(c => c * 0.95), false, dn0); }
   if (!G0) UNIT_PLAN.corr.floors.flatMap(r => state.obsFloor === 2 && r[0] === 13.12 && r[1] === 5.6 ? [[14.3, 5.6, 15.45, r[3]], [13.12, stairYT(1), 14.3, r[3]]] : [r]).forEach(r => { flat(rect(r), 0, c255([188, 184, 176]).map(c => c * 0.85), true); flat(rect(r), H, c255([230, 228, 222]).map(c => c * 0.9), false, dn0); });   // corridor/lobby: 600 mm homogeneous tiles   // 2F: landing floor E half clear of the void-deck flight
@@ -3348,7 +3377,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     for (let r = 0; r + 1 < R.length; r++) for (let j = 0; j < O.length; j++) { const a = V(O[j], R[r]), bb = V(O[(j + 1) % O.length], R[r]), c2 = V(O[(j + 1) % O.length], R[r + 1]), d = V(O[j], R[r + 1]); for (const v of [a, bb, c2, a, c2, d]) A.v(v[0], v[1], v[2], tx); }
     const cap = (r) => { const cc = V([cx, cy, 0, 0], [0, r[1], 0, r[3]]); for (let j = 0; j < O.length; j++) { const a = V(O[j], r), bb = V(O[(j + 1) % O.length], r); for (const v of [cc, a, bb]) A.v(v[0], v[1], v[2], tx); } };
     cap(R[R.length - 1]); if (q.z0 > 0.01) cap(R[0]); return true; };
-  const fGlass = [], fSheer = [], fFrost = []; for (const it of G0 ? [] : [{ fixed: 1 }, ...FURN.items]) for (let q of it.fixed ? furnFixed() : furnParts(it)) { if (it.fixed && !q.mat) q = { ...q, mat: furnWoody(q.c) ? 2 : 3 };   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
+  const fGlass = [], fSheer = [], fFrost = []; for (const it of G0 ? [{ fixed: 1 }] : [{ fixed: 1 }, ...FURN.items]) for (let q of it.fixed ? (G0 ? corrParts() : furnFixed()) : furnParts(it)) { if (it.fixed && !q.mat) q = { ...q, mat: furnWoody(q.c) ? 2 : 3 };   // furniture (+ fixed bath fittings / kitchen; glass → translucent tint pass)
     if (q.glass) { const [p0, , p2] = q.p, a = W(p0[0], p0[1], q.z0), b = W(p2[0], p2[1], q.z0), c2 = W(p2[0], p2[1], q.z1), d = W(p0[0], p0[1], q.z1); fGlass.push(...a, ...b, ...c2, ...a, ...c2, ...d); continue; }   // prism per part, face brightness as the walls (−Y 1.0, ±X 0.86, +Y 0.74), edge lines on box faces (not on round parts)
     if (q.sheer || q.frost) { const [p0, , p2] = q.p; (q.frost ? fFrost : fSheer).push(...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z0), ...W(p2[0], p2[1], q.z1), ...W(p0[0], p0[1], q.z1)); continue; }
     const col = c255(hexRgb(q.c)), P = q.p, m = P.length, E = q.em ? [0, 0, 11, 0] : null, T = (a, b) => (E || (q.cy ? z4 : [a, b, 0, 1]));   // em: light fitting (mode 11, emissive)
@@ -3360,7 +3389,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
     if (q.z0 > 0.01) flat(P, q.z0, E ? col : col.map(c => c * 0.8), false, dn0, E); }
   for (let [x0, y0b, x1, y1, z0, z1, kind] of WL) { wSelf++;
     const ext = isExtKind(kind); if (ext) { z0 = Math.max(z0, zG); z1 = Math.min(z1, zR); if (z1 <= z0) continue; }
-    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
+    const col = isDoorKind(kind) ? [128, 94, 64] : kind === 'liftDoor' ? [196, 199, 201] : kind === 'liftLight' ? [250, 250, 244] : kind === 'steel' ? [158, 160, 158] : kind === 'recyc' ? [46, 98, 168] : ext ? (kind === 'ac' ? [210, 212, 210] : kind === 'rack' ? [150, 154, 160] : kind === 'xglass' ? [70, 78, 88] : TRPF_PAL.greige) : kind === 'cor' ? [222, 219, 210] : kind === 'lobby' ? [214, 210, 202] : kind === 'stair' ? [196, 192, 184] : kind === 'rail' ? [62, 66, 70] : [232, 226, 214];
     if (!kind) finBox([x0, y0b, x1, y1], z0, z1); else box([x0, y0b, x1, y1], z0, z1, c255(col), kind === 'rail' ? 5 : ext, kind === 'lobby' ? 0 : null); }
   { const rc = c255([62, 66, 70]), t = [0, 0, 5, 0];   // stair handrails: sloped prisms (unitWalls boxes are axis-aligned)
     for (const [x0, x1, ya, za, yb, zb] of STAIR_RAILS) { const P = (x, y, z) => W(x, y, z), q = (a, b, c, d, nn, k) => A.quad(a, b, c, d, nn, rc.map(v => v * k), t, t, t, t), h = 0.04;
@@ -3454,7 +3483,7 @@ function gpuRender(cam, env, pxW, pxH) {
   if (GPU.L) gl.drawArrays(gl.TRIANGLES, GPU.groundN, GPU.recvN);   // building/tree shadows on the ground
   // solids with depth
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN);
-  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
+  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree);
   if (GPU.newR[1]) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
@@ -3470,7 +3499,7 @@ function gpuRender(cam, env, pxW, pxH) {
 }
 // #134 interior (second render into the same canvas, transparent elsewhere): drawn over the composited outside scene + rain + pins, as drawInterior.
 function gpuRenderInterior(cam, env, kIn) {
-  if (!GPU.ok) return false; if (onGround() && !(state.walk && state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10)) return false;   // void deck: interior pass only in / at the stair core (else it would paint over columns in front)
+  if (!GPU.ok) return false; if (onGround() && !groundIndoor()) return false;   // void deck: interior pass only in / at the stair core (else it would paint over columns in front)
   const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
   gl.viewport(0, 0, GPU.cv.width, GPU.cv.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const LS = ltState(), lit0 = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
