@@ -1261,7 +1261,7 @@ function stairWalls(f) {
     for (let j = 0, nj = Math.round((yt - 3.64) / 0.07); j < nj; j++) { const y0 = 3.64 + 0.07 * j;
       if (j % 2) { const y = y0 + 0.025; w.push([14.32, y, 14.34, y + 0.02, TA(y + 0.01), RA(y) + 0.87, 'rail'], [14.26, y, 14.28, y + 0.02, TB(y + 0.01), RB(y) + 0.87, 'rail']); } }
     rails.push([14.3, 14.35, yt, RA(yt) + 0.9, 3.64, RA(3.64) + 0.9], [14.25, 14.3, 3.64, RB(3.64) + 0.9, yt, RB(yt) + 0.9]);
-    rails.push([14.345, 15.455, yt, RA(yt) - 0.18, 3.64, RA(3.64) - 0.18, 0.22, 1], [13.115, 14.255, 3.64, RB(3.64) - 0.18, yt, RB(yt) - 0.18, 0.22, 1]);   // smooth inclined waist slab under each flight (RC stair soffit; hides the stepped tread-box undersides, TY 2026-10-30)
+    rails.push([14.33, 15.47, yt - 0.14, RA(yt - 0.14) - 0.18, 3.64, RA(3.64) - 0.18, 0.22, 1], [13.1, 14.27, 3.78, RB(3.78) - 0.18, yt, RB(yt) - 0.18, 0.22, 1]);   /* low ends start half a tread in (top 5 mm under the floor z-fought) and sides 2 cm proud of the tread boxes (TY 2026-10-30 "pixels") */   // smooth inclined waist slab under each flight (RC stair soffit; hides the stepped tread-box undersides, TY 2026-10-30)
     w.push([14.25, 3.6, 14.35, 3.64, b + half + 0.86, b + half + 0.9, 'rail'], [14.25, yt, 14.35, yt + 0.04, b + 0.9, b + 0.9 + r, 'rail']);
     if (k) { const t = k < 0 ? z1 - 0.02 : z1; w.push(...ls(g, b, -0.18, 0, 7.86), [12.86, 1.6, 13.12, 7.86, b, t, 'cor'], [15.45, 1.6, 15.76, 7.98, b, t, 'cor'], [13.12, 7.0, 14.32, 7.98, b, t, 'cor'],
       [14.32, 7.86, 15.23, 7.98, b + 2.1, t, 'cor'], [14.32, 7.89, 15.23, 7.95, b, b + 2.1, 'door'], [15.23, 7.86, 15.45, 7.98, b, t, 'cor']); }   // other storeys: landing slab, well walls, riser B, fire door (closed); below: tops 2 cm under this floor (z-fight, TY 2026-10-30)
