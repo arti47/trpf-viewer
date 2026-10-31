@@ -965,7 +965,7 @@ const MBS_AX = { a: [-2006, -1561], b: [-1919, -1352] };   // SkyPark long axis 
 const CBD_HAND = [];
 {
   const P0 = n => EXISTING.findIndex(P => P.name === n), take = n => { const i = P0(n); if (i < 0) return null; const P = EXISTING[i]; EXISTING.splice(i, 1); return P; };
-  const add = (n, h, b, flat, o) => { const P = Object.assign(makePrism(n, 'existing', h, b, flat, 2), o || {}); EXISTING.push(P); CBD_HAND.push(P); return P; };
+  const add = (n, h, b, flat, o) => { const P = Object.assign(makePrism(n, 'existing', h, b, flat, 2), { hand: true }, o || {}); EXISTING.push(P); CBD_HAND.push(P); return P; };
   const ptsOf = P => [...P.xs].map((x, k) => [x, P.zs[k]]), fl = a => a.flat();
   const scl = (pts, c, s) => pts.map(([x, z]) => [c[0] + (x - c[0]) * s, c[1] + (z - c[1]) * s]);
   const rot = (pts, c, a) => { const C = Math.cos(a), S = Math.sin(a); return pts.map(([x, z]) => [c[0] + (x - c[0]) * C - (z - c[1]) * S, c[1] + (x - c[0]) * S + (z - c[1]) * C]); };
@@ -1922,7 +1922,7 @@ function generateTowers() {
           let floors = low ? st.low : st.step ? clamp(Math.round(lo + fmFrac(x, z) * (hi - lo) + (u - 0.5) * 2), lo, hi) : lo + Math.floor(u * (hi - lo + 1));
           floors = Math.min(floors, Math.floor((target - gfa) / (fp * fp)));   // never exceed GPR × net site
           if (floors < (low ? st.low : lo)) return false; gfa += fp * fp * floors;   // remainder too small for a full block: stop (GFA ≤ target)
-          const P = makePrism(`${g.id}${++n}`, 'new', newRoof(floors), 0, [x - h, z - h, x + h, z - h, x + h, z + h, x - h, z + h], 0); P.floors = floors; P.group = g; P.low = low; out.push(P); return true; };
+          const P = makePrism(`${g.id}${++n}`, 'new', newRoof(floors), 0, [x - h, z - h, x + h, z - h, x + h, z + h, x - h, z + h], 0); P.floors = floors; P.group = g; P.low = low; P.style = 'condo'; out.push(P); return true; };   // style: new-condo look (render only, stage 4 2026-10-31)
         place(pick[0]);
         while (gfa < target && pick.length < cand.length) { let best = null, bd = -1; for (const c of cand) { const d = Math.min(...pick.map(q => Math.hypot(c[0] - q[0], c[1] - q[1]))); if (d > bd) { bd = d; best = c; } } if (bd < fp + 12) break; pick.push(best); if (!place(best)) break; }
         continue;
@@ -1939,7 +1939,7 @@ function generateTowers() {
       }
       for (const [x, z] of pick) {
         const floors = lo + Math.floor(hash01(x, z, state.seed) * (hi - lo + 1));
-        const P = makePrism(`${g.id}${++n}`, 'new', newRoof(floors), 0, [x - h, z - h, x + h, z - h, x + h, z + h, x - h, z + h], 0);
+        const P = makePrism(`${g.id}${++n}`, 'new', newRoof(floors), 0, [x - h, z - h, x + h, z - h, x + h, z + h, x - h, z + h], 0); P.style = 'condo';
         P.floors = floors; P.group = g; out.push(P);
       }
     }
@@ -2730,7 +2730,7 @@ function generateTrees() {
       if (ringIn(L.rings[0], jx, jz) && !holeIn(L.rings, jx, jz)) add(jx, jz, 1); } }
   for (const L of LU) { if (L.c !== 3 || L.maxx < UNIT134[0] - 1200 || L.minx > UNIT134[0] + 1200 || L.maxz < UNIT134[1] - 1200 || L.minz > UNIT134[1] + 1200) continue;   // residential grounds ≤1.2 km: estate/condo trees (stage 3, 2026-10-31; 16 m grid, 50%, ≥4 m from buildings)
     for (let x = Math.floor(L.minx / 16) * 16; x <= L.maxx; x += 16) for (let z = Math.floor(L.minz / 16) * 16; z <= L.maxz; z += 16) { const jx = x + (hash01(x, z, 31) - 0.5) * 10, jz = z + (hash01(z, x, 37) - 0.5) * 10;
-      if (hash01(jx, jz, 39) < 0.5 || Math.hypot(jx - UNIT134[0], jz - UNIT134[1]) > 1200 || ringIn(GEO.trpf, jx, jz) || ringIn(SITE_IMG, jx, jz) || !ringIn(L.rings[0], jx, jz) || holeIn(L.rings, jx, jz)) continue;
+      if (hash01(jx, jz, 39) < 0.5 || Math.hypot(jx - UNIT134[0], jz - UNIT134[1]) > 1200 || ringIn(GEO.trpf, jx, jz) || ringIn(SITE_IMG, jx, jz) || PARCELS.some(p => ringIn(p.ring, jx, jz)) || !ringIn(L.rings[0], jx, jz) || holeIn(L.rings, jx, jz)) continue;
       if ([[4, 0], [-4, 0], [0, 4], [0, -4]].some(([a, b]) => blocked(jx + a, jz + b))) continue; add(jx, jz, 5); } }
   for (let x = -760; x <= -186; x += 12) for (let z = 320; z < 1040; z += 12) { const jx = x + (hash01(x, z, 23) - 0.5) * 3, jz = z + (hash01(z, x, 29) - 0.5) * 3;
     if (ringIn(SH_PAVE, jx, jz) && groundName(jx, jz) === 'Park / open space' && nearWaterSH(jx, jz, 14)) add(jx, jz, 4); }
@@ -3909,7 +3909,7 @@ function faceAO(P, x0, z0, x1, z1, n, b, t) {
   let sb = 0, st = 0; const yb = b + 1.5;
   for (const f of [0.25, 0.75]) { const px = x0 + (x1 - x0) * f + n[0] * 0.3, pz = z0 + (z1 - z0) * f + n[2] * 0.3; let mb = 0, mt = 0;
     for (const d of AO_D) { const x = px + n[0] * d, z = pz + n[2] * d, i = Math.floor((x - GX0) / CELL), j = Math.floor((z - GZ0) / CELL); if (i < 0 || j < 0 || i >= NI || j >= NJ) break; const c = GRID[i * NJ + j]; if (!c) continue;
-      for (const Q of c) { if (Q === P || Q.h < 8 || Q.kind === 'road' || Q.kind === 'new' && P.kind !== 'new' || (P.B && Q.B === P.B) || Q.h - yb <= 0) continue; if (!pointIn(Q, x, z)) continue;
+      for (const Q of c) { if (Q === P || Q === P.src || Q.h < 8 || Q.kind === 'road' || Q.kind === 'new' && P.kind !== 'new' || (P.B && Q.B === P.B) || Q.h - yb <= 0) continue; if (!pointIn(Q, x, z)) continue;
         mb = Math.max(mb, Math.atan2(Q.h - yb, d)); if (Q.h > t) mt = Math.max(mt, Math.atan2(Q.h - t, d)); } }
     sb += Math.sin(mb) / 2; st += Math.sin(mt) / 2; }
   return [clamp(1 - 0.7 * sb, 0.3, 1), clamp(1 - 0.7 * st, 0.3, 1)]; }
@@ -4054,18 +4054,32 @@ function cityDraw(test, T = GPU.tiles, eye) { const gl = GPU.gl; if (!T) return 
   if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); }
 // Rooftop plant (realism 2026-10-31, G3; estimates): on existing buildings ≥ 10 m, ≥ 300 m² roof, within 2.5 km of #134: 1–3 boxes (AHU / water tank /
 // lift motor room, 3–9 m, 2–4.5 m tall) placed by hash inside the footprint (corners tested). Visual only (not in physics/sightlines).
+// rule massing (TY 2026-10-31 stage 4; render only — physics/sightlines keep the OSM prism; sizes estimates): existing non-residential buildings ≥40 m (not hand-modelled,
+// not plain/styled, 4–40 vertices, ≥500 m²): podium (footprint ≥1500 m²: 0.12·h, 10–26 m, full outline) + tower inset toward the centroid (scale 1 − 5/r, 0.72–0.93) +
+// 6.4 m plant crown (×0.92, louvred = plain, darker); ≥150 m: second setback at 0.72·h (×0.95). Pieces keep the building's storey grid (sb 0) and seed; P.massTop = crown outline
+// (roof plant / parapet follow it); faceAO skips the source prism (P.src).
+function massOf(P) { if (P.mass !== undefined) return P.mass; P.mass = null;
+  if (P.kind !== 'existing' || P.nogl || P.style || P.plain || P.hand || P.h < 40 || P.n < 4 || P.n > 40) return null;
+  const al = facadeAlb(P); if (P.res ?? (P.res = (luAt(P.cx, P.cz) || {}).c === 3)) return null;
+  let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; ar = Math.abs(ar) / 2; if (ar < 500) return null;
+  const r = Math.sqrt(ar / Math.PI), s = clamp(1 - 5 / r, 0.72, 0.93), hp = ar >= 1500 ? clamp(Math.round(0.12 * P.h / 3.2) * 3.2 + 3.5, 10.3, 26) : 0, ct = P.h - 6.4, M = [];
+  const pc = (h, b, k, o) => { const fl = []; for (let i = 0; i < P.n; i++) fl.push(P.cx + (P.xs[i] - P.cx) * k, P.cz + (P.zs[i] - P.cz) * k); const q = Object.assign(makePrism(P.name, 'existing', h, b, fl, P.est), { alb: al, glass: P.glass, res: false, sb: 0, st: ct, src: P }, o); q.cx = P.cx; q.cz = P.cz; M.push(q); };
+  if (hp) pc(hp, 0, 1, { st: hp, topc: [150, 158, 150] }); const b0 = hp || 0;
+  if (P.h >= 150) { const ym = Math.round(0.72 * P.h); pc(ym, b0, s); pc(ct, ym, s * 0.95); } else pc(ct, b0, hp ? s : 1);
+  pc(P.h, ct, (hp ? s : 1) * (P.h >= 150 ? 0.95 : 1) * 0.92, { plain: true, alb: al.map(v => v * 0.82), st: P.h }); P.massTop = M[M.length - 1];
+  return (P.mass = M); }
 function gpuRoofKit(A) { const al = [150, 152, 150], tp = [128, 130, 130];
   for (const P of ALL) { if (P.kind !== 'existing' || P.h < 10 || P.nogl || P.glass && P.h > 150 || Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) > 2500) continue;
     let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; ar = Math.abs(ar) / 2; if (ar < 300) continue;
     const k = 1 + Math.floor(hash01(P.cx, P.cz, 71) * Math.min(3, ar / 400));
     for (let q = 0; q < k; q++) { const r = Math.sqrt(ar) * 0.28, x = P.cx + (hash01(P.cx, q, 73) - 0.5) * r, z = P.cz + (hash01(q, P.cz, 79) - 0.5) * r, w = 3 + hash01(x, z, 83) * Math.min(6, Math.sqrt(ar) * 0.12), d = 3 + hash01(z, x, 89) * Math.min(6, Math.sqrt(ar) * 0.12), hh = 2 + hash01(x, q, 97) * 2.5;
-      const xs = [x - w / 2, x + w / 2, x + w / 2, x - w / 2], zs = [z - d / 2, z - d / 2, z + d / 2, z + d / 2]; if (!xs.every((xx, i) => pointIn(P, xx, zs[i]))) continue;
+      const xs = [x - w / 2, x + w / 2, x + w / 2, x - w / 2], zs = [z - d / 2, z - d / 2, z + d / 2, z + d / 2]; if (!xs.every((xx, i) => pointIn(P.massTop || P, xx, zs[i]))) continue;
       glPrism(A, { n: 4, xs, zs, cx: x, cz: z, base: P.h, h: P.h + hh, kind: 'existing', name: 'roof plant', plain: true, alb: al, topc: tp }); } } }
 // near-building detail (less blocky 2026-10-31; visual only, sizes estimates): existing buildings ≤1 km of #134 get a 1.0 m roof parapet (0.25 m thick, light coping);
 // residential (P.res) ≤600 m get a slab ledge per storey (0.15 m, 0.3 m proud) on edges ≥3 m; vertex budget 400k, nearest first
 function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.h >= 10 && P.n >= 3 && P.n <= 64 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000).sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]));
   const n0 = A.n, wl = [236, 234, 228], cp = [205, 205, 200];
-  for (const P of L) { if (A.n - n0 > 4e5) break; const fa = facadeAlb(P), pa = fa.map(c => Math.min(255, c * 1.05 + 6)), dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), ledge = P.res === true && dd < 600;
+  for (const P0 of L) { if (A.n - n0 > 4e5) break; const P = P0.massTop ? Object.assign(Object.create(P0), { xs: P0.massTop.xs, zs: P0.massTop.zs, n: P0.massTop.n }) : P0, fa = facadeAlb(P0), pa = fa.map(c => Math.min(255, c * 1.05 + 6)), dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), ledge = P.res === true && dd < 600;
     let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; const sg = ar > 0 ? 1 : -1;   // outward normal sign for either winding
     for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = P.xs[j], z0 = P.zs[j], x1 = P.xs[i], z1 = P.zs[i], ex = x1 - x0, ez = z1 - z0, l = Math.hypot(ex, ez); if (l < 1.5) continue;
       const nx = sg * ez / l, nz = -sg * ex / l, ux = ex / l, uz = ez / l, pr = (o, k, a, c, y0, y1, al, tp) => { const xs = [x0 + ux * a + nx * o, x1 - ux * c + nx * o, x1 - ux * c + nx * k, x0 + ux * a + nx * k], zs = [z0 + uz * a + nz * o, z1 - uz * c + nz * o, z1 - uz * c + nz * k, z0 + uz * a + nz * k];
@@ -4075,29 +4089,31 @@ function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.n
 // condo kit (TY 2026-10-31 stage 3; visual only, sizes estimates): private-condo towers ≤1 km of #134 (P.style 'condo' = Tanjong Rhu condos, + other residential towers ≥30 m not
 // named Blk/Riverfront) get stacked projecting balconies per storey (slab 0.2 m, 1.4 m deep, white edge; frameless glass balustrade 1.05 m ≤600 m) on 1–2 bays per face ≥4 m,
 // and a roof crown frame (posts + 0.5 m beam 2.5–3.0 m above the roof on edges ≥4 m) + lift motor room. Storeys follow the facade shader (condo: lobby CL + k·CF; else 3.5 + k·3.2).
-function gpuCondoKit(A) { const c = v => v.map(q => q / 255), z4 = [0, 0, 0, 0], wl = c([238, 236, 230]), sf = c([214, 212, 206]), gs = c([168, 196, 194]), fr = c([226, 224, 218]);
+const CK_C = (() => { const c = v => v.map(q => q / 255); return { wl: c([238, 236, 230]), sf: c([214, 212, 206]), gs: c([168, 196, 194]), fr: c([226, 224, 218]) }; })();
+function gpuCondoKit(A) {
   const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.n >= 3 && P.n <= 64 && P.h >= 30 && (P.style === 'condo' || P.res === true && !/Blk|Riverfront|HDB/.test(P.name)) && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000)
     .sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1])), n0 = A.n;
+  for (const P of L) { if (A.n - n0 > 1.2e5) break; condoKitP(A, P, true, Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 600); } }
+function condoKitP(A, P, balc, glass) { const { wl, sf, gs, fr } = CK_C, z4 = [0, 0, 0, 0], cnd = P.style === 'condo', y0 = cnd ? CONDO.lobby : 3.5, fh = cnd ? CONDO.f2f : 3.2, top = cnd ? P.h - CONDO.roof - 0.5 : P.h - 2;
   const quad = (a, b, cc, d, n, col) => { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(cc, n, col, z4); A.v(a, n, col, z4); A.v(cc, n, col, z4); A.v(d, n, col, z4); };
-  for (const P of L) { if (A.n - n0 > 1.6e5) break; const dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), cnd = P.style === 'condo', y0 = cnd ? CONDO.lobby : 3.5, fh = cnd ? CONDO.f2f : 3.2, top = cnd ? P.h - CONDO.roof - 0.5 : P.h - 2;
     let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; const sg = ar > 0 ? 1 : -1;
     for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = P.xs[j], z0 = P.zs[j], x1 = P.xs[i], z1 = P.zs[i], ex = x1 - x0, ez = z1 - z0, l = Math.hypot(ex, ez); if (l < 4) continue;
       const nx = sg * ez / l, nz = -sg * ex / l, ux = ex / l, uz = ez / l, n = [nx, 0, nz], up = [0, 1, 0], dn = [0, -1, 0], P3 = (t, o, y) => [x0 + ux * t + nx * o, y, z0 + uz * t + nz * o];
       { const b0 = P.h + 2.5, b1 = P.h + 3.0; quad(P3(0.3, 0.1, b0), P3(l - 0.3, 0.1, b0), P3(l - 0.3, 0.1, b1), P3(0.3, 0.1, b1), n, fr); quad(P3(0.3, 0.1, b1), P3(l - 0.3, 0.1, b1), P3(l - 0.3, -0.5, b1), P3(0.3, -0.5, b1), up, fr);   // crown frame beam + posts
         quad(P3(0.3, 0.1, b0), P3(0.3, -0.5, b0), P3(l - 0.3, -0.5, b0), P3(l - 0.3, 0.1, b0), dn, sf);
         for (const t of [0.3, l - 0.7]) { quad(P3(t, 0.1, P.h), P3(t + 0.4, 0.1, P.h), P3(t + 0.4, 0.1, b0), P3(t, 0.1, b0), n, fr); quad(P3(t + 0.4, 0.1, P.h), P3(t + 0.4, -0.3, P.h), P3(t + 0.4, -0.3, b0), P3(t + 0.4, 0.1, b0), [ux, 0, uz], fr); quad(P3(t, -0.3, P.h), P3(t, 0.1, P.h), P3(t, 0.1, b0), P3(t, -0.3, b0), [-ux, 0, -uz], fr); } }
-      const bays = l > 16 ? [[l * 0.12, l * 0.42], [l * 0.58, l * 0.88]] : l > 8 ? [[l * 0.2, l * 0.8]] : [[l * 0.1, l * 0.9]], D = 1.4, glass = dd < 600;
+      if (!balc) continue; const bays = l > 16 ? [[l * 0.12, l * 0.42], [l * 0.58, l * 0.88]] : l > 8 ? [[l * 0.2, l * 0.8]] : [[l * 0.1, l * 0.9]], D = 1.4;
       for (let y = y0 + fh; y < top - 0.5; y += fh) for (const [t0, t1] of bays) { const ys = y - 0.2;
         quad(P3(t0, 0, y), P3(t1, 0, y), P3(t1, D, y), P3(t0, D, y), up, sf); quad(P3(t0, D, ys), P3(t1, D, ys), P3(t1, 0, ys), P3(t0, 0, ys), dn, sf);   // slab top / soffit
         quad(P3(t0, D, ys), P3(t1, D, ys), P3(t1, D, y), P3(t0, D, y), n, wl); quad(P3(t1, D, ys), P3(t1, 0, ys), P3(t1, 0, y), P3(t1, D, y), [ux, 0, uz], wl); quad(P3(t0, 0, ys), P3(t0, D, ys), P3(t0, D, y), P3(t0, 0, y), [-ux, 0, -uz], wl);   // white edge
         if (glass) { quad(P3(t0, D - 0.05, y), P3(t1, D - 0.05, y), P3(t1, D - 0.05, y + 1.05), P3(t0, D - 0.05, y + 1.05), n, gs); quad(P3(t1, D - 0.07, y), P3(t0, D - 0.07, y), P3(t0, D - 0.07, y + 1.05), P3(t1, D - 0.07, y + 1.05), n.map(v => -v), gs); } } }
-    let r2 = 0; for (let i = 0; i < P.n; i++) r2 = Math.max(r2, Math.hypot(P.xs[i] - P.cx, P.zs[i] - P.cz)); if (r2 > 8 && pointIn(P, P.cx, P.cz)) glPrism(A, { n: 4, xs: [P.cx - 3, P.cx + 3, P.cx + 3, P.cx - 3], zs: [P.cz - 3, P.cz - 3, P.cz + 3, P.cz + 3], cx: P.cx, cz: P.cz, base: P.h, h: P.h + 3.5, kind: 'existing', name: 'lift motor room', plain: true, alb: [222, 220, 214], topc: [150, 152, 150] }); } }
+    let r2 = 0; for (let i = 0; i < P.n; i++) r2 = Math.max(r2, Math.hypot(P.xs[i] - P.cx, P.zs[i] - P.cz)); if (r2 > 8 && pointIn(P, P.cx, P.cz)) glPrism(A, { n: 4, xs: [P.cx - 3, P.cx + 3, P.cx + 3, P.cx - 3], zs: [P.cz - 3, P.cz - 3, P.cz + 3, P.cz + 3], cx: P.cx, cz: P.cz, base: P.h, h: P.h + 3.5, kind: 'existing', name: 'lift motor room', plain: true, alb: [222, 220, 214], topc: [150, 152, 150] }); }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
   if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
-  for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
+  for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
   if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A);
@@ -4105,7 +4121,8 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
-  const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
+  const ns = A.n; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
+    const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
