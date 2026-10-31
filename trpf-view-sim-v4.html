@@ -129,6 +129,9 @@
     .walk-joy { position: relative; width: 116px; height: 116px; border-radius: 50%; background: rgba(13,20,36,0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1.5px solid rgba(226,232,240,0.35); touch-action: none; cursor: grab; }
     .walk-knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(226,232,240,0.85); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); pointer-events: none; }
     .walk-joy.on .walk-knob { background: var(--you); }
+    .walk-joy.run { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.35); } .walk-joy.run .walk-knob { background: #fbbf24; }
+    .walk-run { display: flex; align-items: center; gap: 4px; margin: 0 0 8px 0; min-height: 34px; padding: 0 12px; border-radius: 999px; background: rgba(13,20,36,0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1.5px solid rgba(226,232,240,0.35); color: #e2e8f0; font-size: 12px; font-weight: 600; }
+    .walk-run[aria-pressed="true"] { border-color: #fbbf24; color: #fbbf24; }
     .hint { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
     .hint-card { max-width: 400px; max-height: calc(100% - 8px); overflow-y: auto; background: var(--glass-hi); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: 20px; padding: 18px 20px; font-size: 13.5px; line-height: 1.55; color: #cbd5e1; display: flex; flex-direction: column; gap: 9px; box-shadow: var(--shadow); animation: pnlIn .2s var(--ease); }
     .hint-card b { color: #f8fafc; }
@@ -670,7 +673,8 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <div id="bldCard" class="bld-card" style="display:none" role="dialog" aria-label="Building"></div>
 <canvas id="walkMap" class="absolute z-10 cursor-crosshair" style="display:none;width:190px;height:140px" title="Tap to expand the map"></canvas>
 <div id="walkPad" class="absolute z-10" style="display:none">
-<div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div>
+<button id="walkRun" class="walk-run" aria-pressed="false" title="Run (toggle; desktop: hold Shift; or push the stick past its ring)"><i data-i="walk"></i><span>Run</span></button>
+<div id="walkJoy" class="walk-joy" title="Drag to walk (push further = faster, past the ring = run); drag elsewhere on the view to look around"><div id="walkKnob" class="walk-knob"></div></div>
 </div>
 <div id="furnEd" class="furn-ed" style="display:none">
 <div class="fe-head"><span class="fe-ttl"><i data-i="sofa"></i>Layout</span>
@@ -2437,17 +2441,23 @@ function walkSet(X, Y) {
   const rm = !onGround() && UNIT_ROOMS.find(([, [x0, y0, x1, y1]]) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1);
   if (rm && rm[0] !== state.spot) { const sp = UNIT_SPOTS.find(q => q.id === rm[0]); if (sp) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; const P0 = POSTURES[state.posture]; if (P0.only && !P0.only.includes(sp.id)) { state.posture = 'stand'; state.eyeOffset = POSTURES.stand.eye; } } }
 }
-const walkStep = k => walkVec(k === 'left' ? -90 : k === 'right' ? 90 : 0, k === 'back' ? -0.15 : 0.15);
-function walkVec(off, st) {   // move st m along heading + off° (plan frame), sliding along walls
-  const sp = curSpot(); if (!state.walk || !sp) return; const nb = UNIT_FN * DEG, h = (state.heading + off) * DEG;
+const walkStep = k => { const s = walkRunning() ? 0.4 : 0.15; walkVec(k === 'left' ? -90 : k === 'right' ? 90 : 0, k === 'back' ? -s : s); };
+const WALK_V = 1.4, RUN_V = 3.6;   // m/s: walk; run (jog, estimate; TY 2026-10-31 "run feature")
+const WALK_RUN = { on: false, shift: false }, walkRunning = () => WALK_RUN.on || WALK_RUN.shift;
+function walkVec(off, st) {   // move st m along heading + off° (plan frame), sliding along walls; split into ≤0.15 m substeps (run steps can't skip thin walls / stair treads)
+  const sp = curSpot(); if (!state.walk || !sp) return; const n = Math.max(1, Math.ceil(Math.abs(st) / 0.15)), f0 = state.obsFloor, sp0 = sp.id;
+  for (let i = 0; i < n && state.walk && !LIFT.busy; i++) walkSub(off, st / n);
+  if (state.spot !== sp0 || state.obsFloor !== f0) renderAll(); else { renderView(); drawWalkMap(); }
+}
+function walkSub(off, st) {
+  const nb = UNIT_FN * DEG, h = (state.heading + off) * DEG;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk, esc = furnBlocks(X, Y);
   // slide along walls; then try directions turned ±25/50/75/90° (step × max(cos, 0.4)) so a diagonal push still gets through narrow gaps (door leaf ↔ shoe cabinet, TY 2026-10-29 "suddenly stuck");
   // if the eye already overlaps a wall (door closed on it, wall toggled), any move that doesn't enter a wall box itself is allowed so it can walk out
   const stuck = !walkFree(X, Y, 0.2, true), ok = (x, y) => walkFree(x, y, 0.2, esc) || (stuck && walkFree(x, y, 0, true));
   let to = ok(X + dX, Y + dY) ? [X + dX, Y + dY] : ok(X + dX, Y) && Math.abs(dX) > 1e-4 ? [X + dX, Y] : ok(X, Y + dY) && Math.abs(dY) > 1e-4 ? [X, Y + dY] : null;
   for (const a of [25, -25, 50, -50, 75, -75, 90, -90]) { if (to) break; const c = Math.cos(a * DEG), sn = Math.sin(a * DEG), k = Math.max(c, 0.4), x = X + (dX * c - dY * sn) * k, y = Y + (dX * sn + dY * c) * k; if (ok(x, y)) to = [x, y]; }
-  const f0 = state.obsFloor; if (to) walkSet(to[0], to[1]); if (Math.abs(state.walk.Z) > 0.3) gpuInteriorPrefetch(state.obsFloor + Math.sign(state.walk.Z));   // on the stairs: build the next storey's interior ahead
-  const sp0 = sp.id; if (state.spot !== sp0 || state.obsFloor !== f0) renderAll(); else { renderView(); drawWalkMap(); }
+  if (to) walkSet(to[0], to[1]); if (Math.abs(state.walk.Z) > 0.3) gpuInteriorPrefetch(state.obsFloor + Math.sign(state.walk.Z));   // on the stairs: build the next storey's interior ahead
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
@@ -4065,14 +4075,14 @@ $('shotBtn').addEventListener('click', () => {   // 📷 Photo mode: re-render t
     if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } }, 'image/png');
 });
 $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; renderAll(); });
-// Walk joystick: knob offset (≤ radius) → direction relative to heading + speed ≤ 1.4 m/s (dead zone 12%); one rAF loop while held
-{ const J = $('walkJoy'), K = $('walkKnob'), J0 = { id: null, v: [0, 0], raf: 0, t: 0 };
-  const set = e => { const b = J.getBoundingClientRect(), R = b.width / 2, dx = e.clientX - b.left - R, dy = e.clientY - b.top - R, m = Math.hypot(dx, dy), k = m > R ? R / m : 1;
-    J0.v = [dx * k / R, dy * k / R]; K.style.transform = `translate(${dx * k}px,${dy * k}px)`; };
+// Walk joystick: knob offset → direction relative to heading + speed ≤ WALK_V (dead zone 12%); dragged past the ring (≥1.15 R, knob held at 1.15 R) or Run on / Shift held → RUN_V; one rAF loop while held
+{ const J = $('walkJoy'), K = $('walkKnob'), J0 = { id: null, v: [0, 0], raf: 0, t: 0, out: false };
+  const set = e => { const b = J.getBoundingClientRect(), R = b.width / 2, dx = e.clientX - b.left - R, dy = e.clientY - b.top - R, m = Math.hypot(dx, dy), k = m > R ? R / m : 1, kk = m > 1.15 * R ? 1.15 * R / m : 1;
+    J0.out = m >= 1.15 * R; J0.v = [dx * k / R, dy * k / R]; K.style.transform = `translate(${dx * kk}px,${dy * kk}px)`; J.classList.toggle('run', J0.out || walkRunning()); };
   const tick = t => { const dt = Math.min(0.1, (t - J0.t) / 1000), [x, y] = J0.v, m = Math.hypot(x, y); J0.t = t;
-    if (m > 0.12 && dt > 0) walkVec(Math.atan2(x, -y) / DEG, 1.4 * Math.min(1, (m - 0.12) / 0.8) * dt);
+    if (m > 0.12 && dt > 0) walkVec(Math.atan2(x, -y) / DEG, (J0.out || walkRunning() ? RUN_V : WALK_V) * Math.min(1, (m - 0.12) / 0.8) * dt);
     J0.raf = J0.id !== null ? requestAnimationFrame(tick) : 0; };
-  const end = e => { if (e.pointerId !== J0.id) return; J0.id = null; J0.v = [0, 0]; K.style.transform = ''; J.classList.remove('on'); };
+  const end = e => { if (e.pointerId !== J0.id) return; J0.id = null; J0.v = [0, 0]; J0.out = false; K.style.transform = ''; J.classList.remove('on', 'run'); };
   J.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (J0.id !== null) return; J0.id = e.pointerId; J.setPointerCapture(e.pointerId); J.classList.add('on'); set(e); J0.t = performance.now(); if (!J0.raf) J0.raf = requestAnimationFrame(tick); });
   J.addEventListener('pointermove', e => { if (e.pointerId === J0.id) { e.stopPropagation(); set(e); } });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => J.addEventListener(ev, end)); }
@@ -4105,6 +4115,10 @@ function doorTap(px, py) {
   doorFlip(best); return true; }
 function handCycle() { HAND.m = (HAND.m + 1) % 3; const b = $('walkHand'); b.innerHTML = [`${ic('hand')}<span>Hand: off</span>`, `${ic('hand')}<span>Hand: on</span>`, `${ic('saber')}<span>Lightsaber</span>`][HAND.m]; b.style.borderColor = HAND.m ? '#34d399' : ''; b.style.color = HAND.m === 2 ? '#4ade80' : ''; b.setAttribute('aria-pressed', String(!!HAND.m)); renderView(); }
 $('walkHand').addEventListener('click', handCycle);
+$('walkRun').addEventListener('pointerdown', e => e.stopPropagation());
+$('walkRun').addEventListener('click', e => { e.stopPropagation(); WALK_RUN.on = !WALK_RUN.on; $('walkRun').setAttribute('aria-pressed', String(WALK_RUN.on)); buzz(); });
+['keydown', 'keyup'].forEach(ev => window.addEventListener(ev, e => { if (e.key === 'Shift') WALK_RUN.shift = ev === 'keydown'; }));
+window.addEventListener('blur', () => { WALK_RUN.shift = false; });
 window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   if (e.key === 'e' || e.key === 'E') { e.preventDefault(); doorToggle(); return; }
   if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
