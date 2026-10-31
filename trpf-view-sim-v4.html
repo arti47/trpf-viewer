@@ -1212,8 +1212,8 @@ const UNIT_PLAN = (() => {
   win(0.695, 2.7, 0, F); win(3.62, 5.58, 0, F); win(6.78, 8.75, 0, F); win(9.99, 12.51, 1.53, 1.68);   // W1 glazing (plan double lines): master, BR2, BR3, living
   w.push([0.31, 0, 0.695, F], [2.7, 0, 3.62, F], [8.75, 0, 9.2, F], [9.51, 1.53, 9.99, 1.68], [12.51, 1.53, 12.86, 1.68]);   // solid wall stubs at the window ends (owner markup 2026-10-25)
   w.push([0, 0, 0.31, 4.48], [5.58, 0, 6.79, 0.16], [9.2, 0, 9.3, 1.69], [9.3, 1.53, 9.51, 1.69], [12.86, 1.53, 13.12, 7.74],   // E wall (no window, owner), columns, W wall
-    // outside the glass line (exterior finish, ±10 storeys): fins 0.4 m proud of the bedroom facade + side walls of the 1.5 m living-window recess
-    ...[[0, -0.4, 0.31, 0], [5.58, -0.4, 6.79, 0], [9.2, -0.4, 9.3, 0], [9.3, -0.4, 9.51, 1.53], [12.86, 1.33, 13.12, 1.53]].map(r => [...r, -28, H + 28, 'ext']),
+    // outside the glass line (exterior finish, 1F ceiling → roof; the 32A raster boxes here are skipped full height, so ±10 storeys left them floating, TY 2026-10-31): fins 0.4 m proud of the bedroom facade + side walls of the 1.5 m living-window recess
+    ...[[0, -0.4, 0.31, 0], [5.58, -0.4, 6.79, 0], [9.2, -0.4, 9.3, 0], [9.3, -0.4, 9.51, 1.53], [12.86, 1.33, 13.12, 1.53]].map(r => [...r, -200, 200, 'ext']),
     [3.2, 0, 3.31, 3.44], [6.2, 0.16, 6.3, 3.44], [9.29, 1.69, 9.38, 3.44],                               // bedroom partitions
     [3.31, 3.33, 5.14, 3.44], [5.14, 3.33, 6.16, 3.44, 2.1, H], [6.16, 3.33, 6.4, 3.44], [6.4, 3.33, 7.36, 3.44, 2.1, H], [7.36, 3.33, 9.38, 3.44],   // corridor wall, BR2/BR3 doors
     [4.22, 3.44, 4.3, 4.48, 2.1, H],                                                                      // master door (into hallway)
@@ -1226,7 +1226,7 @@ const UNIT_PLAN = (() => {
   // service yard opening (E wall, faces ≈80°): owner-planned casement (2026-10-26) on the 1.0 m parapet up to the 2.4 m beam, 3 side-hung sashes, clear glass (closed);
   // no external laundry rack (new BTO, owner). Outside it (estimates): bath/WC1 block north face (±10 storeys); A/C ledge (plan X 1.63–4.03, Y 6.42–7.65) per storey ±6: slab, 1.0 m parapet, 1 System-4 condenser 1.0×0.38×0.95 m (owner 2026-10-26).
   wins.push([6.6, 8.6, 5.6, 'y', YARD.sill, YARD.head]);
-  w.push([1.63, 6.3, 5.6, 6.42, -28, H + 28, 'ext']);
+  w.push([1.63, 6.3, 5.6, 6.42, -200, 200, 'ext']);
   // A/C ledge = one separate open-top box per unit per storey (owner 2026-10-26: not a continuous wall down the facade): outer sides 0.15 m slab edge + 1.0 m parapet,
   // slab inset within the sides (never sorts over them) + condenser; storeys ±6 (acLedge, also used for #132)
   const acLedge = (x0, y0, x1, y1, open, ac) => {
@@ -1299,7 +1299,7 @@ const UNIT_PLAN = (() => {
   // #146 / #148 (N slot) and #140 (S slot) yards (TY plans 2026-10-29, ≈48–52 px/m via the A/C ledges, ±0.3 m): grating box beside the yard on the slot face, same casement
   yardBox(46.98, 47.53, 10.75, 13.13, 10.95, 12.95, 46.98, -1); yardBox(33.65, 34.2, 10.75, 13.13, 10.95, 12.95, 34.2, 1);   // #146, #148
   yardBox(42.98, 43.53, 7.3, 8.95, 7.45, 8.85, 43.53, 1);   // #140 kitchen/utility (3-room), 1.5 m window
-  w.push([5.6, 8.99, 9.36, 9.05, -28, H + 28, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
+  w.push([5.6, 8.99, 9.36, 9.05, -200, 200, 'ext']);   // #134 kitchen/yard N face beyond the corridor end (seen through the opening; raster box skipped)
   wins.push([8.99, 10.64, 9.36, 'y', 1.0, 2.4]);   // corridor end opening (no glass, no frame)
   wins.push([9.05, 10.64, 58.75, 'y', 1.0, 2.4]);   // W corridor end opening
   const corr = { wash: [20.89, 16.91, 25.31, 20.71], walk: [[9.51, 7.46, 13.26, 10.64], [13.12, 7.92, 15.45, 9.05], [13.12, 1.6, 15.45, 7.92], [26.37, 10.64, 29.6, 11.95], [52.0, 10.64, 53.8, 11.95], [57.3, 10.64, 58.6, 11.95], [33.5, 8.0, 35.0, 9.05], [38.2, 8.0, 39.9, 9.05], [57.0, 8.0, 58.6, 9.05], [52.0, 7.92, 55.3, 9.05], [55.3, 8.55, 57.0, 9.05], [13.26, 9.05, 58.4, 10.64], [13.34, 10.64, 15.1, 12.24], [17.3, 8.0, 18.6, 9.05], [18.73, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [21.04, 16.91, 25.31, 20.56]], stop: 58.4, hole: [13.12, 1.6, 14.25, 5.6], floors: [[9.36, 7.74, 21.77, 10.95], [21.77, 8.75, 58.6, 10.95], [26.37, 10.95, 29.6, 12.1], [52.0, 10.95, 58.6, 12.1], [33.5, 7.85, 35.0, 8.75], [38.2, 7.85, 39.9, 8.75], [52, 7.86, 58.6, 8.75], [13.34, 10.64, 16.96, 12.24], [16.96, 10.64, 26.06, 11.33], [19.96, 11.33, 23.07, 16.91], [13.12, 5.6, 15.45, 7.74], [9.86, 7.46, 11.1, 7.74]] };   // walkable rects: #134 front + corridor W to the lift lobby (owner 2026-10-29: stop line X 26.06, was 13.26 → 19.6) + #132/#136 door recesses + under the lifts + lift lobby + wash area; neighbours' doors, stair + riser doors stay closed (walls), floor/ceiling rects
@@ -3543,7 +3543,7 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
   const nb = UNIT_FN * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], [px, py] = spotP(S), y0 = slabY(), H = UNIT_H, A = glArr(), z4 = [0, 0, 0, 0], X4 = [0, 0, 4, 0];
   const W = (X, Y, h) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), y0 + h, sp.z + u[1] * (X - px) - n[1] * (Y - py)], c255 = c => c.map(v => v / 255);
   const Nw = (ax, ay, bx, by) => { const l = Math.hypot(bx - ax, by - ay) || 1, nX = (by - ay) / l, nY = -(bx - ax) / l; return [u[0] * nX - n[0] * nY, 0, u[1] * nX - n[1] * nY]; }, dn0 = [0, -1, 0];   // plan edge (CCW as the box sides) → outward world normal (interior sun term)
-  const zG = -slabAt(state.obsFloor), zR = BLK_TOP + TRPF_CROWN + zG;
+  const zG = VOID_DECK_HEIGHT - slabAt(state.obsFloor), zR = BLK_TOP + TRPF_CROWN - slabAt(state.obsFloor);   // ext faces/ledges: from the 1F ceiling (void deck stays open; per-storey ledges below 2F dropped) to the roof
   const WL = unitWalls().map(([x0, y0b, x1, y1, z0 = 0, z1 = H, kind]) => [x0, y0b, x1, y1, z0, z1, kind]), wIn = (w, X, Y) => X > w[0] && X < w[2] && Y > w[1] && Y < w[3];
   let wSelf = -1; const cov = (X, Y, nX, nY, z0, z1, ext, C) => { for (let q = 0; q < C.length; q++) { const j = C[q], w = WL[j]; if (j === wSelf || w[5] <= z0 || w[4] >= z1) continue; const ej = isExtKind(w[6]);   // coplanar face of another wall box (bath wall vs bath-block ext face, overlapping walls): one copy only, else z-fight (blocky on phone depth buffers)
       if ((ext && !ej) || (!!ext === ej && j < wSelf)) if (wIn(w, X - nX * 0.01, Y - nY * 0.01) && !wIn(w, X + nX * 0.01, Y + nY * 0.01)) return [Math.max(z0, w[4]), Math.min(z1, w[5])]; } return null; };
