@@ -3513,7 +3513,7 @@ const GL_FS = `#version 300 es
 precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
-uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH;
+uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH, uWet;
 uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun, uHQ; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 ` + GL_TONE + GL_CLOUD + `
@@ -3525,6 +3525,19 @@ float h3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fra
 float vn3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);   // value noise 0..1
   return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y), mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
 float vn2(vec2 p) { return vn3(vec3(p, 0.5)); }
+// Interior mapping (realism 2026-10-31, M4): a fake room box behind each window cell (f = position in the cell 0..1, sz = cell m, depth 3–6 m by hash);
+// the view ray hits back wall / side walls / floor / ceiling; day = dim sky-lit room falling off with depth, night = warm lamp light if the cell is on. Linear radiance.
+vec3 roomIM(vec2 f, vec2 sz, vec3 v, vec3 n, float sd, float on) {
+  vec3 tn = vec3(-n.z, 0.0, n.x), d = vec3(dot(v, tn), v.y, -dot(v, n)); d.z = max(d.z, 1e-3); d.x = abs(d.x) < 1e-4 ? 1e-4 : d.x; d.y = abs(d.y) < 1e-4 ? 1e-4 : d.y;
+  float D = 3.0 + 3.0 * fract(sd * 7.7), r1 = fract(sd * 3.1), r2 = fract(sd * 13.1); vec3 p = vec3(f * sz, 0.0);
+  vec3 tt = vec3((d.x > 0.0 ? sz.x - p.x : -p.x) / d.x, (d.y > 0.0 ? sz.y - p.y : -p.y) / d.y, D / d.z); float t = min(min(tt.x, tt.y), tt.z); vec3 h = p + d * t;
+  vec3 wc = mix(vec3(0.66, 0.62, 0.55), vec3(0.6, 0.62, 0.64), r1), col = t == tt.z ? wc : t == tt.x ? wc * 0.78 : d.y > 0.0 ? wc * 1.08 : mix(vec3(0.36, 0.29, 0.22), vec3(0.5, 0.48, 0.45), r2);
+  if (t == tt.z && h.y < 0.85 && r2 > 0.35 && abs(h.x - sz.x * (0.3 + 0.4 * r1)) < sz.x * 0.25) col *= 0.45;   // furniture silhouette against the back wall
+  float dep = clamp(h.z / D, 0.0, 1.0), cs = fract(sd * 5.3), cw = 0.22 + 0.3 * fract(sd * 9.1);
+  if (cs > 0.45 && (cs > 0.72 ? f.x < cw : f.x > 1.0 - cw)) { col = mix(vec3(0.82, 0.78, 0.7), vec3(0.62, 0.66, 0.7), fract(sd * 17.3)) * (0.9 + 0.1 * sin(f.x * sz.x * 18.0)); dep = 0.0; }   // drawn curtain at the glass (pleats)
+  else if (d.y > 0.0 && t == tt.y && length(h.xz - vec2(sz.x * 0.5, D * 0.45)) < 0.35) col = vec3(1.6, 1.45, 1.2) * (0.3 + 0.7 * on);   // ceiling lamp
+  vec3 al = toLin(col);
+  return al * (uAmb * 0.3 * SUNK * 0.3 * (1.0 - 0.6 * dep) + uNight * on * vec3(1.0, 0.76, 0.48) * (0.5 + 0.35 * (1.0 - dep))); }
 vec3 fogCol(vec3 v) { float m = max(0.0, dot(v, uSun));   // haze colour + forward (Mie) in-scatter toward the sun; matches the 2D sky's wide sun glow
   return uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y); }
 float pcfK(sampler2DShadow sm, vec3 q, float t) {   // 4 taps; photo mode (uHQ): 16 rotated-grid taps over ±3 texels (softer penumbra)
@@ -3561,7 +3574,7 @@ float shadowAt(vec3 p, vec3 n) {
   return 1.0;
 }
 void main() {
-  vec3 alb = vCol, nrm = normalize(vNor); float mode = vTex.z, lit = 0.0, gm = 0.0;   // gm: glazing fraction (sky reflection)
+  vec3 alb = vCol, nrm = normalize(vNor), wroom = vec3(0.0), vv = normalize(vWorld - uEye); float mode = vTex.z, lit = 0.0, gm = 0.0;   // gm: glazing fraction (sky reflection)
   if (mode < -2.5) {   // sea plane: Fresnel sky reflection (n 1.33) on rippled normals (fade with distance), sun glitter (facet tilt σ 0.12 rad, analytic density + per-pixel sparkles), streaks
     vec3 v = normalize(vWorld - uEye); float amp = 0.06 * (1.0 - smoothstep(60.0, 700.0, vDist)); vec2 q = vWorld.xz; float t = uTime;
     vec2 g = vec2(sin(q.x * 0.31 + q.y * 0.12 + t * 1.3) + 0.6 * sin(q.x * 0.73 - q.y * 0.41 + t * 2.1), cos(q.y * 0.27 - q.x * 0.09 + t * 1.1) + 0.6 * cos(q.y * 0.81 + q.x * 0.37 + t * 1.9));
@@ -3580,6 +3593,7 @@ void main() {
     float k = mix(wx * wy, m, det) * step(0.0, g.y), on = step(hash(floor(g) + vTex.w), mode > 2.5 ? 0.5 : 0.3);
     float cu = mode < 2.5 ? step(0.72, hash(floor(g) + vTex.w + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
     alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
+    if (mode < 2.5 && det > 0.01) { float im = det * smoothstep(0.35, 0.15, max(fw.x, fw.y)); wroom = k * im * (1.0 - 0.85 * cu) * roomIM(f, vec2(3.6, 3.2), vv, nrm, hash(floor(g) + vTex.w + 3.0), on); lit *= 1.0 - 0.8 * im; }
   } else if (mode > 5.5 && mode < 6.5 && vTex.w > 5.5) {   // TRPF common corridor (6) / lift core (7) / stair (8) (31A, TY 2026-10-31): greige walls + white slab edge per storey; corridor = 1.0 m parapet, open (shaded, lit at night) to the 2.4 m beam, posts every 6 m; stair = vent band
     float wi = floor(vTex.w + 0.5), al = vTex.x, y = vTex.y, fa = fwidth(al), fy = fwidth(y), px = FH / max(fy, 1e-4);
     alb = C_GREIGE;
@@ -3598,6 +3612,7 @@ void main() {
       float wm = (band(bx, 0.18, 0.48, fb) + band(bx, 0.52, 0.82, fb)) * band(yy, 0.9, 2.3, fy) * smoothstep(4.0, 6.0, px);
       float on = step(hash(vec2(floor(ls / (SW * 0.5)) + si * 7.0 + off, fl) + vTex.w * 3.1), 0.35);
       alb = mix(alb, uGlass, wm); lit = uNight * wm * on; gm = wm;
+      { float im = smoothstep(8.0, 16.0, px); wroom = wm * im * roomIM(vec2(bx, yy / FH), vec2(SW * 0.5, FH), vv, nrm, hash(vec2(floor(ls / (SW * 0.5)) + si * 7.0 + off, fl) + 1.7), on); lit *= 1.0 - 0.8 * im; }
       alb = mix(alb, brown && mod(fl, 5.0) < 0.5 ? C_BROWN : C_WHITE, band(yy, -0.01, 0.22, fy) * smoothstep(2.0, 3.0, px)); }
     if (y >= VOID) { float j = floor(al / SW + 0.5), dj = abs(al - j * SW), tl = mod(j - 1.0 + off, 3.0), tr = mod(j + off, 3.0);   // frame strips at stack joints
       vec3 fc = plain < 0.5 && (tl < 0.5 || tr < 0.5) ? C_BROWN : (tl > 1.5 || tr > 1.5) ? C_WHITE : vec3(-1.0);
@@ -3611,7 +3626,8 @@ void main() {
     if (y < CL) alb = vec3(70.0, 76.0, 84.0) / 255.0;
     else if (y < vTex.w) { float s = (y - CL) / CF, yy = fract(s) * CF; float wm = band(yy, 0.95, 2.5, fy) * smoothstep(2.0, 3.0, px);
       alb = mix(alb, vec3(86.0, 98.0, 110.0) / 255.0, wm); gm = wm; alb = mix(alb, vec3(240.0, 238.0, 232.0) / 255.0, band(yy, -0.01, 0.35, fy) * smoothstep(1.5, 2.5, px));
-      lit = uNight * wm * step(hash(vec2(floor(x * 2.0), floor(s)) + vTex.w), 0.3) * smoothstep(1.5, 3.0, px);
+      float con = step(hash(vec2(floor(x * 2.0), floor(s)) + vTex.w), 0.3); lit = uNight * wm * con * smoothstep(1.5, 3.0, px);
+      { float im = smoothstep(8.0, 16.0, px); wroom = wm * im * roomIM(vec2(fract(x * 2.0), yy / CF), vec2(3.6, CF), vv, nrm, hash(vec2(floor(x * 2.0), floor(s)) + vTex.w + 5.0), con); lit *= 1.0 - 0.8 * im; }
       alb = mix(alb, vec3(236.0, 236.0, 232.0) / 255.0, band(abs(x - floor(x + 0.5)), -1.0, 0.045, fx)); }
   } else if (mode > 8.5 && mode < 9.5) alb = mix(alb, vec3(240.0, 240.0, 236.0) / 255.0, band(vTex.y, 7.2, 8.0, fwidth(vTex.y)));
   if (uUnlit < 0.5 && mode > 9.5 && mode < 10.5) {   // trees: leaf clumps (2-octave noise on albedo + normal), darker canopy underside; trunk bark streaks
@@ -3668,7 +3684,14 @@ void main() {
     if (d > 0.0) { vis = shadowAt(vWorld, normalize(vNor)) * cloudSh(vWorld, uSun); d *= vis; } vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), v = normalize(vWorld - uEye);
     float sa = clamp(uSun.y * 5.0 + 0.5, 0.0, 1.0) * (1.0 - abs(nrm.y)) * max(0.0, dot(nrm.xz, uSun.xz) / max(length(uSun.xz), 1e-3));   // brighter sky on the sun side
     vec3 hemi = mix(vec3(0.6, 0.58, 0.54) * (1.0 + 0.12 * uWarm), 0.82 + 0.34 * uSkyMid, 0.5 + 0.5 * nrm.y) + 0.12 * sa;   // sky dome above, warm ground bounce below
-    vec3 al = toLin(alb); float ao = clamp(length(vNor), 0.25, 1.0); c = al * (uAmb * 0.3 * hemi * ao + d * tint) * SUNK + lit * vec3(1.0, 0.68, 0.27) * 0.75;
+    vec3 al = toLin(alb); float ao = clamp(length(vNor), 0.25, 1.0), hz = step(0.7, nrm.y), wet = uWet * hz * (leaf ? 0.0 : 1.0); al *= 1.0 - 0.35 * wet;   // rain: horizontal surfaces darken (wet)
+    c = al * (uAmb * 0.3 * hemi * ao + d * tint) * SUNK + lit * vec3(1.0, 0.68, 0.27) * 0.75 + wroom;
+    { vec3 hv = normalize(uSun - v); float nl = max(dot(nrm, uSun), 0.0), nh = max(dot(nrm, hv), 0.0), nv = max(dot(nrm, -v), 1e-3);   // GGX sun specular (realism M1): paint 0.65, roofs/paving 0.78, leaves 0.55, wet 0.15
+      float ro = mix(leaf ? 0.55 : hz > 0.5 ? 0.78 : 0.65, 0.15, wet), a2 = ro * ro * ro * ro, dn = nh * nh * (a2 - 1.0) + 1.0, kk = (ro + 1.0) * (ro + 1.0) / 8.0;
+      float sp = a2 / (3.14159 * dn * dn) / (4.0 * (nl * (1.0 - kk) + kk) * (nv * (1.0 - kk) + kk)) * (0.04 + 0.96 * pow(1.0 - max(dot(hv, -v), 0.0), 5.0));
+      c += vec3(1.0, 0.97, 0.9) * tint * min(sp, 40.0) * nl * uDirect * vis * SUNK * (1.0 - gm) * 0.5;
+      if (wet > 0.0) { vec3 r = reflect(v, nrm); float pm = smoothstep(0.5, 0.68, vn2(vWorld.xz * 0.12)) * step(vWorld.y, 0.6), F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);   // wet sheen + puddles: sky reflection (Fresnel)
+        c = mix(c, untone(r.y > 0.0 ? mix(fogCol(r), uSkyTop, sqrt(r.y)) : uFog), wet * clamp(0.15 + 0.8 * pm + F, 0.0, 0.85)); } }
     if (leaf) c += al * vec3(0.55, 0.7, 0.25) * 0.5 * SUNK * pow(max(0.0, dot(v, uSun)), 3.0) * uDirect * vis;   // sunlight through the canopy (backlit leaves)
     if (gm > 0.0 && abs(nrm.y) < 0.5) { vec3 n = dot(v, nrm) > 0.0 ? -nrm : nrm, r = reflect(v, n); float F = 0.04 + 0.96 * pow(1.0 - max(0.0, -dot(v, n)), 5.0);   // window glass: Fresnel sky reflection + sun glint
       vec3 sr = r.y > 0.0 ? mix(fogCol(r), uSkyTop, sqrt(r.y)) : mix(uFog, vec3(0.3, 0.32, 0.33) * (0.3 + uAmb), 0.6);
@@ -3701,7 +3724,7 @@ precision highp float; uniform vec4 uColor; out vec4 o; void main() { o = vec4(u
 // Land-use fill (fullscreen quad under the stencil): per-pixel ground point from the view ray → multi-octave mottling (grass/paving, faded by pixel footprint),
 // per-pixel haze over the true distance (was one fog value per land-use class) + sun in-scatter (as fogCol).
 const GL_GFILL_FS = `#version 300 es
-precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uFog, uSkyMid; uniform vec4 uP, uColor; uniform vec2 uRes; uniform float uBeta, uCls, uDirect, uWarm, uAmb; out vec4 o;
+precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uFog, uSkyMid; uniform vec4 uP, uColor; uniform vec2 uRes; uniform float uBeta, uCls, uDirect, uWarm, uAmb, uWet; out vec4 o;
 ` + GL_TONE + GL_CLOUD + `
 float h3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 float vn2(vec2 q) { vec3 p = vec3(q, 0.5), i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y); }
@@ -3711,6 +3734,7 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
   vec3 c = uColor.rgb; float a = uCls > 1.5 && uCls < 2.5 ? 0.5 : uCls < 1.5 ? 0.2 : 0.16; c *= 1.0 + a * n;
   if (uCls > 1.5 && uCls < 2.5) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
   float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
+  if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
   vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), L = toLin(c) * (uAmb * 0.3 * (0.82 + 0.34 * uSkyMid) + uDirect * 0.85 * max(uSun.y, 0.0) * cloudSh(vec3(w.x, 0.0, w.y), uSun) * tint) * SUNK;   // albedo lit as a level GL_FS face (linear)
   o = vec4(mix(fc, tone(L), exp(-uBeta * t)), 1.0); }`;
 // GL sky (realism 2026-10-31, L2/L4): palette gradient (skyPalette/weatherSky, display space) shaped per pixel — horizon haze band, sun-side aureole (Mie) and
@@ -4122,7 +4146,7 @@ function gpuEnv(pr, env, unlit) {
   gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); gl.uniform1f(u.uUnlit, unlit ? 1 : 0); gl.uniform1f(u.uHQ, GPU.hq ? 1 : 0);
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9); gl.uniform1f(u.uLitK, lit); gl.uniform1f(u.uExtK, clamp(0.35 + env.ambient * 1.3, 0.15, 1)); gl.uniform1f(u.uAlpha, 1);
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
-  gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); if (u.uCld) gl.uniform4f(u.uCld, ...cloudU(env)); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
+  gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); if (u.uCld) gl.uniform4f(u.uCld, ...cloudU(env)); gl.uniform1f(u.uWet, env.W.rain ? 1 : 0); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
   gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1i(u.uDep, 4); gl.uniform1f(u.uAO, 0); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
@@ -4163,7 +4187,7 @@ function gpuRender(cam, env, pxW, pxH) {
     if (re > rs0) gl.drawArrays(gl.TRIANGLES, rs0, re - rs0); if (!any) continue; const L = list[0].L;
     const col = GROUND_ALB[L.c], G = GPU.gfill;   // fill: per-pixel texture + haze (GL_GFILL_FS)
     gl.colorMask(true, true, true, true); gl.stencilMask(0xff); gl.stencilFunc(gl.NOTEQUAL, 2, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE); gpuCam(G, cam, NEAR, FAR); gl.uniform1f(G.u.uClip, 1); gl.uniform4f(G.u.uColor, col[0] / 255, col[1] / 255, col[2] / 255, 1); gl.uniform1f(G.u.uCls, L.c);
-    gl.uniform2f(G.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform3f(G.u.uSun, ...env.sunVec); gl.uniform3f(G.u.uFog, ...env.sky.hor.map(v => v / 255)); gl.uniform1f(G.u.uBeta, env.beta); gl.uniform1f(G.u.uDirect, env.direct); gl.uniform1f(G.u.uWarm, env.warm); gl.uniform1f(G.u.uAmb, env.ambient); gl.uniform4f(G.u.uCld, ...cloudU(env)); gl.uniform3f(G.u.uSkyMid, ...env.sky.mid.map(v => v / 255));
+    gl.uniform2f(G.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform3f(G.u.uSun, ...env.sunVec); gl.uniform3f(G.u.uFog, ...env.sky.hor.map(v => v / 255)); gl.uniform1f(G.u.uBeta, env.beta); gl.uniform1f(G.u.uDirect, env.direct); gl.uniform1f(G.u.uWarm, env.warm); gl.uniform1f(G.u.uAmb, env.ambient); gl.uniform4f(G.u.uCld, ...cloudU(env)); gl.uniform1f(G.u.uWet, env.W.rain ? 1 : 0); gl.uniform3f(G.u.uSkyMid, ...env.sky.mid.map(v => v / 255));
     gpuAttrib(G, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); gl.useProgram(F.p); }
   gl.stencilMask(0); gl.stencilFunc(gl.EQUAL, 0, 2); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);   // reflections: city mirrored in y, water pixels only
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gl.uniform1f(M.u.uMirror, 1); gl.uniform1f(M.u.uMirA, env.night ? 0.75 : 0.5);
