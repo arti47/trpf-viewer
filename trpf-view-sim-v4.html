@@ -2603,7 +2603,10 @@ function setWalk(on) {
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   walkUI(on); renderAll();
 }
-function walkUI(on) { $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); }
+// Walk joystick + Run chip sit 10 px above the time bar wherever it overlaps them (phone dock height varies with its rows)
+function padPlace() { const wp = $('walkPad'), tb = $('timeBar'), par = wp && (wp.offsetParent || wp.parentElement); if (!par || !tb || !tb.offsetHeight) return; const P = par.getBoundingClientRect(), T = tb.getBoundingClientRect(), b = T.left < P.left + 150 ? P.bottom - T.top + 10 : 14; wp.style.setProperty('bottom', `${Math.max(14, Math.round(b))}px`, 'important'); }
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(padPlace).observe($('timeBar')); window.addEventListener('resize', padPlace);
+function walkUI(on) { $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); $('walkBtn').innerHTML = on ? `${ic('x')}<span>Stop</span>` : `${ic('walk')}<span>Walk</span>`; $('walkMap').style.display = $('walkPad').style.display = on ? '' : 'none'; if (on) requestAnimationFrame(padPlace); document.querySelector('.canvas-pane-bottom').classList.toggle('walking', on); }
 // Resume after refresh (TY 2026-10-30 "remain in the previous spot"): viewer state (spot/position, floor, heading, tilt, lens, posture, room interior, windows, walk X/Y/Z, time, date) in localStorage `trpf134.view`;
 // saved every 2 s when changed + on pagehide/hidden; restored in initApp2 before the first render. Date saved as 'today' when it was today (a later visit opens on its own today). World/scenario not saved.
 const VIEW_KEYS = ['spot', 'vx', 'vz', 'obsFloor', 'heading', 'pitchDeg', 'focalLength', 'standDist', 'eyeOffset', 'posture', 'showBalcony', 'winOpen', 'hour'];
