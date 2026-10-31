@@ -91,9 +91,9 @@
     .fstrip { position: absolute; right: 10px; top: 110px; height: calc(100% - 186px); width: 46px; z-index: 13; touch-action: none; cursor: ns-resize; outline: none; transition: opacity .3s; }
     .fstrip:focus-visible { outline: 2px solid var(--accent); border-radius: var(--r2); }
     .ov-time { position: absolute; left: 10px; right: 10px; bottom: 12px; margin: 0 auto; max-width: 600px; z-index: 14; display: flex; align-items: center; gap: 10px; background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: var(--r3); padding: 7px 8px 7px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.3); transition: opacity .3s; }
-    .tb-track { position: relative; flex: 1; min-width: 0; height: 34px; }
+    .tb-track { position: relative; flex: 1; min-width: 0; height: 34px; touch-action: none; cursor: ew-resize; }
     .tb-track canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 9px; }
-    .tb-track input[type=range] { position: absolute; inset: 0; height: 100%; margin: 0; }
+    .tb-track input[type=range] { position: absolute; inset: 0; height: 100%; margin: 0; pointer-events: none; }
     .tb-track input[type=range]::-webkit-slider-runnable-track { background: transparent; border: 0; height: 34px; }
     .tb-track input[type=range]::-moz-range-track { background: transparent; border: 0; height: 34px; }
     .tb-track input[type=range]::-webkit-slider-thumb { margin-top: 3px; width: 8px; height: 28px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--sun), 0 2px 8px rgba(0,0,0,.5); }
@@ -4063,7 +4063,13 @@ perspectiveCanvas.addEventListener('pointerup', e => { const d = drag3D; if (d &
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
 bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
-bind('inlineHour', v => { state.hour = parseFloat(v); });
+// Time scrubber: pointer drag anywhere on the track (iOS range inputs only move when the 6 px thumb itself is grabbed); while dragging only the 3D view redraws (lighting env refreshed), full render on release
+function hourSet(h, fast) { h = clamp(Math.round(h * 4) / 4, 5, 23); if (h === state.hour) return; state.hour = h; $('inlineHour').value = h; $('inlineHourVal').textContent = fmtHour(h); if (!lastMath) return renderAll(); lastMath.env = lightingEnv(); if (!fast) return renderView(); clearTimeout(idleT); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawFast(lastMath); }); }
+$('inlineHour').addEventListener('input', e => hourSet(parseFloat(e.target.value)));
+(() => { const tr = $('timeTrack').parentElement; let id = null; const at = e => { const r = tr.getBoundingClientRect(); return 5 + clamp((e.clientX - r.left - 4) / Math.max(1, r.width - 8), 0, 1) * 18; };
+  tr.addEventListener('pointerdown', e => { if (e.button > 0) return; e.preventDefault(); e.stopPropagation(); id = e.pointerId; tr.setPointerCapture(id); hourSet(at(e), true); });
+  tr.addEventListener('pointermove', e => { if (e.pointerId === id) hourSet(at(e), true); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => tr.addEventListener(t, e => { if (e.pointerId !== id) return; id = null; renderAll(); })); })();
 const setMonth = mo => { const [y, , d] = state.dateStr.split('-').map(Number), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); state.dateStr = `${y}-${String(mo).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`; renderAll(); };   // keep day, clamp to month length
 $('glassSelect').addEventListener('change', e => { state.glass = e.target.value; renderAll(); });
 $('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
