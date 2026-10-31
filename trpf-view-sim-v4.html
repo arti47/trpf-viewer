@@ -2465,6 +2465,11 @@ function liftPanel() {
     `<button data-d="1" title="Open doors" style="${bs}rgba(255,255,255,.14);background:rgba(255,255,255,.04);grid-column:span 2">◀|▶</button><button data-d="0" title="Close doors" style="${bs}rgba(255,255,255,.14);background:rgba(255,255,255,.04);grid-column:span 2">▶|◀</button>`; }
 // Void deck / grounds walk test: inside the TRPF site, clear of ground-storey prisms (columns, cores, MSCP, ESS, posts, bin centres…) by the body radius
 let GOBS = { t: null, a: [] };
+let OVH = { t: null, a: [] };
+const tiltMax = () => { const w = state.walk; if (!w || !onGround() || Math.abs(w.Z || 0) > 0.3 || groundIndoor()) return 30;   // look far up only walking outdoors on the ground, with nothing overhead
+  if (OVH.t !== TRPF) OVH = { t: TRPF, a: TRPF.filter(P => P.base >= 2) }; const [x, z] = P2W(w.X, w.Y);
+  for (const P of OVH.a) { if (x < P.minx || x > P.maxx || z < P.minz || z > P.maxz) continue; if (pointIn(P, x, z)) return 30; } return 85; };
+const tiltCap = () => { const m = tiltMax(); if (state.pitchDeg > m) state.pitchDeg = m; const sl = $('pitchSlider'); if (sl && +sl.max !== m) sl.max = m; };
 const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor && !P.wlift) }; return GOBS.a; };   // lift core: plan walls (GROUND_WALLS + liftWalls) collide instead
 const groundFree = (X, Y, r) => { const [x, z] = P2W(X, Y); if (!ringIn(GEO.trpf, x, z)) return false; r = r ? Math.max(r, 0.25) : 0;
   for (const P of groundObs()) { if (x < P.minx - r || x > P.maxx + r || z < P.minz - r || z > P.maxz + r) continue; if (pointIn(P, x, z)) return false; if (r > 0) { for (let i = 0, j = P.n - 1; i < P.n; j = i++) if (segD(x, z, P.xs[j], P.zs[j], P.xs[i], P.zs[i]) < r) return false; } } return true; };
@@ -4013,8 +4018,8 @@ function renderAll() { if (renderPending) return; renderPending = true; requestA
 let viewPending = false, idleT = 0;
 const PIN_VIS = { m: new Map(), fast: false };   // pin anchor visible through the room (name → bool), from the last full render
 const drawFast = m => { PIN_VIS.fast = true; try { drawPerspective(m); } finally { PIN_VIS.fast = false; } };
-function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawFast(lastMath); }); }
-function renderNow() { renderPending = false; const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
+function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; tiltCap(); if (!renderPending) drawFast(lastMath); }); }
+function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -4030,7 +4035,7 @@ profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e);
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
 let drag3D = null;
 perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX, y: e.clientY, hd: state.heading, p: state.pitchDeg, t: performance.now() }; perspectiveCanvas.setPointerCapture(e.pointerId); });
-perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 85) * 2) / 2; renderView(); });
+perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, tiltMax()) * 2) / 2; renderView(); });
 perspectiveCanvas.addEventListener('pointerup', e => { const d = drag3D; if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8 && performance.now() - d.t < 500) { const { x, y } = localXY(perspectiveCanvas, e); if (state.walk) { if (doorTap(x, y)) { state.heading = d.hd; state.pitchDeg = d.p; } } else tapView(x, y); } });   // tap (not drag) → door
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
@@ -4068,7 +4073,7 @@ $('facadeToggle').addEventListener('change', e => { state.facadeLimit = e.target
 const setPlanMode = md => { state.planMode = md; resizeCanvases(); };
 $('planSiteBtn').addEventListener('click', () => setPlanMode('site')); $('planAreaBtn').addEventListener('click', () => setPlanMode('area'));
 $('levelBtn').addEventListener('click', () => { state.pitchDeg = 0; renderAll(); });
-$('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m.binding) { state.pitchDeg = clamp(Math.round(m.binding.angleDeg * 2) / 2, -85, 85); renderAll(); } });
+$('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m.binding) { state.pitchDeg = clamp(Math.round(m.binding.angleDeg * 2) / 2, -85, tiltMax()); renderAll(); } });
 document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', () => { const t = b.dataset.time; state.hour = t === 'day' ? 13 : t === 'night' ? 21 : Math.round((findSunsetHour() - 0.2) * 4) / 4; renderAll(); }));
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
