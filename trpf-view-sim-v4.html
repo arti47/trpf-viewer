@@ -1065,11 +1065,14 @@ function blkOutline(B, dil, tol, cl = 0) { const c = 0.5, xs = B.boxes.flatMap(b
   if (cl) { const mo = (src, v) => { const o = new Uint8Array(W * H); for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let r = !v; for (let dj = -cl; dj <= cl && r !== v; dj++) for (let di = -cl; di <= cl; di++) { const a = i + di, b = j + dj, q = a >= 0 && a < W && b >= 0 && b < H && src[b * W + a]; if (!!q === v) { r = v; break; } } o[j * W + i] = r ? 1 : 0; } return o; };   // closing: dilate then erode (fills notches/gaps < 2·cl cells)
     const Cg = mo(mo(G, true), false); G.set(Cg); }
   for (const [a0, b0, a1, b1] of B.voids || []) for (let j = Math.max(0, Math.round((b0 - z0) / c)); j < Math.min(H, Math.round((b1 - z0) / c)); j++) for (let i = Math.max(0, Math.round((a0 - x0) / c)); i < Math.min(W, Math.round((a1 - x0) / c)); i++) G[j * W + i] = 0;   // open air (32A slots/ends)
+  return gridLoops(G, W, H, x0, z0, c, tol); }
+// raster (Uint8 cells, W × H, origin x0/z0, cell c) → boundary loops (filled cells on the left), Douglas–Peucker tol; holes (cw) dropped unless holes
+function gridLoops(G, W, H, x0, z0, c, tol, holes = false) {
   const f = (i, j) => i >= 0 && i < W && j >= 0 && j < H && G[j * W + i], E = new Map(), k = (i, j) => i + ',' + j, add = (a, b, p, q) => { const K = k(a, b); (E.get(K) || E.set(K, []).get(K)).push([p, q]); };
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) if (f(i, j)) { if (!f(i, j - 1)) add(i, j, i + 1, j); if (!f(i + 1, j)) add(i + 1, j, i + 1, j + 1); if (!f(i, j + 1)) add(i + 1, j + 1, i, j + 1); if (!f(i - 1, j)) add(i, j + 1, i, j); }
   const out = []; for (const [K0, L0] of E) while (L0.length) { const [si, sj] = K0.split(',').map(Number), loop = [[si, sj]]; let cur = L0.pop();
     while (cur) { const [p, q] = cur; if (p === si && q === sj) break; loop.push([p, q]); const L = E.get(k(p, q)); cur = L && L.pop(); }
-    let A = 0; for (let i = 0; i < loop.length; i++) { const [a, b] = loop[i], [d, e] = loop[(i + 1) % loop.length]; A += a * e - d * b; } if (A <= 0) continue;   // holes (cw) dropped
+    let A = 0; for (let i = 0; i < loop.length; i++) { const [a, b] = loop[i], [d, e] = loop[(i + 1) % loop.length]; A += a * e - d * b; } if (A <= 0 && !holes) continue;   // holes (cw) dropped
     const P = loop.map(([i, j]) => [x0 + i * c, z0 + j * c]), dp = (pts, t) => { if (pts.length < 3) return pts; const [a, b] = [pts[0], pts[pts.length - 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9; let m = 0, mi = 0;
       for (let i = 1; i < pts.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - pts[i][1]) - (a[0] - pts[i][0]) * (b[1] - a[1])) / L; if (d > m) { m = d; mi = i; } } return m > t ? dp(pts.slice(0, mi + 1), t).slice(0, -1).concat(dp(pts.slice(mi), t)) : [a, b]; };
     let far = 0, fd = 0; P.forEach((p, i) => { const d = Math.hypot(p[0] - P[0][0], p[1] - P[0][1]); if (d > fd) { fd = d; far = i; } });
@@ -1337,6 +1340,129 @@ function bridgeKit() {
   return (BRIDGE_KIT = { T, lamps });
 }
 function gpuBridges(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of bridgeKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
+// Road detail (TY 2026-10-31 "roads don't have proper kerbs, lines and markings; expressway not realistic"): Singapore style (LTA: lane / centre / edge / stop lines white, yellow = no-parking kerb lines);
+// all sizes, dash lengths and spacings are estimates. Built once for the at-grade OSM ways near #134 (render only, physics/metrics unchanged):
+// markings ≤ RK_R (painter quads over the asphalt, own tiled buffer GPU.mark): lane dividers dashed, two-way centre double white (cls ≤ 2) / dashed (cls 3), kerbside double (cls ≤ 2) / single (cls 3)
+// yellow lines, expressway edge lines white; junction arms (arms ≥ 3 at a shared OSM node): zebra crossing, stop line over the inbound lanes, lane arrows (rightmost lane right-turn) on cls ≤ 2.
+// 3D (opaque city range, tiled + culled, casts shadows) ≤ RK_K: 0.2 × 0.15 m concrete kerbs, single-arm lamp posts at the night-lamp positions; expressway (cls 0) ≤ RK_X: F-shape concrete
+// median barrier (side facing the opposite carriageway), W-beam guardrail on posts (outer side), sign gantries every ~700 m (green boards), lamp posts on the median barrier every 40 m.
+// Lines stop where they enter another way's ribbon (except plain continuations) and inside a junction's stop line. Inside the site plan image (ribbons there replaced by SITE_ROADS):
+// markings only where they fall ≥ 0.4 m inside the site-road mask, kerbs along the mask edge (0.5 m raster → loops incl. islands, DP 0.25 m).
+const RK_R = 1500, RK_K = 500, RK_X = 2500, RK_L = 450;   // markings, kerbs, expressway kit, lamp-post geometry (beyond RK_L: night lamp sprite only)
+let ROAD_KIT = null;
+function roadKit() {
+  if (ROAD_KIT) return ROAD_KIT; const [ux, uz] = UNIT134, cc = v => v.map(q => q / 255), M = glArr(), T = [], lamps = [], lit = new Set(), up = [0, 1, 0], z4 = [0, 0, 0, 0];
+  const WH = cc([228, 228, 222]), YE = cc([228, 180, 46]), KB = cc([186, 184, 176]), CON = cc([200, 198, 190]), STL = cc([172, 176, 180]), POLE = cc([150, 154, 158]), GRN = cc([16, 110, 70]), GRY = cc([118, 122, 126]);
+  const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, tri = (a, b, d, n, col) => T.push([a, b, d, n, col]), quad = (a, b, d, e, n, col) => { tri(a, b, d, n, col); tri(a, d, e, n, col); };
+  const box = (cx, cz, y0, y1, ux, uz, hu, hv, col, fc) => { const V = [-uz, ux], p = (su, sv, y) => [cx + ux * su * hu + V[0] * sv * hv, y, cz + uz * su * hu + V[1] * sv * hv], R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];   // oriented box (U along, V across); fc = colour of the −U face
+    for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2], n = nz([ux * m[0] + V[0] * m[1], 0, uz * m[0] + V[1] * m[1]]); quad(p(a0, b0, y0), p(a1, b1, y0), p(a1, b1, y1), p(a0, b0, y1), n, fc && m[0] < -0.5 ? fc : col); }
+    quad(...R.map(([a, b]) => p(a, b, y1)), [0, 1, 0], col); if (y0 > 0.05) quad(...R.map(([a, b]) => p(a, b, y0)), [0, -1, 0], col); };
+  const cyl = (x, z, y0, y1, r, col) => { for (let k = 0; k < 8; k++) { const t0 = k * Math.PI / 4, t1 = t0 + Math.PI / 4, tm = t0 + Math.PI / 8; quad([x + r * Math.cos(t0), y0, z + r * Math.sin(t0)], [x + r * Math.cos(t1), y0, z + r * Math.sin(t1)], [x + r * Math.cos(t1), y1, z + r * Math.sin(t1)], [x + r * Math.cos(t0), y1, z + r * Math.sin(t0)], [Math.cos(tm), 0, Math.sin(tm)], col); } };
+  // ways: centre-line arc, segment frames [nx, nz, tx, tz] (n = left normal), mitered vertex offsets (scaled, ≤ 2×)
+  const W = []; ROADS.forEach(R => { if (R.minx > ux + RK_X || R.maxx < ux - RK_X || R.minz > uz + RK_X || R.maxz < uz - RK_X) return; const p = R.pts, n = p.length / 2; if (n < 2) return; const sn = [], A = [0];
+    for (let i = 0; i + 1 < n; i++) { const ex = p[2 * i + 2] - p[2 * i], ez = p[2 * i + 3] - p[2 * i + 1], L = Math.hypot(ex, ez) || 1e-6; sn.push([-ez / L, ex / L, ex / L, ez / L]); A.push(A[i] + L); }
+    const mv = []; for (let i = 0; i < n; i++) { const a = sn[Math.max(0, i - 1)], b = sn[Math.min(n - 2, i)]; let mx = a[0] + b[0], mz = a[1] + b[1]; const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l; const k = 1 / Math.max(0.5, mx * b[0] + mz * b[1]); mv.push([mx * k, mz * k]); }
+    const sIn = []; for (let i = 0; i + 1 < n; i++) sIn.push(ringIn(SITE_IMG, (p[2 * i] + p[2 * i + 2]) / 2, (p[2 * i + 1] + p[2 * i + 3]) / 2));
+    W.push({ R, p, n, sn, A, mv, sIn, hw: R.w / 2, c: R.c, len: A[n - 1], lanes: Math.max(1, Math.round((R.w - 1.2) / 3.4)) }); });
+  const GC = 25, gk = (i, j) => (i + 5000) * 10000 + j + 5000, G = new Map(), cell = (x, z) => G.get(gk(Math.floor(x / GC), Math.floor(z / GC))) || [];
+  W.forEach((w, wi) => { for (let i = 0; i + 1 < w.n; i++) { const p = w.p, r = w.hw + 3, x0 = Math.min(p[2 * i], p[2 * i + 2]) - r, x1 = Math.max(p[2 * i], p[2 * i + 2]) + r, z0 = Math.min(p[2 * i + 1], p[2 * i + 3]) - r, z1 = Math.max(p[2 * i + 1], p[2 * i + 3]) + r;
+    for (let a = Math.floor(x0 / GC); a <= Math.floor(x1 / GC); a++) for (let b = Math.floor(z0 / GC); b <= Math.floor(z1 / GC); b++) { const k = gk(a, b); (G.get(k) || G.set(k, []).get(k)).push(wi, i); } } });
+  // shared OSM nodes: 2 arms of 2 ways = plain continuation (not clipped against each other); ≥ 3 arms = junction
+  const node = new Map(); W.forEach((w, wi) => { for (let i = 0; i < w.n; i++) { const k = Math.round(w.p[2 * i] * 20) + ',' + Math.round(w.p[2 * i + 1] * 20); let e = node.get(k); if (!e) node.set(k, e = { x: w.p[2 * i], z: w.p[2 * i + 1], arms: [] }); if (i > 0) e.arms.push([wi, i, -1]); if (i < w.n - 1) e.arms.push([wi, i, 1]); } });
+  const cont = new Set(), J = [], JG = new Map();
+  for (const e of node.values()) { if (e.arms.length === 2 && e.arms[0][0] !== e.arms[1][0]) { cont.add(e.arms[0][0] + '|' + e.arms[1][0]); cont.add(e.arms[1][0] + '|' + e.arms[0][0]); }
+    if (e.arms.length >= 3) { e.ways = new Set(e.arms.map(a => a[0])); e.r = Math.max(...e.arms.map(a => W[a[0]].hw)) + 1; J.push(e); const k = gk(Math.floor(e.x / GC), Math.floor(e.z / GC)); (JG.get(k) || JG.set(k, []).get(k)).push(e); } }
+  const other = (wi, x, z, m) => { const L = cell(x, z); for (let q = 0; q < L.length; q += 2) { const wj = L[q]; if (wj === wi || cont.has(wi + '|' + wj)) continue; const w = W[wj], p = w.p, i = L[q + 1]; if (segD(x, z, p[2 * i], p[2 * i + 1], p[2 * i + 2], p[2 * i + 3]) < w.hw + m) return true; } return false; };
+  const nearJ = (wi, x, z) => { const a = Math.floor(x / GC), b = Math.floor(z / GC); for (let i = a - 1; i <= a + 1; i++) for (let j = b - 1; j <= b + 1; j++) for (const e of JG.get(gk(i, j)) || []) if (e.ways.has(wi) && Math.hypot(x - e.x, z - e.z) < e.r + 4.5) return true; return false; };
+  // site-plan road mask (0.5 m) for markings inside the plan image
+  const sb = [Infinity, -Infinity, Infinity, -Infinity]; for (let i = 0; i < SITE_IMG.length; i += 2) { sb[0] = Math.min(sb[0], SITE_IMG[i]); sb[1] = Math.max(sb[1], SITE_IMG[i]); sb[2] = Math.min(sb[2], SITE_IMG[i + 1]); sb[3] = Math.max(sb[3], SITE_IMG[i + 1]); }
+  const MC = 0.5, MW = Math.ceil((sb[1] - sb[0]) / MC) + 2, MH = Math.ceil((sb[3] - sb[2]) / MC) + 2, MX = sb[0] - MC, MZ = sb[2] - MC, MK = new Uint8Array(MW * MH);
+  for (const r of SITE_ROADS) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); z0 = Math.min(z0, r[i + 1]); z1 = Math.max(z1, r[i + 1]); }
+    for (let j = Math.max(0, Math.floor((z0 - MZ) / MC)); j <= Math.min(MH - 1, Math.ceil((z1 - MZ) / MC)); j++) for (let i = Math.max(0, Math.floor((x0 - MX) / MC)); i <= Math.min(MW - 1, Math.ceil((x1 - MX) / MC)); i++) if (!MK[j * MW + i] && ringIn(r, MX + (i + 0.5) * MC, MZ + (j + 0.5) * MC)) MK[j * MW + i] = 1; }
+  { const seen = new Uint8Array(MW * MH), AS = cc([70, 72, 78]);   // pinholes in the plan mask (text / symbols on the plan, < 20 m²) → asphalt patches (painter, before the lines) + filled for kerbs/markings
+    for (let s0 = 0; s0 < MW * MH; s0++) { if (MK[s0] || seen[s0]) continue; const st = [s0], comp = []; seen[s0] = 1; let edge = false;
+      while (st.length) { const q = st.pop(), i = q % MW, j = (q - i) / MW; comp.push(q); if (i === 0 || j === 0 || i === MW - 1 || j === MH - 1) edge = true;
+        for (const t of [q - 1, q + 1, q - MW, q + MW]) if (t >= 0 && t < MW * MH && !MK[t] && !seen[t] && Math.abs((t % MW) - i) <= 1) { seen[t] = 1; st.push(t); } }
+      if (edge || comp.length > 80) continue; for (const q of comp) { MK[q] = 1; const i = q % MW, j = (q - i) / MW, x = MX + i * MC - 0.3, z = MZ + j * MC - 0.3, e = MC + 0.6; M.quad([x, 0.02, z], [x + e, 0.02, z], [x + e, 0.02, z + e], [x, 0.02, z + e], up, AS, z4, z4, z4, z4); } } }
+  const mk = (x, z) => { const i = Math.floor((x - MX) / MC), j = Math.floor((z - MZ) / MC); return i >= 0 && i < MW && j >= 0 && j < MH && MK[j * MW + i] === 1; }, siteOn = (x, z, m) => mk(x, z) && mk(x + m, z) && mk(x - m, z) && mk(x, z + m) && mk(x, z - m);
+  // arc helpers along a way at lateral offset s (+ = left of the OSM direction)
+  const segOf = (w, a) => { let lo = 0, hi = w.n - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (w.A[m] <= a) lo = m; else hi = m - 1; } return lo; };
+  const posAt = (w, a, s) => { const i = segOf(w, a), p = w.p, f = clamp((a - w.A[i]) / (w.A[i + 1] - w.A[i] || 1e-6), 0, 1), x0 = p[2 * i] + w.mv[i][0] * s, z0 = p[2 * i + 1] + w.mv[i][1] * s; return [x0 + (p[2 * i + 2] + w.mv[i + 1][0] * s - x0) * f, z0 + (p[2 * i + 3] + w.mv[i + 1][1] * s - z0) * f, i]; };
+  const path = (w, a0, a1, s) => { const P0 = posAt(w, a0, s), P1 = posAt(w, a1, s), out = [[P0[0], P0[1], w.sn[P0[2]][0], w.sn[P0[2]][1]]];
+    for (let i = P0[2] + 1; i <= P1[2]; i++) if (w.A[i] > a0 && w.A[i] < a1) out.push([w.p[2 * i] + w.mv[i][0] * s, w.p[2 * i + 1] + w.mv[i][1] * s, w.mv[i][0], w.mv[i][1]]);
+    out.push([P1[0], P1[1], w.sn[P1[2]][0], w.sn[P1[2]][1]]); return out; };
+  const strip = (pts, h, col, y = 0.03) => { for (let k = 0; k + 1 < pts.length; k++) { const [ax, az, anx, anz] = pts[k], [bx, bz, bnx, bnz] = pts[k + 1]; M.quad([ax - anx * h, y, az - anz * h], [bx - bnx * h, y, bz - bnz * h], [bx + bnx * h, y, bz + bnz * h], [ax + anx * h, y, az + anz * h], up, col, z4, z4, z4, z4); } };
+  const runs = (w, s, ok, a0 = 0, a1 = w.len) => { const out = []; let r0 = -1, last = -1; for (let a = a0; a <= a1 + 1e-6; a += 1) { const aa = Math.min(a, a1), [x, z, i] = posAt(w, aa, s); if (ok(x, z, i)) { if (r0 < 0) r0 = aa; last = aa; } else if (r0 >= 0) { if (last > r0) out.push([r0, last]); r0 = -1; } } if (r0 >= 0 && last > r0) out.push([r0, last]); return out; };
+  const line = (w, s, ok, hwid, col, dash) => { for (const [r0, r1] of runs(w, s, ok)) { if (!dash) { strip(path(w, r0, r1, s), hwid, col); continue; } const [D, Gp, ph] = dash, P = D + Gp;
+    for (let d = Math.floor((r0 - ph) / P) * P + ph; d < r1; d += P) { const a = Math.max(d, r0), b = Math.min(d + D, r1); if (b - a > 0.3) strip(path(w, a, b, s), hwid, col); } } };
+  const near = (x, z, r) => Math.hypot(x - ux, z - uz) < r, midNear = (w, r) => { const q = posAt(w, w.len / 2, 0); return near(q[0], q[1], r); };
+  // extrude a convex cross-section [[s, y], …] (open polyline) along a run (3D, opaque city)
+  const extrude = (w, a0, a1, prof, col) => { const P = prof.map(([s]) => path(w, a0, a1, s)), cs = prof.reduce((q, v) => q + v[0], 0) / prof.length, cy = prof.reduce((q, v) => q + v[1], 0) / prof.length;
+    for (let e = 0; e + 1 < prof.length; e++) { const [sa, ya] = prof[e], [sb2, yb] = prof[e + 1]; let ns = yb - ya, ny = -(sb2 - sa); if (ns * ((sa + sb2) / 2 - cs) + ny * ((ya + yb) / 2 - cy) < 0) { ns = -ns; ny = -ny; }
+      for (let k = 0; k + 1 < P[e].length; k++) { const A0 = P[e][k], B0 = P[e][k + 1], A1 = P[e + 1][k], B1 = P[e + 1][k + 1], n = nz([A0[2] * ns, ny, A0[3] * ns]); quad([A0[0], ya, A0[1]], [B0[0], ya, B0[1]], [B1[0], yb, B1[1]], [A1[0], yb, A1[1]], n, col); } } };
+  const partner = (w, wi) => { let L = 0, R = 0, k = 0; for (let i = 0; i + 1 < w.n; i++) { const p = w.p, mx = (p[2 * i] + p[2 * i + 2]) / 2, mz = (p[2 * i + 1] + p[2 * i + 3]) / 2, [nx, nzz, tx, tz] = w.sn[i]; k++; const Lc = []; for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) Lc.push(...cell(mx + da * GC, mz + db * GC));
+      for (let q = 0; q < Lc.length; q += 2) { const wj = Lc[q], v = W[wj]; if (wj === wi || (v.c === 0) !== (w.c === 0) || Math.abs(v.c - w.c) > 1) continue; const j = Lc[q + 1], o = v.sn[j]; if (o[2] * tx + o[3] * tz > -0.94) continue;
+        const d = (v.p[2 * j] - mx) * nx + (v.p[2 * j + 1] - mz) * nzz, lat = Math.abs(d); if (lat > w.hw + v.hw - 1 && lat < w.hw + v.hw + 22 && segD(mx, mz, v.p[2 * j], v.p[2 * j + 1], v.p[2 * j + 2], v.p[2 * j + 3]) < lat + 2) { if (d > 0) L++; else R++; break; } } }
+    return L + R >= Math.max(1, k * 0.4) ? (L >= R ? 1 : -1) : 0; };
+  W.forEach((w, wi) => {
+    if (w.R.minx > ux + RK_R || w.R.maxx < ux - RK_R || w.R.minz > uz + RK_R || w.R.maxz < uz - RK_R) { if (w.c !== 0) return; }
+    const hw = w.hw, e = Math.max(1, hw - 0.6), med = w.med = partner(w, wi), one = w.c === 0 || med !== 0, ph = hash01(w.p[0], w.p[1], 3) * 6;
+    const inS = (x, z, i) => w.sIn[i] || ringIn(SITE_IMG, x, z), mOK = (x, z, i) => near(x, z, RK_R) && !other(wi, x, z, 1.0) && !nearJ(wi, x, z) && (inS(x, z, i) ? siteOn(x, z, 0.4) : true);
+    const eOK = m => (x, z, i) => near(x, z, RK_R) && !inS(x, z, i) && !other(wi, x, z, m);
+    if ((w.c <= 3 || w.lanes >= 2) && midNear(w, RK_R + w.len)) {   // cls 4 (minor/unclassified, e.g. Tanjong Rhu Rd) with ≥ 2 lanes: as cls 3
+      const D = w.c === 0 ? [4, 8, ph] : [2, 4, ph], lw = w.c === 0 ? 0.075 : 0.06, n = w.lanes;
+      if (one) for (let k = 1; k < n; k++) line(w, -e + k * 2 * e / n, mOK, lw, WH, D);
+      else if (n >= 2) { const ns = Math.max(1, Math.floor(n / 2)); if (w.c <= 2) { line(w, 0.11, mOK, 0.05, WH); line(w, -0.11, mOK, 0.05, WH); } else line(w, 0, mOK, 0.06, WH, D);
+        for (let k = 1; k < ns; k++) for (const sg of [-1, 1]) line(w, sg * k * e / ns, mOK, lw, WH, D); }
+      if (w.c === 0) for (const sg of [-1, 1]) line(w, sg * (hw - 0.45), eOK(0.5), 0.075, WH);
+      else if (w.lanes >= 1) for (const sg of [-1, 1]) { if (w.c <= 2) { line(w, sg * (hw - 0.3), eOK(0.4), 0.05, YE); line(w, sg * (hw - 0.5), eOK(0.6), 0.05, YE); } else line(w, sg * (hw - 0.3), eOK(0.4), 0.05, YE); } }
+    if (w.c !== 0) { const kOK = (x, z, i) => near(x, z, RK_K) && !inS(x, z, i) && !other(wi, x, z, 0.2);   // kerbs
+      for (const sg of [-1, 1]) for (const [a, b] of runs(w, sg * (hw + 0.1), kOK)) extrude(w, a, b, [[sg * hw, 0], [sg * hw, 0.15], [sg * (hw + 0.2), 0.15], [sg * (hw + 0.2), 0]], KB);
+      // lamp posts: at the old night-lamp spacing (35 m, both sides cls ≤ 2 at 10 m, else one side at 8 m) on the footpath, arm 1.8 m over the road
+      if (midNear(w, RK_K + w.len / 2)) { lit.add(w.R); const ph2 = hash01(w.p[0], w.p[1], 5) * 35, hp = w.c <= 2 ? 10 : 8;
+        for (let a = ph2; a < w.len; a += 35) for (const sg of w.c <= 2 ? [-1, 1] : [1]) { const [x, z, i] = posAt(w, a, sg * (hw + 0.9)); if (other(wi, x, z, 0.6) || (inS(x, z, i) && mk(x, z))) continue;
+          const [hx, hz] = posAt(w, a, sg * (hw - 0.9)), [tx, tz] = [w.sn[i][2], w.sn[i][3]]; lamps.push([hx, hp - 0.22, hz, 0]); if (!near(x, z, RK_L)) continue; box(x, z, 0, hp, tx, tz, 0.09, 0.09, POLE); box((x + hx) / 2, (z + hz) / 2, hp - 0.12, hp, -w.sn[i][0], -w.sn[i][1], 0.9, 0.04, POLE); box(hx, hz, hp - 0.22, hp - 0.05, tx, tz, 0.16, 0.3, POLE); } } }
+    else {   // expressway
+      const xOK = (m, r) => (x, z, i) => near(x, z, r) && !inS(x, z, i) && !other(wi, x, z, m);
+      for (const sg of [-1, 1]) { const isMed = med === sg;
+        if (isMed) for (const [a, b] of runs(w, sg * (hw + 0.6), xOK(0.8, RK_X))) extrude(w, a, b, [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.81], [0.38, 0.81], [0.44, 0.33], [0.57, 0.08], [0.62, 0]].map(([u, y]) => [sg * (hw + 0.3 + u), y]), CON);
+        else for (const [a, b] of runs(w, sg * (hw + 0.6), xOK(0.8, 1500))) { extrude(w, a, b, [[sg * (hw + 0.55), 0.45], [sg * (hw + 0.55), 0.75], [sg * (hw + 0.63), 0.75], [sg * (hw + 0.63), 0.45]], STL);
+          for (let s = Math.ceil(a / 4) * 4; s <= b; s += 4) { const [x, z, i] = posAt(w, s, sg * (hw + 0.72)); if (near(x, z, 300)) box(x, z, 0, 0.72, w.sn[i][2], w.sn[i][3], 0.05, 0.075, STL); } } }
+      if (midNear(w, RK_X + w.len / 2)) { lit.add(w.R); const ls = med || 1, off = med ? hw + 0.61 : hw + 1.2, ph3 = hash01(w.p[0], w.p[1], 7) * 40;   // lamp posts (median barrier top, or verge)
+        for (let a = ph3; a < w.len; a += 40) { const [x, z, i] = posAt(w, a, ls * off); if (inS(x, z, i) || other(wi, x, z, 0.8)) continue; const [hx, hz] = posAt(w, a, ls * (off - 2.6)), y0 = med ? 0.81 : 0; lamps.push([hx, 11.74, hz, 0]); if (!near(x, z, 1000)) continue;
+          cyl(x, z, y0, 12, 0.12, POLE); box((x + hx) / 2, (z + hz) / 2, 11.86, 12, -ls * w.sn[i][0], -ls * w.sn[i][1], 1.3, 0.05, POLE); box(hx, hz, 11.74, 11.92, w.sn[i][2], w.sn[i][3], 0.18, 0.34, POLE); } }
+      if (w.R.w >= 8) for (let a = 150 + hash01(w.p[0], w.p[1], 9) * 500; a < w.len - 30; a += 700) {   // sign gantry: 2 posts, truss beam 6.6–7.3 m, green board(s) facing oncoming traffic
+        const [x, z, i] = posAt(w, a, 0), [tx, tz] = [w.sn[i][2], w.sn[i][3]], [nx, nzz] = [w.sn[i][0], w.sn[i][1]], pl = posAt(w, a, hw + 1.1), pr = posAt(w, a, -hw - 1.1); if (!near(x, z, RK_X) || inS(x, z, i) || other(wi, pl[0], pl[1], 0.5) || other(wi, pr[0], pr[1], 0.5)) continue;
+        for (const q of [pl, pr]) { box(q[0], q[1], 0, 7.4, tx, tz, 0.25, 0.25, GRY); box(q[0], q[1], 0, 0.4, tx, tz, 0.45, 0.45, CON); }
+        for (const dy of [6.6, 7.2]) box(x, z, dy, dy + 0.12, nx, nzz, hw + 1.1, 0.06, GRY); for (let s = -hw; s <= hw; s += 1.2) { const q = posAt(w, a, s); box(q[0], q[1], 6.72, 7.2, tx, tz, 0.04, 0.04, GRY); }
+        const bw = Math.min(9, hw * 1.1), boards = [[hw - 0.4 - bw / 2, bw]]; if (w.R.w >= 14) boards.push([-(hw - 0.4 - 2.6), 5.2]);
+        for (const [sc, wb] of boards) { const q = posAt(w, a - 0.25, sc); box(q[0], q[1], 5.0, 7.7, tx, tz, 0.07, wb / 2, GRY, GRN);
+          for (const [yy, f] of [[7.1, 0.7], [6.4, 0.55], [5.6, 0.8]]) { const r = posAt(w, a - 0.33, sc - wb * (1 - f) / 2 + wb * 0.04); box(r[0], r[1], yy, yy + 0.32, tx, tz, 0.02, wb * f / 2 - wb * 0.06, WH); } } } }
+  });
+  // junction arms: zebra crossing (3 m), stop line over the inbound half, lane arrows (cls ≤ 2)
+  for (const e of J) for (const [wi, i, dir] of e.arms) { const w = W[wi]; if (w.c === 0 || w.c > 3 || !near(e.x, e.z, RK_R)) continue; const rr = Math.max(0, ...e.arms.filter(q => q[0] !== wi).map(q => W[q[0]].hw)); if (!rr) continue;
+    const r = rr + 1, an = w.A[i], avail = dir > 0 ? w.len - an : an; if (avail < r + 14) continue; const at = (u, s) => posAt(w, an + dir * u, s), hw = w.hw, ea = Math.max(1, hw - 0.6);
+    const ok = (x, z, m) => !other(wi, x, z, m) && (ringIn(SITE_IMG, x, z) ? siteOn(x, z, 0.3) : true), seg = (u0, u1, s, h, col) => { const a0 = an + dir * u0, a1 = an + dir * u1; strip(path(w, Math.min(a0, a1), Math.max(a0, a1), s), h, col); };
+    const P = (u, s) => { const q = at(u, s); return [q[0], 0.035, q[1]]; }, tq = (u0, u1, s0, s1) => M.quad(P(u0, s0), P(u1, s0), P(u1, s1), P(u0, s1), up, WH, z4, z4, z4, z4), tr = (a, b, d) => { M.v(a, up, WH, z4); M.v(b, up, WH, z4); M.v(d, up, WH, z4); };
+    for (let s = -ea + 0.25; s <= ea - 0.25; s += 1.0) { const q = at(r + 2, s), q2 = at(r + 3.5, s); if (ok(q[0], q[1], 0) && ok(q2[0], q2[1], 0.3)) seg(r + 0.5, r + 3.5, s, 0.25, WH); }
+    const one = w.lanes >= 1 && partner(w, wi) !== 0, sig = -dir; if (one && dir > 0) continue; const [s0, s1] = one ? [-ea, ea] : w.lanes >= 2 ? [0, sig * ea].sort((a, b) => a - b) : [-ea, ea];
+    { const q = at(r + 4.5, (s0 + s1) / 2), qa = at(r + 4.5, s0), qb = at(r + 4.5, s1); if (ok(q[0], q[1], 0.5) && ok(qa[0], qa[1], 0.3) && ok(qb[0], qb[1], 0.3)) tq(r + 4.35, r + 4.65, s0, s1); }
+    if (w.c > 2) continue; const nin = one ? w.lanes : Math.max(1, Math.floor(w.lanes / 2)), lw = (s1 - s0) / nin, rho = one ? -1 : -sig;
+    for (let k = 0; k < nin; k++) { const sc = one ? s0 + (k + 0.5) * lw : sig * (k + 0.5) * Math.abs(lw), q = at(r + 9, sc); if (!ok(q[0], q[1], 0.3)) continue; const right = nin >= 2 && k === 0;
+      if (!right) { tr(P(r + 6.5, sc), P(r + 8, sc - 0.5), P(r + 8, sc + 0.5)); tq(r + 8, r + 12, sc - 0.09, sc + 0.09); }
+      else { tq(r + 9.2, r + 12, sc - 0.09, sc + 0.09); tq(r + 9.2, r + 9.38, sc, sc + rho * 0.9); tr(P(r + 9.29, sc + rho * 1.6), P(r + 8.84, sc + rho * 0.9), P(r + 9.74, sc + rho * 0.9)); } } }
+  // kerbs along the site-plan road mask (islands too), not along the image border
+  const MS = (src, v, r) => { const t = new Uint8Array(MW * MH), o = new Uint8Array(MW * MH), x = v ? 1 : 0;   // separable square dilate (v) / erode (!v), radius r cells
+    for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) { let q = 1 - x; for (let d = -r; d <= r; d++) { const a = i + d; if ((a >= 0 && a < MW ? src[j * MW + a] : 0) === x) { q = x; break; } } t[j * MW + i] = q; }
+    for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) { let q = 1 - x; for (let d = -r; d <= r; d++) { const b = j + d; if ((b >= 0 && b < MH ? t[b * MW + i] : 0) === x) { q = x; break; } } o[j * MW + i] = q; } return o; };
+  const MKs = MS(MS(MS(MS(MK, true, 2), false, 2), false, 2), true, 2);   // closing + opening (1 m): plan-mask staircase / pinholes smoothed before tracing
+  for (const lp of gridLoops(MKs, MW, MH, MX, MZ, MC, 0.5, true)) { let ar = 0; for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length]; ar += a[0] * b[1] - b[0] * a[1]; } if (Math.abs(ar) / 2 < 25) continue;
+    for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue;
+    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (polyD(SITE_IMG, mx, mz) < 1.5) continue; let ox = (b[1] - a[1]) / L, oz = -(b[0] - a[0]) / L; { const i = Math.floor((mx + ox * 0.6 - MX) / MC), j = Math.floor((mz + oz * 0.6 - MZ) / MC); if (i >= 0 && i < MW && j >= 0 && j < MH && MKs[j * MW + i]) { ox = -ox; oz = -oz; } }
+    const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L; box(mx + ox * 0.1, mz + oz * 0.1, 0, 0.15, tx, tz, L / 2 + 0.05, 0.1, KB); } }
+  return (ROAD_KIT = { M, T, lamps, lit });
+}
+function gpuRoadKit(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of roadKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of playKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
 const VD_NLAWN = pxRing([[170, 230], [1110, 130], [1110, 318], [930, 335], [880, 342], [600, 362], [300, 418], [170, 425]]);   // N lawn between Tanjong Rhu Rd and the blocks (site px)
@@ -3642,18 +3768,17 @@ function gpuInit() {
     GPU.corners = gpuBuf(new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1])); GPU.dyn = {};
     { const S = glArr(), up = [0, 1, 0], sea = [0, 0, -3, 0], c0 = [0, 0, 0], E = 36000, st = 1500;   // sea plane ±36 km (curved per vertex); land drawn over it
       for (let x = -E; x < E; x += st) for (let z = -E; z < E; z += st) S.quad([x, 0, z], [x + st, 0, z], [x + st, 0, z + st], [x, 0, z + st], up, c0, sea, sea, sea, sea); GPU.sea = gpuBuf(new Float32Array(S.a)); GPU.seaN = S.n; }
+    const RC = WC.ver === WORLD_VER && WC.e && WC.e.rk, RK = RC ? { lit: new Set(RC.lit.map(i => ROADS[i])), lamps: RC.lamps } : roadKit();   // roadKit lamps/markings from the startup cache when it hits (build ≈0.2 s desktop)
     { const L = [], SP = 35;   // night street lamps (as drawStreetLights): pool (ground glow 7 m), halo, core; every 35 m, both sides on cls ≤2 (10 m poles), else one side (8 m)
-      for (const R of ROADS) { const p = R.pts, hw = R.w / 2 + 0.6, ph = R.c <= 2 ? 10 : 8, sides = R.c <= 2 ? [-1, 1] : [1]; let s0 = hash01(p[0], p[1], 5) * SP;
+      for (const R of ROADS) { if (RK.lit.has(R)) continue; const p = R.pts, hw = R.w / 2 + 0.6, ph = R.c <= 2 ? 10 : 8, sides = R.c <= 2 ? [-1, 1] : [1]; let s0 = hash01(p[0], p[1], 5) * SP;
         for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], Lg = Math.hypot(p[i + 2] - ax, p[i + 3] - az) || 1, ux = (p[i + 2] - ax) / Lg, uz = (p[i + 3] - az) / Lg; let s = s0;
           for (; s < Lg; s += SP) for (const sd of sides) { const x = ax + ux * s - uz * hw * sd, z = az + uz * s + ux * hw * sd;
             L.push(x, 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, ph, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, ph, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6); }   // halo/core pulled 6 m toward the eye (canopies of roadside trees reach the lamp heads)
           s0 = s - Lg; } }
-      for (const [x, y, z, yr] of bridgeKit().lamps) L.push(x, yr + 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, y, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, y, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6);   // bridge / viaduct lamp heads (bridgeKit)
+      for (const [x, y, z, yr] of [...bridgeKit().lamps, ...RK.lamps]) L.push(x, yr + 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, y, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, y, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6);   // bridge / viaduct lamp heads (bridgeKit)
       GPU.lamps = gpuBuf(new Float32Array(L)); GPU.lampN = L.length / 13; }
-    { const L = [], c = [240 / 255, 240 / 255, 235 / 255, 0.55];   // lane edge lines on cls ≤2 roads (2D: within 900 m)
-      for (const R of ROADS) { if (R.c > 2) continue; const p = R.pts, hw = R.w / 2 * 0.9; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], Lg = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / Lg * hw, pz = (bx - ax) / Lg * hw;
-        L.push(ax - px, 0.08, az - pz, ...c, bx - px, 0.08, bz - pz, ...c, ax + px, 0.08, az + pz, ...c, bx + px, 0.08, bz + pz, ...c); } }
-      GPU.lanes = gpuBuf(new Float32Array(L)); GPU.laneN = L.length / 7; }
+    if (RC) { GPU.markT = RC.markT; GPU.mark = gpuBuf(RC.m); GPU.markN = RC.n; }
+    else { const K = roadKit(); GPU.markT = gpuTileSort(K.M.b, K.M.n); const m = new Float32Array(K.M.a.length ? K.M.a : [0]); GPU.mark = gpuBuf(m); GPU.markN = K.M.n; WC.rk = { m, n: K.M.n, markT: GPU.markT, lamps: K.lamps, lit: [...K.lit].map(R => ROADS.indexOf(R)) }; }   // road markings (roadKit), tiled for culling
     GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return { tx, fb }; });
     GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.mk = prog(GL_MASK_VS, GL_SH_FS); GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
@@ -3666,9 +3791,12 @@ function gpuInit() {
     const G = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], fl = [150, 150, 148].map(c => c / 255);
     [[-12000, -5200, -3300, 9000], [-12000, 12000, 1800, 12000], [2600, 12000, -1200, 1800]].forEach(([x0, x1, z0, z1]) => { const nx = 12, nz = 12; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const a = x0 + (x1 - x0) * i / nx, b = x0 + (x1 - x0) * (i + 1) / nx, c = z0 + (z1 - z0) * j / nz, d = z0 + (z1 - z0) * (j + 1) / nz; G.quad([a, 0, c], [b, 0, c], [b, 0, d], [a, 0, d], up, fl, z4, z4, z4, z4); } });
     GPU.farN = G.n; const asph = [70, 72, 78].map(c => c / 255);
-    for (const R of ROADS) { const p = R.pts, hw = R.w / 2; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / L * hw, pz = (bx - ax) / L * hw;
-      if (ringIn(SITE_IMG, (ax + bx) / 2, (az + bz) / 2)) continue;   // inside the site plan: plan roads (gpuGrounds) instead
-      G.quad([ax - px, 0, az - pz], [bx - px, 0, bz - pz], [bx + px, 0, bz + pz], [ax + px, 0, az + pz], up, asph, z4, z4, z4, z4); } }
+    for (const R of ROADS) { const p = R.pts, hw = R.w / 2, n = p.length / 2, sn = [];   // ribbons with mitered joints (≤ 2×; was one quad per segment: wedge gaps on bends)
+      for (let i = 0; i + 1 < n; i++) { const L = Math.hypot(p[2 * i + 2] - p[2 * i], p[2 * i + 3] - p[2 * i + 1]) || 1e-6; sn.push([-(p[2 * i + 3] - p[2 * i + 1]) / L, (p[2 * i + 2] - p[2 * i]) / L]); }
+      const mv = i => { const a = sn[Math.max(0, i - 1)], b = sn[Math.min(n - 2, i)]; let mx = a[0] + b[0], mz = a[1] + b[1]; const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l; const k = hw / Math.max(0.5, mx * b[0] + mz * b[1]); return [mx * k, mz * k]; };
+      for (let i = 0; i + 1 < n; i++) { const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3], [pa, qa] = mv(i), [pb, qb] = mv(i + 1);
+        if (ringIn(SITE_IMG, (ax + bx) / 2, (az + bz) / 2)) continue;   // inside the site plan: plan roads (gpuGrounds) instead
+        G.quad([ax - pa, 0, az - qa], [bx - pb, 0, bz - qb], [bx + pb, 0, bz + qb], [ax + pa, 0, az + qa], up, asph, z4, z4, z4, z4); } }
     GPU.groundN = G.n; const rv = [0, 0, -2, 0], blk = [0, 0, 0];   // ground shadow receiver: ±6 km grid, 100 m cells (follows curvature)
     GPU.recvT = []; for (let bz = -6000; bz < 6000; bz += 1000) for (let bx = -6000; bx < 6000; bx += 1000) { const s0 = G.n; for (let x = bx; x < bx + 1000; x += 100) for (let z = bz; z < bz + 1000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv); GPU.recvT.push([s0, G.n - s0, bx, bx + 1000, 0, 0.2, bz, bz + 1000]); }   // 1 km blocks (frustum-culled)
     GPU.recvN = G.n - GPU.groundN; GPU.ground = gpuBuf(new Float32Array(G.a));
@@ -3716,7 +3844,7 @@ function cityDraw(test, T = GPU.tiles) { const gl = GPU.gl; if (!T) return gl.dr
   if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
-  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
@@ -3724,18 +3852,18 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (state.showExisting) gpuLandmarks(A);
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
-  const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
+  const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
-  GPU.tiles = gpuTileSort(A.b, GPU.opN); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
+  GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck paving, driveways, plazas (wavy stripes), court, pads, jogging loop (white edges + centre line)
   const up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), poly = (r, y, col) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), z4); };
@@ -3944,7 +4072,7 @@ function gpuShadows(env) {
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
-    const lc = lightCull(L, k); gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); cityDraw(lc); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
+    const lc = lightCull(L, k); gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); cityDraw(lc); if (!k && GPU.rkT) cityDraw(lc, GPU.rkT); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
     gl.useProgram(GPU.sht.p); gpuTrees(GPU.sht, lc); }
   gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
@@ -3979,11 +4107,11 @@ function gpuRender(cam, env, pxW, pxH) {
   gpuAttrib(M, GPU.city); cityDraw(camCull(cam, true)); gl.drawArrays(gl.TRIANGLES, GPU.opN, (CMP.on && GPU.newR[1] ? GPU.newR[0] : GPU.cityN) - GPU.opN); gl.uniform1f(M.u.uMirror, 0); gl.clear(gl.DEPTH_BUFFER_BIT);
   gl.stencilMask(0xff); gl.disable(gl.STENCIL_TEST); mask(); paint();
   gl.useProgram(M.p); gpuAttrib(M, GPU.ground); if (state.showRoads) gl.drawArrays(gl.TRIANGLES, GPU.farN, GPU.groundN - GPU.farN);
-  if (state.showRoads) { gpuLines(cam, env, GPU.lanes, GPU.laneN, false, 900); gl.useProgram(M.p); gpuAttrib(M, GPU.ground); }
   if (GPU.gxN) { gpuAttrib(M, GPU.gx); gl.drawArrays(gl.TRIANGLES, 0, GPU.gxN); gpuAttrib(M, GPU.ground); }
+  if (state.showRoads && GPU.markN) { gpuAttrib(M, GPU.mark); cityDraw(camCull(cam), GPU.markT); gpuAttrib(M, GPU.ground); }   // lane lines / kerb lines / crossings / arrows (roadKit; over the plan roads too)
   if (GPU.L) cityDraw(camCull(cam), GPU.recvT);   // building/tree shadows on the ground
   // solids with depth
-  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); const cc = camCull(cam); cityDraw(cc);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); const cc = camCull(cam); cityDraw(cc); if (GPU.rkT) cityDraw(cc, GPU.rkT);
   const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
   if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]);
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
@@ -4751,7 +4879,7 @@ function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { W
   const get = wcDB().then(db => new Promise(res => { const q = db.transaction('w').objectStore('w').get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; db.close(); res(); }; q.onerror = () => { db.close(); res(); }; }));
   return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
 function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
-  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, trees: { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
 /* ===================== UX ROUND 4 (2026-10-31): scenario chip, hold-to-compare, pinch/wheel lens, double-tap face, haptics, phone dock, plan full screen, panel width + keys ===================== */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} };
 const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', allres: 'Full', custom: 'Custom' };
