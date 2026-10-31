@@ -4634,11 +4634,33 @@ function carMesh(A, x, y, z, hx, hz, k) { const L = Math.hypot(hx, hz) || 1, ux 
     A.quad(P(a0, -w, y1), P(a1, -w, y1), P(a1, w, y1), P(a0, w, y1), [0, 1, 0], c, t0, t0, t0, t0); };
   const dark = [0.08, 0.08, 0.09], glass = [0.12, 0.15, 0.18], h1 = ty === 2 ? 1.95 : ty === 1 ? 1.62 : 1.45, cl = ty === 2 ? [-2.0, 1.4] : ty === 1 ? [-1.7, 1.2] : [-1.25, 1.05];
   bx(-2.1, 2.1, 0.86, 0.05, 0.38, dark); bx(-2.2, 2.2, 0.89, 0.3, 0.85, col); bx(cl[0], cl[1], 0.78, 0.85, h1 - 0.42, glass); bx(cl[0] + 0.05, cl[1] - 0.05, 0.76, h1 - 0.42, h1, col); }
+// ships (TY 2026-10-31 stage 5; visual only, sizes/colours estimates): along x, bow toward dir. Type by length + index: < 50 m bumboat/harbour craft (timber hull, cabin + canopy);
+// else container ship / tanker / bulk carrier: pointed bow (last 16%), red antifouling band to 1.2 m, dark painted hull to freeboard 0.05·L (≥4 m), white accommodation block
+// near the stern (bridge wings) + funnel; container: 40 ft bays (12.2 m) of 2 stacks across the beam, 2–6 tiers, carrier colours; tanker: red deck, pipe rack, manifold + crane;
+// bulk: 5–7 raised hatch covers + 4 deck cranes.
+const SHIP_CC = [[40, 90, 160], [196, 54, 44], [230, 230, 226], [120, 124, 128], [222, 120, 40], [50, 120, 80], [150, 40, 60], [36, 64, 110]];
+function shipMesh(Sh, x, z, L, dir, k) { const B = L < 50 ? L * 0.28 : L * 0.145, h = (a, s) => hash01(k * 7.1 + a, L, s), P = (n, y1, y0, fl, o) => glPrism(Sh, Object.assign(makePrism(n, 'existing', y1, y0, fl), { plain: true }, o));
+  const X = t => x + dir * (t - 0.5) * L, hull = (y0, y1, o, inset = 0) => { const b = B / 2 - inset, t0 = 0.84; P('ship', y1, y0, [X(0.0) + dir * inset, z - b, X(t0), z - b, X(1) - dir * inset * 2, z, X(t0), z + b, X(0.0) + dir * inset, z + b], o); };
+  const box = (t0, t1, b0, b1, y0, y1, alb, topc) => P('ship', y1, y0, [X(t0), z + b0, X(t1), z + b0, X(t1), z + b1, X(t0), z + b1], { alb, topc: topc || alb });
+  if (L < 50) { const fb = 1.4; hull(0, 0.5, { alb: [70, 50, 40] }); hull(0.5, fb, { alb: [150, 104, 64], topc: [170, 140, 100] });   // bumboat
+    box(0.3, 0.7, -B * 0.32, B * 0.32, fb, fb + 2.0, [214, 206, 186], [190, 70, 50]); box(0.18, 0.3, -B * 0.32, B * 0.32, fb, fb + 1.8, [120, 90, 64]); return; }
+  const ty = k % 3, fb = Math.max(4, L * 0.05), hc = [[36, 46, 64], [40, 60, 52], [70, 30, 34], [30, 34, 40]][Math.floor(h(1, 3) * 4)], dk = ty === 1 ? [150, 60, 50] : [110, 112, 108];
+  hull(0, 1.2, { alb: [150, 44, 38] }); hull(1.2, fb, { alb: hc, topc: dk });   // antifouling + topsides, deck
+  const a0 = 0.06, a1 = ty === 0 ? 0.16 : 0.13, ah = fb + Math.max(10, L * (ty === 0 ? 0.11 : 0.09)), w = [236, 236, 230];
+  box(a0, a1, -B * 0.42, B * 0.42, fb, ah, w); box(a1 - 0.02, a1, -B * 0.5, B * 0.5, ah - 2.6, ah - 2.2, w); box(a1 - 0.025, a1 - 0.005, -B * 0.5, B * 0.5, ah - 2.2, ah - 0.4, [60, 70, 80]);   // house, bridge wings, bridge windows
+  box(a0 - 0.035, a0 + 0.005, -B * 0.12, B * 0.12, fb, ah + 5, ty === 0 ? [200, 60, 40] : [40, 40, 44], [30, 30, 30]);   // funnel
+  if (ty === 0) { const nb = Math.floor((0.9 - a1 - 0.03) * L / 12.6); for (let i = 0; i < nb; i++) { const t0 = a1 + 0.03 + (i * 12.6) / L, t1 = t0 + 12.2 / L;   // container bays
+      for (const [b0, b1] of [[-B * 0.46, -B * 0.24], [-B * 0.23, -0.1], [0.1, B * 0.23], [B * 0.24, B * 0.46]]) { const ti = 2 + Math.floor(h(i + b0, 9) * 5) - (i === nb - 1 ? 1 : 0);   // 4 stacks across, one prism per tier (mixed carrier colours)
+        for (let q = 0; q < ti; q++) { const c = SHIP_CC[Math.floor(h(i * 3 + b1 + q * 17, 11) * SHIP_CC.length)]; box(t0, t1, b0, b1, fb + q * 2.6, fb + q * 2.6 + 2.55, c, c.map(v => v * 0.9)); } } } }
+  else if (ty === 1) { box(a1 + 0.02, 0.92, -0.6, 0.6, fb, fb + 1.6, [200, 200, 196]); box(0.5, 0.53, -B * 0.4, B * 0.4, fb, fb + 2.2, [200, 200, 196]); box(0.47, 0.49, -1, 1, fb, fb + 12, [230, 180, 40]); }   // tanker: pipe rack, manifold, hose crane
+  else { const nh = 5 + Math.floor(h(2, 13) * 3); for (let i = 0; i < nh; i++) { const t0 = a1 + 0.05 + i * (0.86 - a1) / nh; box(t0, t0 + 0.6 * (0.86 - a1) / nh, -B * 0.36, B * 0.36, fb, fb + 2.2, [170, 60, 50], [180, 70, 56]);
+      if (i % 2 && i < nh - 1) box(t0 + 0.7 * (0.86 - a1) / nh, t0 + 0.75 * (0.86 - a1) / nh, -1, 1, fb, fb + 22, [230, 190, 40]); } }   // bulk: hatch covers + cranes
+  box(0.94, 0.985, -B * 0.06, B * 0.06, fb, fb + 6, w); }   // forecastle mast
 function gpuFx0(cam, env) {
   const add = [], opq = [], la = [], lo = [], Sh = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
-  SHIPS.forEach(([x, z, len]) => { glPrism(Sh, makePrism('ship', 'existing', 12, 0, box(x - len / 2, z - len * 0.08, x + len / 2, z + len * 0.08))); glPrism(Sh, makePrism('ship', 'existing', 30, 12, box(x - len * 0.4, z - len * 0.06, x - len * 0.2, z + len * 0.06))); });
+  SHIPS.forEach(([x, z, len], i) => shipMesh(Sh, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i));   // stage 5 (2026-10-31): typed ship meshes
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
-    glPrism(Sh, makePrism('ship', 'existing', big ? 10 : 3, 0, box(x - len / 2, z - len * 0.08, x + len / 2, z + len * 0.08))); glPrism(Sh, makePrism('ship', 'existing', big ? 26 : 6, big ? 10 : 3, box(Math.min(a, b), z - len * 0.06, Math.max(a, b), z + len * 0.06)));
+    shipMesh(Sh, x, z, len, dir, 20 + MOVERS.indexOf(Mv));
     S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2); });
   if (state.showRoads) { const cc = {};
     CAR_SINK = (x, y, z, hx, hz, k, dd) => { const near = Math.hypot(x - cam.ex, z - cam.ez) < 700; if (near) carMesh(Sh, x, y, z, hx, hz, k);   // ≤700 m: 3D car (realism 2026-10-31); beyond: sprite rect
