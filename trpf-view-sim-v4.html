@@ -1047,7 +1047,9 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
   for (const n of ['Flower Dome', 'Cloud Forest']) { const i = P0(n); if (i < 0) continue; const G = EXISTING[i], H = G.h, pts = [...G.xs].map((x, k) => [x, G.zs[k]]); EXISTING.splice(i, 1); LM_DOMES.push({ pts, c: [G.cx, G.cz], H });
     for (let k = 0; k < 6; k++) { const y0 = (k * H) / 6, y1 = ((k + 1) * H) / 6, sc = Math.sqrt(1 - (y1 / H) ** 2) * 0.98 + 0.02; ghost(n, y1, y0, pts.flatMap(([x, z]) => [G.cx + (x - G.cx) * sc, G.cz + (z - G.cz) * sc])); } }
   for (const P of EXISTING) if (P.cx > -1700 && P.cx < -1500 && P.cz > -1740 && P.cz < -1360 && P.h >= 24 && P.h <= 52 && P.maxx - P.minx < 30) { LM_TREES.push([P.cx, P.cz, P.h, (P.maxx - P.minx) / 2]); P.h *= 0.72; P.alb = [86, 108, 70]; P.topc = [70, 60, 70]; }
-  { const i = P0('Marina Barrage Pump House'); if (i >= 0) { EXISTING[i].h = 12; EXISTING[i].est = 2; EXISTING[i].topc = [112, 160, 88]; EXISTING[i].plain = true; EXISTING[i].alb = [196, 202, 206]; } }
+  { const i = P0('Marina Barrage Pump House'); if (i >= 0) { const G = EXISTING[i]; EXISTING.splice(i, 1); const pts = [...G.xs].map((x, k) => [x, G.zs[k]]), d = [0, -1], pr = pts.map(p => p[1]), mx = Math.max(...pr), mn = Math.min(...pr);   // stage 2 (2026-10-31): the famous kite-flying lawn = green roof sloping up from the city side to 12 m (rising toward the sea, S; slope direction estimate) as 6 terraces
+    for (let k = 0; k < 6; k++) { const t = mx - (mx - mn) * (k / 6), q = []; for (let a = 0; a < pts.length; a++) { const p = pts[a], r = pts[(a + 1) % pts.length], fa = p[1] - t, fb = r[1] - t; if (fa <= 0) q.push(p); if ((fa < 0) !== (fb < 0) && fa !== fb) { const s = fa / (fa - fb); q.push([p[0] + (r[0] - p[0]) * s, p[1] + (r[1] - p[1]) * s]); } }
+      if (q.length < 3) continue; const P = makePrism('Marina Barrage Pump House', 'existing', 2 + 10 * (k + 1) / 6, k ? 2 + 10 * k / 6 : 0, q.flat(), 2); Object.assign(P, { topc: [112, 160, 88], plain: true, alb: k ? [104, 148, 84] : [196, 202, 206] }); EXISTING.push(P); } } }   // risers above the base = grass banks
   { const pier = EXISTING.filter(P => P.cx > -760 && P.cx < -540 && P.cz > -1800 && P.cz < -1640 && (P.maxx - P.minx) * (P.maxz - P.minz) < 300); pier.forEach(P => { P.h = 9; P.est = 2; P.alb = [176, 180, 184]; });
     if (pier.length > 1) { pier.sort((a, b) => a.cx - b.cx); const a = pier[0], b = pier[pier.length - 1], L = Math.hypot(b.cx - a.cx, b.cz - a.cz), ux = (b.cx - a.cx) / L, uz = (b.cz - a.cz) / L;
       const P = makePrism('Marina Barrage crest gates', 'existing', 4, 0, [a.cx - uz * 2, a.cz + ux * 2, b.cx - uz * 2, b.cz + ux * 2, b.cx + uz * 2, b.cz - ux * 2, a.cx + uz * 2, a.cz - ux * 2], 2); P.alb = [70, 82, 94]; EXISTING.push(P); } }
@@ -4072,7 +4074,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); GPU.noAO = false; }
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
@@ -4101,6 +4103,23 @@ function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck 
   for (const q of VD_FLAT.pads) { poly(q.r, 0.18, q.c); if (q.play) { const [x, z] = q.play, S = PLAY_SCH[q.sch], sh = (r, k) => r.map((v, i) => (i % 2 ? z : x) + (v - (i % 2 ? z : x)) * k);   // playgrounds: EPDM wet-pour rubber, band + inner field + dots in a second/third colour
       poly(sh(q.r, 0.82), 0.185, S.ring); poly(sh(q.r, 0.74), 0.19, q.c); for (let k = 0; k < 9; k++) { const a = k * 2.4 + q.sch, d = 2.5 + 2.2 * hash01(k, q.sch, 17); const dx = x + d * Math.cos(a), dz = z + 0.8 * d * Math.sin(a); if (ringIn(sh(q.r, 0.7), dx, dz)) poly(blobRing(dx, dz, 0.45, 0.45, k, 10), 0.195, k % 3 ? S.dot : S.ring); } } }
   for (const T of VD_TRACKS) rib(T, 2.5, 0.2, [240, 240, 236], !T.open); for (const T of VD_TRACKS) rib(T, 2.2, 0.21, [64, 124, 188], !T.open); for (const T of VD_TRACKS) rib(T, 0.07, 0.22, [236, 240, 244], !T.open);
+}
+// Singapore Flyer (2008; 165 m overall, wheel Ø 150 m → hub 90 m, 28 capsules outside the rim; TY 2026-10-31 stage 2): 3D mesh in the opaque range (casts shadows), plane at
+// bearing 60° as the old line rim; truss rim = 2 tube rings ±1.6 m + diagonals, cable spokes from the hub ends, A-frame legs both sides, capsules Ø 4 × 7 m (sizes estimates). Visual only (not in sightlines).
+function gpuFlyer(A) { const ax = [Math.sin(60 * DEG), 0, Math.cos(60 * DEG)], ox = [ax[2], 0, -ax[0]], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), R = 75, H = 90;
+  const W = (t, r, o) => [FLYER[0] + ax[0] * r * Math.cos(t) + ox[0] * o, H + r * Math.sin(t), FLYER[1] + ax[2] * r * Math.cos(t) + ox[2] * o];
+  const tube = (p, q, r, col, k = 6) => { const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], L = Math.hypot(...d) || 1, u = d.map(v => v / L), a = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    let e1 = [u[1] * a[2] - u[2] * a[1], u[2] * a[0] - u[0] * a[2], u[0] * a[1] - u[1] * a[0]]; const l1 = Math.hypot(...e1); e1 = e1.map(v => v / l1); const e2 = [u[1] * e1[2] - u[2] * e1[1], u[2] * e1[0] - u[0] * e1[2], u[0] * e1[1] - u[1] * e1[0]];
+    for (let i = 0; i < k; i++) { const a0 = (2 * Math.PI * i) / k, a1 = (2 * Math.PI * (i + 1)) / k, n0 = e1.map((v, j) => v * Math.cos(a0) + e2[j] * Math.sin(a0)), n1 = e1.map((v, j) => v * Math.cos(a1) + e2[j] * Math.sin(a1));
+      const P = (b, n) => b.map((v, j) => v + n[j] * r), A0 = P(p, n0), A1 = P(p, n1), B0 = P(q, n0), B1 = P(q, n1);
+      A.v(A0, n0, col, z4); A.v(A1, n1, col, z4); A.v(B1, n1, col, z4); A.v(A0, n0, col, z4); A.v(B1, n1, col, z4); A.v(B0, n0, col, z4); } };
+  const wh = c([236, 238, 240]), st = c([200, 204, 208]), gl = c([150, 176, 196]), N = 84;
+  for (let i = 0; i < N; i++) { const t0 = (2 * Math.PI * i) / N, t1 = (2 * Math.PI * (i + 1)) / N; tube(W(t0, R, 1.6), W(t1, R, 1.6), 0.8, wh); tube(W(t0, R, -1.6), W(t1, R, -1.6), 0.8, wh); tube(W(t0, R - 2.4, 0), W(t1, R - 2.4, 0), 0.6, wh);   // triangular truss rim
+    tube(W(t0, R, 1.6), W(t1, R - 2.4, 0), 0.25, st, 4); tube(W(t0, R, -1.6), W(t1, R - 2.4, 0), 0.25, st, 4); }
+  for (let i = 0; i < 28; i++) { const t = (2 * Math.PI * i) / 28; tube(W(0, 0, 7), W(t + 0.06, R - 2.4, 1.6), 0.18, st, 4); tube(W(0, 0, -7), W(t - 0.06, R - 2.4, -1.6), 0.18, st, 4);   // cable spokes
+    const cp = W(t, R + 3.4, 0); tube(cp.map((v, j) => v - ox[j] * 3.5), cp.map((v, j) => v + ox[j] * 3.5), 2, gl, 10); tube(W(t, R + 0.6, 0), W(t, R + 1.6, 0), 0.4, st, 4); }   // capsules (axis ⟂ wheel plane) + mounts
+  tube(W(0, 0, -9), W(0, 0, 9), 2.2, st, 10); tube(W(0, 0, -9.5), W(0, 0, -8.8), 6, wh, 12); tube(W(0, 0, 8.8), W(0, 0, 9.5), 6, wh, 12);   // spindle + hubs
+  for (const sg of [-1, 1]) for (const a of [-1, 1]) { const g = [FLYER[0] + ax[0] * 36 * a + ox[0] * 16 * sg, 0, FLYER[1] + ax[2] * 36 * a + ox[2] * 16 * sg]; tube(g, W(0, 0, 9 * sg), 1.4, wh, 8); }   // A-frame legs
 }
 function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof, GBTB domes + Supertree canopies; plain shading (mode 0)
   const z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), nrm = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
@@ -4585,7 +4604,7 @@ function gpuFx0(cam, env) {
       else if (!near) { const i = k % CAR_COL.length, c = cc[i] || (cc[i] = shade(CAR_COL[i], [0, 1, 0], env).map(v => v / 255)); S(opq, x, y + 0.8, z, hx, hz, 2.25, 0.9, c, 1, 3); } };
     try { drawCars(null, cam, env); for (const P of DECKS) { if (P.name === 'Pier' || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2200 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 2300)) continue; deckCars(null, cam, env, P); } } finally { CAR_SINK = null; } }
   { const ax = Math.sin(60 * DEG), az = Math.cos(60 * DEG), P = t => [FLYER[0] + ax * 75 * Math.cos(t), 90 + 75 * Math.sin(t), FLYER[1] + az * 75 * Math.cos(t)], o = night ? la : lo, c = night ? [150 / 255, 200 / 255, 1] : [235 / 255, 235 / 255, 240 / 255];   // Flyer rim (+ 24 lit capsules at night)
-    for (let i = 0; i < 48; i++) { const p = P((2 * Math.PI * i) / 48), q = P((2 * Math.PI * (i + 1)) / 48); o.push(...p, ...c, 1, ...q, ...c, 1); if (night && i % 2 === 0) S(add, ...p, 0, 0, 0, 1.3, [200 / 255, 230 / 255, 1], 0.8, 1); } }
+    if (night) for (let i = 0; i < 48; i++) { const p = P((2 * Math.PI * i) / 48), q = P((2 * Math.PI * (i + 1)) / 48); o.push(...p, ...c, 1, ...q, ...c, 1); if (night && i % 2 === 0) S(add, ...p, 0, 0, 0, 1.3, [200 / 255, 230 / 255, 1], 0.8, 1); } }
   if (night) gpuNight(env, add, la, S);
   gpuDyn('ship', Sh.a); gpuDyn('opq', opq); gpuDyn('add', add); gpuDyn('la', la); gpuDyn('lo', lo);
   return { ship: Sh.n, opq: opq.length / 13, add: add.length / 13, la: la.length / 7, lo: lo.length / 7 };
