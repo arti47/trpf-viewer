@@ -91,14 +91,14 @@
     .fstrip { position: absolute; right: 10px; top: 110px; height: calc(100% - 186px); width: 46px; z-index: 13; touch-action: none; cursor: ns-resize; outline: none; transition: opacity .3s; }
     .fstrip:focus-visible { outline: 2px solid var(--accent); border-radius: var(--r2); }
     .ov-time { position: absolute; left: 10px; right: 10px; bottom: 12px; margin: 0 auto; max-width: 600px; z-index: 14; display: flex; align-items: center; gap: 10px; background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: var(--r3); padding: 7px 8px 7px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.3); transition: opacity .3s; }
-    .tb-track { position: relative; flex: 1; min-width: 0; height: 34px; touch-action: none; cursor: ew-resize; }
+    .tb-track { position: relative; flex: 1; min-width: 0; height: 46px; touch-action: none; cursor: ew-resize; }
     .tb-track canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 9px; }
-    .tb-track input[type=range] { position: absolute; inset: 0; height: 100%; margin: 0; pointer-events: none; }
-    .tb-track input[type=range]::-webkit-slider-runnable-track { background: transparent; border: 0; height: 34px; }
-    .tb-track input[type=range]::-moz-range-track { background: transparent; border: 0; height: 34px; }
+    .tb-track input[type=range] { position: absolute; inset: 0; height: 100%; margin: 0; pointer-events: none; -webkit-appearance: none; appearance: none; background: transparent; }
+    .tb-track input[type=range]::-webkit-slider-runnable-track { background: transparent; border: 0; height: 46px; }
+    .tb-track input[type=range]::-moz-range-track { background: transparent; border: 0; height: 46px; }
     .tb-track input[type=range]::-webkit-slider-thumb { margin-top: 3px; width: 8px; height: 28px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--sun), 0 2px 8px rgba(0,0,0,.5); }
     .tb-track input[type=range]::-moz-range-thumb { width: 8px; height: 28px; border-radius: 4px; background: #fff; border: 0; box-shadow: 0 0 0 2px var(--sun); }
-    .tb-val { font-size: 15px; font-weight: 700; color: var(--sun); width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+    .tb-val { font-size: 17px; font-weight: 700; color: var(--sun); width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
     .date-chip { position: relative; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; height: 34px; font-size: 13px; font-weight: 600; padding: 0 10px; border: 1px solid rgba(251,191,36,.35); background: rgba(120,53,15,.35); border-radius: var(--r2); color: #fde68a; white-space: nowrap; }
     .date-pop { position: absolute; right: 0; bottom: calc(100% + 8px); width: min(330px, calc(100vw - 20px)); background: var(--glass-hi); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: var(--r3); padding: 12px; display: flex; flex-direction: column; gap: 9px; box-shadow: var(--shadow); animation: pnlIn .18s var(--ease); z-index: 20; }
     .date-pop .dp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
@@ -375,7 +375,7 @@
       .tape { top: 48px; height: 40px; }
       .fstrip { top: 94px; height: calc(100% - 154px); }
       .ov-time { bottom: 6px; padding: 4px 6px 4px 10px; }
-      .tb-track { height: 30px; }
+      .tb-track { height: 42px; }
       #roomHud { bottom: 54px; }
       .rail-btn[aria-pressed="true"]::before { left: -3px; top: 6px; bottom: 6px; }
       .bld-card { top: 52px; left: auto; right: 10px; transform: none; width: min(320px, calc(100% - 140px)); }
@@ -415,8 +415,10 @@
     .date-pop { max-height: min(78vh, calc(100dvh - 150px)); overflow-y: auto; overscroll-behavior: contain; --sec: #fbbf24; --sec-rgb: 251,191,36; }
     .date-pop .hero { height: 64px; flex-shrink: 0; cursor: pointer; }
     .date-pop .panel { padding: 0; background: none; border: 0; }
-    .tb-track input[type=range]::-webkit-slider-thumb { margin-top: 0; height: 21px; width: 6px; border-radius: 3px; }
-    .tb-track input[type=range]::-moz-range-thumb { height: 21px; width: 6px; border-radius: 3px; }
+    .tb-track input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: 2px; height: 26px; width: 26px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--sun), 0 2px 8px rgba(0,0,0,.55); }
+    .tb-track input[type=range]::-moz-range-thumb { height: 26px; width: 26px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 3px var(--sun), 0 2px 8px rgba(0,0,0,.55); }
+    .tb-track.drag input[type=range]::-webkit-slider-thumb { transform: scale(1.18); }
+    .tb-track.drag input[type=range]::-moz-range-thumb { transform: scale(1.18); }
     .hud-pill .hc { display: inline-flex; align-items: center; gap: 3px; } .hud-pill small { font-size: 10.5px; color: var(--muted); font-weight: 600; margin-left: 2px; }
     .hud-h .more { margin-left: auto; }
     @media (hover: none) { .rail-btn:not([aria-pressed="true"]):hover { background: transparent; color: var(--muted); } .rail-btn:hover .ic { transform: none; } .chip:hover { background: rgba(30,41,59,.65); } .ov-btn:hover, .ov-badge:hover { background: var(--glass); } .scn:hover { border-color: var(--line); } }
@@ -4134,10 +4136,10 @@ bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSli
 // Time scrubber: pointer drag anywhere on the track (iOS range inputs only move when the 6 px thumb itself is grabbed); while dragging only the 3D view redraws (lighting env refreshed), full render on release
 function hourSet(h, fast) { h = clamp(Math.round(h * 4) / 4, 5, 23); if (h === state.hour) return; state.hour = h; $('inlineHour').value = h; $('inlineHourVal').textContent = fmtHour(h); if (!lastMath) return renderAll(); lastMath.env = lightingEnv(); if (!fast) return renderView(); clearTimeout(idleT); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawFast(lastMath); }); }
 $('inlineHour').addEventListener('input', e => hourSet(parseFloat(e.target.value)));
-(() => { const tr = $('timeTrack').parentElement; let id = null; const at = e => { const r = tr.getBoundingClientRect(); return 5 + clamp((e.clientX - r.left - 4) / Math.max(1, r.width - 8), 0, 1) * 18; };
-  tr.addEventListener('pointerdown', e => { if (e.button > 0) return; e.preventDefault(); e.stopPropagation(); id = e.pointerId; tr.setPointerCapture(id); hourSet(at(e), true); });
+(() => { const tr = $('timeTrack').parentElement; let id = null; const at = e => { const r = tr.getBoundingClientRect(); return 5 + clamp((e.clientX - r.left - 13) / Math.max(1, r.width - 26), 0, 1) * 18; };
+  tr.addEventListener('pointerdown', e => { if (e.button > 0) return; e.preventDefault(); e.stopPropagation(); id = e.pointerId; tr.setPointerCapture(id); tr.classList.add('drag'); buzz(); hourSet(at(e), true); });
   tr.addEventListener('pointermove', e => { if (e.pointerId === id) hourSet(at(e), true); });
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => tr.addEventListener(t, e => { if (e.pointerId !== id) return; id = null; renderAll(); })); })();
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => tr.addEventListener(t, e => { if (e.pointerId !== id) return; id = null; tr.classList.remove('drag'); renderAll(); })); })();
 const setMonth = mo => { const [y, , d] = state.dateStr.split('-').map(Number), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate(); state.dateStr = `${y}-${String(mo).padStart(2, '0')}-${String(Math.min(d, dim)).padStart(2, '0')}`; renderAll(); };   // keep day, clamp to month length
 $('glassSelect').addEventListener('change', e => { state.glass = e.target.value; renderAll(); });
 $('inlineDate').addEventListener('change', e => { if (e.target.value) { state.dateStr = e.target.value; renderAll(); } }); bind('opacitySlider', v => { state.opacity = parseInt(v, 10) / 100; });
@@ -4350,12 +4352,12 @@ function drawStrip() {
 const TT = { key: '' };
 function drawTimeTrack() {
   const cv = $('timeTrack'); if (!cv || !cv._w) return; const w = cv._w, h = cv._h, key = [state.dateStr, w, h].join('|'); if (TT.key === key) return; TT.key = key;
-  const g = cv.getContext('2d'), t0 = 5, t1 = 23, X = t => 4 + ((t - t0) / (t1 - t0)) * (w - 8); g.clearRect(0, 0, w, h);
+  const g = cv.getContext('2d'), t0 = 5, t1 = 23, X = t => 13 + ((t - t0) / (t1 - t0)) * (w - 26);   // 13 = half the 26 px thumb, so hour ticks line up with its centre g.clearRect(0, 0, w, h);
   const col = el => el < -6 ? [14, 22, 48] : el < 0 ? mix([14, 22, 48], [190, 90, 70], (el + 6) / 6) : el < 8 ? mix([240, 140, 60], [250, 205, 110], el / 8) : mix([250, 205, 110], [86, 182, 236], Math.min(1, (el - 8) / 25));
   const gr = g.createLinearGradient(X(t0), 0, X(t1), 0); let up = null, dn = null, noon = t0, top = -99, prev = null;
   for (let t = t0; t <= t1 + 1e-6; t += 0.25) { const el = solarPosition(state.dateStr, t).elDeg; gr.addColorStop((t - t0) / (t1 - t0), rgbStr(col(el))); if (prev !== null) { if (prev < 0 && el >= 0) up = t; if (prev >= 0 && el < 0) dn = t; } if (el > top) { top = el; noon = t; } prev = el; }
   g.globalAlpha = 0.85; g.fillStyle = gr; rrect(g, 0, 0, w, h, 9); g.fill(); g.globalAlpha = 1;
-  g.font = `600 9.5px ${UIFONT}`; g.textAlign = 'center';
+  g.font = `600 11px ${UIFONT}`; g.textAlign = 'center';
   g.lineWidth = 3; g.strokeStyle = 'rgba(2,6,23,0.55)'; g.lineJoin = 'round';
   for (let t = 6; t <= 21; t += 3) { g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(X(t) - 0.5, h - 15, 1, 3); g.strokeText(String(t).padStart(2, '0'), X(t), h - 3); g.fillStyle = '#f8fafc'; g.fillText(String(t).padStart(2, '0'), X(t), h - 3); }
   [[up, '↑'], [noon, '·'], [dn, '↓']].forEach(([t, s0]) => { if (t === null) return; g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(X(t) - 0.5, 2, 1, 7); g.font = `700 9px ${UIFONT}`; g.fillText(s0, X(t) + (s0 === '·' ? 0 : 6), 9); });
