@@ -3493,6 +3493,7 @@ const GL_TONE = `const float EXPO = 0.7, SUNK = 2.3;
 vec3 toLin(vec3 c) { return pow(max(c, 0.0), vec3(2.2)); }
 vec3 aces(vec3 x) { return clamp(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 tone(vec3 x) { return pow(aces(max(x, 0.0) * EXPO), vec3(1.0 / 2.2)); }
+vec3 grade(vec3 d) { float l = dot(d, vec3(0.2126, 0.7152, 0.0722)); d = mix(vec3(l), d, 1.07); d += vec3(-0.012, 0.0, 0.018) * (1.0 - l) * (1.0 - l) + vec3(0.014, 0.004, -0.014) * l * l; return clamp(d, 0.0, 1.0); }   // UE-like grade (realism 2026-10-31): +7% saturation, cool shadows / warm highlights; applied to final display colour
 vec3 untone(vec3 d) { vec3 y = min(toLin(d), vec3(0.985)), a = 2.51 - 2.43 * y, b = 0.03 - 0.59 * y; return (-b + sqrt(b * b + 0.56 * a * y)) / (2.0 * a) / EXPO; }
 `;
 // Cloud layer (realism 2026-10-31, L4): one fbm cumulus field on a plane CLH above ground, drifting with the wind; seen in the GL sky (gpuSky) and cast as
@@ -3516,7 +3517,7 @@ precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
 uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH, uWet;
-uniform sampler2DShadow uSmI; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun, uHQ; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
+uniform sampler2DShadow uSmI; uniform sampler2D uSmIR; uniform float uBounce; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun, uHQ; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
 ` + GL_TONE + GL_CLOUD + `
 const vec3 C_WHITE = vec3(${TRPF_PAL.white.map(c => (c / 255).toFixed(3))}), C_GREIGE = vec3(${TRPF_PAL.greige.map(c => (c / 255).toFixed(3))}), C_GREY = vec3(${TRPF_PAL.grey.map(c => (c / 255).toFixed(3))}),
@@ -3548,7 +3549,11 @@ float pcfK(sampler2DShadow sm, vec3 q, float t) {   // 4 taps; photo mode (uHQ):
   float a = hash(mod(gl_FragCoord.xy, 61.0)) * 6.2831853, s = 0.0; mat2 R = mat2(cos(a), sin(a), -sin(a), cos(a));
   for (int i = 0; i < 16; i++) { vec2 g = (vec2(float(i % 4), float(i / 4)) - 1.5) * 2.0 / 2048.0; s += texture(sm, q + vec3(R * g, 0.0)); } return s / 16.0; }
 float pcf(sampler2DShadow sm, vec3 l) { vec3 q = l * 0.5 + 0.5; q.z -= 0.0005; return pcfK(sm, q, 0.5 / 2048.0); }
-float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; q.z -= 0.0002; return pcfK(uSmI, q, 0.6 / 2048.0); }
+float pcfI(vec3 l) { vec3 q = l * 0.5 + 0.5; q.z -= 0.0002;   // contact-hardening (PCSS, realism 2026-10-31): blocker search on the raw depth (sampler object on unit 6), penumbra = blocker distance × sun half-angle 0.0047 rad
+  const vec2 BD[6] = vec2[6](vec2(-0.6, -0.3), vec2(0.2, -0.9), vec2(0.9, -0.2), vec2(0.5, 0.6), vec2(-0.2, 0.4), vec2(-0.8, 0.5)); float sb = 0.0, nb = 0.0;
+  for (int i = 0; i < 6; i++) { float z = texture(uSmIR, q.xy + BD[i] * 7.0 / 2048.0).r; if (z < q.z) { sb += z; nb += 1.0; } }
+  if (nb < 0.5) return 1.0; float dm = (q.z - sb / nb) * 2.0 * uLsI.y, pen = clamp(dm * 0.0047 / (2.0 * uLsI.x / 2048.0), 0.6, 7.0);
+  return pcfK(uSmI, q, pen / 2.4 / 2048.0); }
 float ffEdge(vec3 a, vec3 b, vec3 n) { vec3 c = cross(a, b); float l = length(c); return l < 1e-6 ? 0.0 : acos(clamp(dot(a, b), -1.0, 1.0)) * dot(n, c / l); }
 float ffRect(vec3 p, vec3 n, vec3 o, vec3 a, vec3 b) {   // form factor point → rectangle (Lambert, contour integral); horizon clipping ignored, clamped ≥ 0
   vec3 v0 = normalize(o - p), v1 = normalize(o + a - p), v2 = normalize(o + a + b - p), v3 = normalize(o + b - p);
@@ -3586,7 +3591,7 @@ void main() {
     if (k > 0.985) c = mix(c, k > 0.9925 ? uFog : uWater * 0.6, 0.18);   // sparse ripple streaks (as the 2D)
     if (uDirect > 0.05 && uSun.y > 0.0) { vec3 h = normalize(uSun - v); float dens = exp(-dot(h.xz, h.xz) / max(h.y * h.y, 1e-4) / 0.0288);
       float sp = dens > 1e-3 ? step(hash(mod(floor(gl_FragCoord.xy / 1.6), 509.0) + mod(floor(t * 6.0), 97.0) * vec2(7.13, 3.71)), dens * 0.2) : 0.0;   /* small hash args: large ones lose sin precision */ c += vec3(1.0, 0.96 - 0.16 * uWarm, 0.88 - 0.35 * uWarm) * (dens * 0.3 + sp) * uDirect * T; }
-    o = vec4(clamp(c, 0.0, 1.0), 1.0); return; }
+    o = vec4(grade(clamp(c, 0.0, 1.0)), 1.0); return; }
   if (mode < -1.5) { float a = (1.0 - shadowAt(vWorld, vec3(0.0, 1.0, 0.0))) * uGroundSh * exp(-uBeta * vDist); o = vec4(0.0, 0.0, 0.05 * a, a); return; }
   if (mode > 0.5 && mode < 3.5) {   // procedural windows: bays 3.6 m × storeys; faded to their mean when a cell is < ~3 px (no moire)
     vec2 g = vTex.xy, fw = fwidth(g), f = fract(g), aa = fw * 0.75 + 1e-4; float det = 1.0 - smoothstep(0.2 + 0.25 * uNight, 0.5 + 0.3 * uNight, max(fw.x, fw.y));   // night: lit windows stay resolved down to ~1.3 px (as litWindows)
@@ -3676,6 +3681,7 @@ void main() {
       if (h > -0.01 && h < 0.1 && vTex.w < 1.5) { float fy = fwidth(h); c = mix(c, vec3(0.93, 0.92, 0.89) * uLitK, 0.85); c *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.5 * fy, 0.1 - h)); }   // 100 mm skirting + shadow line (I3)
       vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.16 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); }
     c = untone(c); vec3 al = toLin(alb);
+    if (uBounce > 0.0 && mode < 3.5) c += al * vec3(1.0, 0.9, 0.76) * uBounce * SUNK * (0.6 + 0.4 * max(0.0, -nrm.y));   // sun-patch bounce (one-bounce GI estimate, realism 2026-10-31): warm fill on every room surface, more on ceilings
     if (uInSun > 0.0) {   // sun through the openings: interior shadow map (walls, frames, furniture; ±12 m) × outdoor near cascade (city + rest of the block) × Lambert
       float lam = max(0.0, dot(nrm, uSun)); if (lam > 0.0) { vec3 r = vWorld + nrm * 0.015 - uLcI, l = vec3(dot(uLr, r) / uLsI.x, dot(uLu, r) / uLsI.x, dot(uLf, r) / uLsI.y);
         float v = max(abs(l.x), abs(l.y)) < 0.99 && abs(l.z) < 0.99 ? pcfI(l) : 1.0; if (v > 0.0) v *= shadowAt(vWorld, nrm);
@@ -3708,8 +3714,8 @@ void main() {
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
     if (mode > 0.2 && mode < 0.4) c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96);   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > 0.4 && mode < 0.5) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); }
   vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist));   // haze blended in display space (as tuned for the 2D sky)
-  if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(dc * a, a); return; }   // reflection in water
-  o = vec4(dc * uAlpha, uAlpha);
+  if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
+  o = vec4(grade(dc) * uAlpha, uAlpha);
 }`;
 const GL_VS = GL_HDR + `in vec3 aPos, aNor, aCol; in vec4 aTex; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist; uniform float uMirror;
 void main() { float d; gl_Position = project(uMirror > 0.5 ? aPos * vec3(1.0, -1.0, 1.0) : aPos, d); vDist = d; vNor = aNor; vCol = aCol; vTex = aTex; vWorld = aPos; }`;
@@ -3750,12 +3756,12 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
   float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
   if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
   vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), L = toLin(c) * (uAmb * 0.3 * (0.82 + 0.34 * uSkyMid) + uDirect * 0.85 * max(uSun.y, 0.0) * cloudSh(vec3(w.x, 0.0, w.y), uSun) * tint) * SUNK;   // albedo lit as a level GL_FS face (linear)
-  o = vec4(mix(fc, tone(L), exp(-uBeta * t)), 1.0); }`;
+  o = vec4(grade(mix(fc, tone(L), exp(-uBeta * t))), 1.0); }`;
 // GL sky (realism 2026-10-31, L2/L4): palette gradient (skyPalette/weatherSky, display space) shaped per pixel — horizon haze band, sun-side aureole (Mie) and
 // anti-sun deepening (Rayleigh), plus the cloud layer (self-shadowed toward the sun, silver lining, faded with distance). Drawn by drawSkyAndSea in place of the 2D gradient + puff clouds.
 const GL_SKY_FS = `#version 300 es
 precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uTop, uMid, uHor, uClit, uCbase; uniform vec4 uP; uniform vec2 uRes; uniform float uWarm, uDirect; out vec4 o;
-` + GL_CLOUD + `
+` + GL_TONE + GL_CLOUD + `
 void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF + uR * (q.x / uP.x) + uU * (q.y / uP.y)); float e = max(d.y, 0.0), a = asin(e) / 1.5708, t = sqrt(a);
   vec3 c = mix(uHor, uMid, smoothstep(0.0, 0.42, t)); c = mix(c, uTop, smoothstep(0.42, 1.0, t));
   float cg = dot(d, uSun), up = smoothstep(-0.12, 0.15, uSun.y); vec3 glow = vec3(1.0, 0.9 - 0.18 * uWarm, 0.76 - 0.36 * uWarm);
@@ -3766,12 +3772,13 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
     if (den > 0.002) { vec2 sd = uSun.xz / max(length(uSun.xz), 1e-3); float sh = cloudD(p + sd * 320.0), lt = clamp(1.0 - 0.75 * sh + 0.25 * (1.0 - den), 0.0, 1.0);
       vec3 cl = mix(uCbase, uClit, lt) + glow * 0.3 * pow(max(cg, 0.0), 5.0) * (1.0 - den) * uDirect;   // silver lining at thin edges toward the sun
       float f = 1.0 - smoothstep(12000.0, 60000.0, tt); cl = mix(c, cl, f); c = mix(c, cl, clamp(den * 1.1, 0.0, 0.97)); } }
-  o = vec4(clamp(c, 0.0, 1.0), 1.0); }`;
+  o = vec4(grade(clamp(c, 0.0, 1.0)), 1.0); }`;
 // Sprites (instanced quads): type 0 billboard glow, 1 billboard disc, 2 ground-aligned glow, 3 ground-aligned rect (cars, oriented ax), 4 ground-aligned disc.
 // Instance: pos 3, (ax, az, size m, min px | half-width) 4, rgba 4, (type, pull m toward eye) 2. Additive: alpha × haze T; opaque: colour fogged.
-const GL_SPR_VS = GL_HDR + `in vec2 aQ; in vec3 aP; in vec4 aS, aC; in vec2 aT; uniform vec2 uVP; uniform float uBeta, uRange; out vec2 vQ; out vec4 vC; out float vT, vF;
+const GL_SPR_VS = GL_HDR + `in vec2 aQ; in vec3 aP; in vec4 aS, aC; in vec2 aT; uniform vec2 uVP; uniform float uBeta, uRange, uWetR; out vec2 vQ; out vec4 vC; out float vT, vF;
 void main() { float d, ty = aT.x; vec3 p = aP; vQ = aQ; vC = aC; vT = ty;
-  if (ty > 1.5) { vec2 ax = aS.xy, pr = vec2(-ax.y, ax.x); p += vec3(ax.x * aQ.x * aS.z + pr.x * aQ.y * aS.w, 0.0, ax.y * aQ.x * aS.z + pr.y * aQ.y * aS.w); gl_Position = project(p, d); }
+  if (ty > 1.5) { vec2 ax = aS.xy; float sz = aS.z, hw = aS.w; if (uWetR > 0.5 && floor(ty + 0.5) == 2.0) { vec2 e = p.xz - uEye.xz; ax = e / max(length(e), 1e-3); sz *= 4.0; hw *= 0.6; vC.a *= 1.8; }   // wet road: lamp pools stretched toward the eye (reflection streaks, realism N3)
+    vec2 pr = vec2(-ax.y, ax.x); p += vec3(ax.x * aQ.x * sz + pr.x * aQ.y * hw, 0.0, ax.y * aQ.x * sz + pr.y * aQ.y * hw); gl_Position = project(p, d); }
   else { vec3 tw = uEye - p; float L = max(length(tw), 1e-3); p += tw / L * min(aT.y, L * 0.9); vec4 c = project(p, d); float rm = max(aS.z, aS.w * 2.0 * max(c.w, 0.0) / (uP.x * uVP.x)); c.x += aQ.x * rm * uP.x; c.y += aQ.y * rm * uP.y; gl_Position = c; }
   vF = exp(-uBeta * d); if (d > uRange) vC.a = 0.0; }`;
 const GL_SPR_FS = `#version 300 es
@@ -4171,7 +4178,7 @@ function gpuEnv(pr, env, unlit) {
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); if (u.uCld) gl.uniform4f(u.uCld, ...cloudU(env)); gl.uniform1f(u.uWet, env.W.rain ? 1 : 0); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
-  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); gl.uniform1i(u.uDep, 4); gl.uniform1f(u.uAO, 0); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); if (u.uSmIR) { gl.uniform1i(u.uSmIR, 6); gl.uniform1f(u.uBounce, 0); gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); if (!GPU.rawS) { const S = GPU.rawS = gl.createSampler(); gl.samplerParameteri(S, gl.TEXTURE_COMPARE_MODE, gl.NONE); gl.samplerParameteri(S, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.samplerParameteri(S, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.samplerParameteri(S, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.samplerParameteri(S, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); } gl.bindSampler(6, GPU.rawS); } gl.uniform1i(u.uDep, 4); gl.uniform1f(u.uAO, 0); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
@@ -4267,7 +4274,7 @@ function gpuRenderInterior(cam, env, kIn) {
   const nl = p4.length / 4; gl.uniform1i(M.u.uNL, nl); if (nl) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } if (HV) HV.nl = nl;
   { const WLt = gpuWinLights(), dayW = clamp((env.sun.elDeg + 4) / 10, 0, 1), D = (lit0 - 0.12) * LS.kCov * kIn * dayW; gl.uniform1i(M.u.uNW, D > 0.005 && !onGround() ? WLt.n : 0); gl.uniform1f(M.u.uWD, D);
     if (D > 0.005) { gl.uniform3fv(M.u['uWo[0]'], WLt.o); gl.uniform3fv(M.u['uWa[0]'], WLt.a); gl.uniform3fv(M.u['uWb[0]'], WLt.b); gl.uniform4fv(M.u['uWR[0]'], WLt.r); } }
-  if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
+  if (sun) { const tv = state.winOpen ? 1 : clamp(GLASS[state.glass].tv / 0.65, 0.7, 1.3); gl.uniform1f(M.u.uShadow, 1); gl.uniform3f(M.u.uLcI, ...GPU.LI.c); gl.uniform2f(M.u.uLsI, ...GPU.LI.s); gl.uniform1f(M.u.uInSun, 0.9 * env.direct * tv * kIn * LS.sheer); gl.uniform1f(M.u.uBounce, sunBounce() * 0.9 * env.direct * tv * kIn * LS.sheer); }   // sun patches/shadows (replaces the roomLight patch overlay; readings unchanged)
   const ao = gpuDepth(cam, n); gpuCam(M, cam, 0.05, 400); gl.uniform1f(M.u.uAO, ao ? 1 : 0); if (ao) { gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, 0.05, 400); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
   if (onGround()) { const vc = gpuVdCols(); if (vc) { gl.colorMask(false, false, false, false); gpuAttrib(M, vc.buf); gl.drawArrays(gl.TRIANGLES, 0, vc.n); gl.colorMask(true, true, true, true); } }
   if (onGround() && !(state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10)) { const sb = gpuSoffit(); if (sb) { gl.colorMask(false, false, false, false); gpuAttrib(M, sb.buf); gl.drawArrays(gl.TRIANGLES, 0, sb.n); gl.colorMask(true, true, true, true); } }   // void deck outside the stair core: 1F ceiling plates in depth first, so upper-storey interior (2F corridor slab, shafts, stair well) can't paint over the ceiling (TY 2026-10-30)
@@ -4302,6 +4309,10 @@ function gpuWinLights() {
   return (GPU.wl = { o, a, b, r, n: o.length / 3 });
 }
 // Interior sun shadow map: unit walls, frames, ceilings, furniture seen from the sun (ortho ±12 m around the unit, ±30 m deep); re-rendered when the interior or the sun changes.
+// one-bounce estimate: sunlit floor + back-wall patch area (roomLight) / room floor area × floor albedo 0.35, capped (realism 2026-10-31, I1-lite; cached per spot/date/hour/world)
+function sunBounce() { const sp = roomSpot(); if (!sp) return 0; const k = `${sp.id}|${state.dateStr}|${state.hour}|${WORLD_VER}`; if (sunBounce.k === k) return sunBounce.v; let v = 0;
+  try { const r = roomLight(sp), A = (WIN[sp.id] && (WIN[sp.id].area || WIN[sp.id].roomW * WIN[sp.id].depth)) || 12; v = clamp((r.aFloor + r.aBack) / A * 0.35, 0, 0.25); } catch (_) { v = 0; }
+  sunBounce.k = k; return (sunBounce.v = v); }
 function gpuShadowInterior() {
   // map centred on the unit; in the corridor it follows the walk eye (snapped to 6 m) so the far corridor / slots stay inside the ±12 m map (TY 2026-10-29: blotchy floor beyond it)
   const wk = state.walk, far = wk && state.spot === 'corr' && wk.X > 14, [cX, cY] = far ? [Math.round(wk.X / 6) * 6, 7] : [6.5, 4.5], ls = far ? [24, 40] : [12, 30];
@@ -4364,19 +4375,35 @@ function gpuHand(HV) {   // after the room: depth cleared, hand (main program, r
 // kept (soft knee), box-blurred twice on the CPU and drawn back upscaled with 'lighter' after the room pass, so bright sky/sun/glints/night lights bleed over
 // window frames and dark edges. Vignette: −12% at the corners (multiply).
 const BLOOM = { a: null, b: null };
-function bloomGrab(ctx, w, h) {
+function bloomGrab(ctx, w, h, SUN) {
   const bw = Math.max(16, Math.round(w / 12)), bh = Math.max(10, Math.round(h / 12)), mk = () => { const c = document.createElement('canvas'); return c; };
   const A = BLOOM.a || (BLOOM.a = mk()), B = BLOOM.b || (BLOOM.b = mk()); A.width = bw * 3; A.height = bh * 3; B.width = bw; B.height = bh;
   const ca = A.getContext('2d'), cb = B.getContext('2d', { willReadFrequently: true }); ca.drawImage(ctx.canvas, 0, 0, A.width, A.height); cb.drawImage(A, 0, 0, bw, bh);
   const im = cb.getImageData(0, 0, bw, bh), d = im.data, N = bw * bh, R = new Float32Array(N * 3); let any = 0;
   for (let i = 0; i < N; i++) { const r = d[4 * i] / 255, g = d[4 * i + 1] / 255, b = d[4 * i + 2] / 255, Y = 0.3 * r + 0.59 * g + 0.11 * b, k = Y > 0.8 ? Math.min(1, (Y - 0.8) / 0.2) ** 1.5 : 0; R[3 * i] = r * k; R[3 * i + 1] = g * k; R[3 * i + 2] = b * k; any += k; }
-  if (any < 0.5) return false;
+  BLOOM.flare = null;
+  if (SUN && SUN.k > 0.05) {   // sun shafts (realism 2026-10-31, UE-style light shafts): bright pixels weighted by closeness to the sun, radially blurred toward it (24 taps, decay 0.94)
+    const sx = SUN.x / w * bw, sy = SUN.y / h * bh, sg = 0.4 * bw, M = new Float32Array(N), G = new Float32Array(N);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const i = y * bw + x, q = ((x - sx) ** 2 + (y - sy) ** 2) / (2 * sg * sg); M[i] = (R[3 * i] + R[3 * i + 1] + R[3 * i + 2]) / 3 * Math.exp(-q); }
+    let gs = 0; for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let a = 0, dec = 1; for (let k = 0; k < 24; k++) { const t = k / 24 * 0.85, xx = Math.round(x + (sx - x) * t), yy = Math.round(y + (sy - y) * t); if (xx >= 0 && yy >= 0 && xx < bw && yy < bh) a += M[yy * bw + xx] * dec; dec *= 0.94; } G[y * bw + x] = a / 10; gs += a; }
+    if (gs > 0.5) { const wc = [1, 0.9 - 0.15 * SUN.warm, 0.72 - 0.3 * SUN.warm]; for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) R[3 * i + c] += G[i] * wc[c] * 0.35 * SUN.k; any += gs; }
+    const ix = Math.round(sx), iy = Math.round(sy); if (ix >= 0 && iy >= 0 && ix < bw && iy < bh) { const j = 4 * (iy * bw + ix), Y = (0.3 * d[j] + 0.59 * d[j + 1] + 0.11 * d[j + 2]) / 255; if (Y > 0.88) BLOOM.flare = { x: SUN.x, y: SUN.y, k: SUN.k * Math.min(1, (Y - 0.88) / 0.08) }; } }   // lens flare only if the sun disc itself is visible
+  if (any < 0.5) return false; Object.assign(BLOOM, { R, bw, bh, im, cb }); return true; }
+function bloomApply(ctx, w, h, on) {
+  const F = BLOOM.flare && !(BLOOM.inter && BLOOM.fcov) ? BLOOM.flare : null; if (F) { const cx = w / 2, cy = h / 2, dx = cx - F.x, dy = cy - F.y; ctx.save(); ctx.globalCompositeOperation = 'lighter';   // lens flare ghosts along sun → centre → beyond (realism 2026-10-31, estimate)
+    for (const [t, r, c, a] of [[0.35, 0.05, '255,220,170', 0.09], [0.7, 0.025, '170,210,255', 0.12], [1.1, 0.09, '200,255,210', 0.05], [1.45, 0.04, '255,190,150', 0.08], [1.9, 0.14, '180,190,255', 0.04]]) {
+      const x = F.x + dx * t, y = F.y + dy * t, rr = r * Math.min(w, h), g = ctx.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, `rgba(${c},${a * F.k})`); g.addColorStop(0.75, `rgba(${c},${a * F.k * 0.6})`); g.addColorStop(1, `rgba(${c},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rr, 0, 7); ctx.fill(); }
+    const hr = 0.22 * Math.min(w, h), g = ctx.createRadialGradient(F.x, F.y, hr * 0.85, F.x, F.y, hr); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, `rgba(200,220,255,${0.05 * F.k})`); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(F.x - hr, F.y - hr, hr * 2, hr * 2); ctx.restore(); }
+  if (!BLOOM.grain) { const c = BLOOM.grain = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), im = x.createImageData(128, 128); for (let i = 0; i < im.data.length; i += 4) { const v = 128 + (Math.random() - 0.5) * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } x.putImageData(im, 0, 0); }
+  { const pat = ctx.createPattern(BLOOM.grain, 'repeat'), ox = Math.random() * 128, oy = Math.random() * 128; ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.05; ctx.translate(-ox, -oy); ctx.fillStyle = pat; ctx.fillRect(ox, oy, w, h); ctx.restore(); }   // film grain (5% overlay)
+  if (on) { const { R, bw, bh, im, cb } = BLOOM, N = bw * bh, d = im.data;
+    if (BLOOM.inter) { const c2 = BLOOM.c2 || (BLOOM.c2 = document.createElement('canvas')); c2.width = bw; c2.height = bh; const x2 = c2.getContext('2d', { willReadFrequently: true }); x2.clearRect(0, 0, bw, bh); x2.drawImage(GPU.cv, 0, 0, bw, bh);   // room pass on: no glow from scene hidden behind walls
+      const A = x2.getImageData(0, 0, bw, bh).data; for (let i = 0; i < N; i++) { const k = 1 - A[4 * i + 3] / 255; R[3 * i] *= k; R[3 * i + 1] *= k; R[3 * i + 2] *= k; } }
   const T = new Float32Array(N * 3), blur = (S, D, dx, dy, r) => { for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let a0 = 0, a1 = 0, a2 = 0, n = 0; for (let k = -r; k <= r; k++) { const xx = x + dx * k, yy = y + dy * k; if (xx < 0 || yy < 0 || xx >= bw || yy >= bh) continue; const j = 3 * (yy * bw + xx); a0 += S[j]; a1 += S[j + 1]; a2 += S[j + 2]; n++; } const o = 3 * (y * bw + x); D[o] = a0 / n; D[o + 1] = a1 / n; D[o + 2] = a2 / n; } };
   for (let p = 0; p < 2; p++) { blur(R, T, 1, 0, 2); blur(T, R, 0, 1, 2); }
   for (let i = 0; i < N; i++) { d[4 * i] = Math.min(255, R[3 * i] * 255 * 1.6); d[4 * i + 1] = Math.min(255, R[3 * i + 1] * 255 * 1.6); d[4 * i + 2] = Math.min(255, R[3 * i + 2] * 255 * 1.6); d[4 * i + 3] = 255; }
-  cb.putImageData(im, 0, 0); return true; }
-function bloomApply(ctx, w, h, on) {
-  if (on) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.imageSmoothingEnabled = true; ctx.drawImage(BLOOM.b, 0, 0, w, h); ctx.restore(); }
+    cb.putImageData(im, 0, 0);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.imageSmoothingEnabled = true; ctx.drawImage(BLOOM.b, 0, 0, w, h); ctx.restore(); }
   const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) / 2); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
   ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); ctx.restore(); }
 function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, additive)
@@ -4416,14 +4443,14 @@ function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, c
     la.push(x, SP.h, z, ...c, 0.55, x + 1500 * Math.sin(sw + 0.4) * 0.5, SP.h + 1500, z + 1500 * Math.cos(sw + 0.4) * 0.5, ...c, 0); } }
 }
 function gpuSprites(cam, env, buf, n, additive, range) {
-  const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0);
+  const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
   for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   gl.bindBuffer(gl.ARRAY_BUFFER, GPU.corners); gl.enableVertexAttribArray(pr.a.aQ); gl.vertexAttribPointer(pr.a.aQ, 2, gl.FLOAT, false, 8, 0);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (const [k, m, off] of [['aP', 3, 0], ['aS', 4, 12], ['aC', 4, 28], ['aT', 2, 44]]) { const l = pr.a[k]; if (l < 0) continue; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, m, gl.FLOAT, false, 52, off); gl.vertexAttribDivisor(l, 1); }
   const e0 = GL_DIAG ? gl.getError() : 0; gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n); if (GL_DIAG) glDiag('sprites', e0, gl.getError());
 }
 function gpuLines(cam, env, buf, n, additive, range = 1e9) {
-  const gl = GPU.gl, pr = GPU.line, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0);
+  const gl = GPU.gl, pr = GPU.line, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
   for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(pr.a.aPos); gl.vertexAttribPointer(pr.a.aPos, 3, gl.FLOAT, false, 28, 0); if (pr.a.aCol >= 0) { gl.enableVertexAttribArray(pr.a.aCol); gl.vertexAttribPointer(pr.a.aCol, 4, gl.FLOAT, false, 28, 12); }
   gl.drawArrays(gl.LINES, 0, n);
@@ -4436,7 +4463,7 @@ function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { drawPerspectiv
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
-  const lo = PIN_VIS.lo && cv === perspectiveCanvas ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h); }
+  const lo = PIN_VIS.lo && cv === perspectiveCanvas ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [];
   if (state.showLabels) {
@@ -4479,7 +4506,7 @@ function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscree
       let pinsDone = false; if (gpuRenderInterior(cam, env, X.kIn)) { const gl = GPU.gl, kx = GPU.cv.width / w, ky = GPU.cv.height / h, px = new Uint8Array(4);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); const vis = pt => { gl.readPixels(Math.round(pt.x * kx), Math.round(GPU.cv.height - pt.y * ky), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return px[3] < 140; };   // outside seen through glass / openings
         // readPixels stalls the GPU pipeline: only on full renders; fast frames (drag/walk/animate) reuse the last result per pin
-        const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
+        BLOOM.inter = true; if (BLOOM.flare && !(PIN_VIS.fast && cv === perspectiveCanvas)) BLOOM.fcov = !vis({ x: BLOOM.flare.x, y: BLOOM.flare.y }); const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
       if (!pinsDone) drawPins(); } }
   else drawPins();
   if (gpu && !(PIN_VIS.fast && cv === perspectiveCanvas)) bloomApply(ctx, w, h, bloom);
