@@ -1581,10 +1581,10 @@ function estateLamps() {
   const busy = (x, z) => [...VD_FLAT.pads.map(q => q.r), ...VD_FLAT.porches, VD_FLAT.court].some(r => ringIn(r, x, z) || polyD(r, x, z) < 1.2) || VD_LINKS.some(l => l.some((p, i) => i && segD(x, z, l[i - 1][0], l[i - 1][1], p[0], p[1]) < 2.2));
   let free = (x, z, rd = 0.6) => ringIn(GEO.trpf, x, z) && !drives.some(r => ringIn(r, x, z) || polyD(r, x, z) < rd) && !obs.some(({ P, f }) => x > P.minx - 1 && x < P.maxx + 1 && z > P.minz - 1 && z < P.maxz + 1 && (pointIn(P, x, z) || polyD(f, x, z) < 0.8)) && !posts.some(([a, b]) => Math.hypot(a - x, b - z) < 7);
   const pool = (x, z, r, a, ax = 1, az = 0, rb = r) => S.push(x, 0.12, z, ax, az, r, rb, 0.78, 0.84, 0.96, a, 2, 0);
-  const glow = (x, y, z, rh, pull) => S.push(x, y, z, 0, 0, rh, 5, 0.85, 0.9, 1.0, 0.42, 0, pull, x, y, z, 0, 0, rh * 0.28, 2.2, 1.0, 0.97, 0.92, 1.0, 1, pull);
+  const glow = (x, y, z, rh, pull) => S.push(x, y, z, 0, 0, rh * 0.7, 3, 0.85, 0.9, 1.0, 0.2, 0, pull, x, y, z, 0, 0, rh * 0.22, 1.5, 1.0, 0.97, 0.92, 0.85, 1, pull);
   const road = (x, z, ux, uz) => { const hx = x + ux * 1.2, hz = z + uz * 1.2; posts.push([x, z]); cyl(x, z, 0, 0.5, 0.16, POLE); cyl(x, z, 0.5, 8.0, 0.075, POLE); box((x + hx) / 2, (z + hz) / 2, 7.92, 8.0, ux, uz, 0.62, 0.035, POLE);
-    box(hx, hz, 7.78, 7.98, ux, uz, 0.36, 0.14, HEAD, z4, ln); glow(hx, 7.74, hz, 2.6, 12); pool(hx, hz, 12, 0.45); };
-  const lantern = (x, z) => { posts.push([x, z]); cyl(x, z, 0, 0.35, 0.12, POLE); cyl(x, z, 0.35, 4.0, 0.055, POLE); cyl(x, z, 4.0, 4.45, 0.2, LENS, ln); box(x, z, 4.45, 4.55, 1, 0, 0.26, 0.26, HEAD); glow(x, 4.22, z, 1.9, 12); pool(x, z, 8, 0.42); };
+    box(hx, hz, 7.78, 7.98, ux, uz, 0.36, 0.14, HEAD, z4, ln); glow(hx, 7.74, hz, 2.6, 12); pool(hx, hz, 10, 0.22); };
+  const lantern = (x, z) => { posts.push([x, z]); cyl(x, z, 0, 0.35, 0.12, POLE); cyl(x, z, 0.35, 4.0, 0.055, POLE); cyl(x, z, 4.0, 4.45, 0.2, LENS, ln); box(x, z, 4.45, 4.55, 1, 0, 0.26, 0.26, HEAD); glow(x, 4.22, z, 1.9, 12); pool(x, z, 6.5, 0.18); };
   for (const r of drives) { const n = r.length / 2; if (n < 3) continue; let ar = 0; for (let i = 0, j = n - 1; i < n; j = i++) ar += r[2 * j] * r[2 * i + 1] - r[2 * i] * r[2 * j + 1]; const sg = ar > 0 ? 1 : -1;   // CCW (x E, z N): outward normal = (ez, −ex)
     let s = hash01(r[0], r[1], 61) * 28; for (let i = 0; i < n; i++) { const ax = r[2 * i], az = r[2 * i + 1], bx = r[(2 * i + 2) % r.length], bz = r[(2 * i + 3) % r.length], L = Math.hypot(bx - ax, bz - az); if (L < 1e-3) continue; const ex = (bx - ax) / L, ez = (bz - az) / L, ox = ez * sg, oz = -ex * sg;
       for (; s < L; s += 20) { const x = ax + ex * s + ox * 1.0, z = az + ez * s + oz * 1.0; if (free(x, z, 0.5) && !busy(x, z)) road(x, z, -ox, -oz); } s -= L; } }
@@ -1602,7 +1602,7 @@ function estateLamps() {
   for (const l of VD_LINKS) for (let i = 1; i < l.length; i++) { const [ax, az] = l[i - 1], [bx, bz] = l[i], L = Math.hypot(bx - ax, bz - az); if (L < 4) continue; const ex = (bx - ax) / L, ez = (bz - az) / L;   // lanterns beside the covered linkways
     for (let s = 6, k = 0; s < L - 2; s += 16, k++) { const sd = k % 2 ? 1 : -1, x = ax + ex * s + ez * 2.6 * sd, z = az + ez * s - ex * 2.6 * sd; if (free(x, z)) lantern(x, z); } }
   for (const l of VD_LINKS) for (let i = 1; i < l.length; i++) { const [ax, az] = l[i - 1], [bx, bz] = l[i], L = Math.hypot(bx - ax, bz - az); if (L < 1) continue; const ex = (bx - ax) / L, ez = (bz - az) / L;
-    for (let s = 3; s < L - 1; s += 6) { const x = ax + ex * s, z = az + ez * s; box(x, z, 2.64, 2.69, ex, ez, 0.6, 0.07, LENS, ln); S.push(x, 2.6, z, 0, 0, 0.25, 2.0, 0.95, 0.97, 1.0, 0.9, 1, 0.3); pool(x, z, 3, 0.35, ex, ez, 2); } }
+    for (let s = 3; s < L - 1; s += 6) { const x = ax + ex * s, z = az + ez * s; box(x, z, 2.64, 2.69, ex, ez, 0.6, 0.07, LENS, ln); S.push(x, 2.6, z, 0, 0, 0.2, 1.4, 0.95, 0.97, 1.0, 0.75, 1, 0.3); pool(x, z, 2.6, 0.18, ex, ez, 1.7); } }
   return (ELAMP = { t: TRPF, T, S: new Float32Array(S.length ? S : new Array(13).fill(0)), n: S.length / 13, posts }); }
 function gpuEstate(A) { for (const [a, b, d, n, col, t] of estateLamps().T) { A.v(a, n, col, t); A.v(b, n, col, t); A.v(d, n, col, t); } }
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
