@@ -464,8 +464,9 @@
       .ov-time #roomHud { position: static; order: 1; flex: 1 1 auto; min-width: 0; max-width: none; background: none; border: 0; box-shadow: none; padding: 0 2px; backdrop-filter: none; -webkit-backdrop-filter: none; }
       .ov-time .hud-pill { gap: 12px; font-size: 13px; }
       .ov-time .date-chip { order: 2; margin-left: auto; height: 32px; }
-      .ov-time .tb-track { order: 3; flex: 1 1 0; }
-      .ov-time .tb-val { order: 4; }
+      .ov-time .tb-track { order: 3; flex: 1 1 calc(100% - 66px); }   /* own row: basis 0 let it wrap onto the HUD/date row as a 40 px sliver */
+      .ov-time .tb-val { order: 4; width: 56px; flex: 0 0 56px; }
+      @media (max-width: 400px) { .ov-time { gap: 6px 8px; padding: 8px 10px; } .ov-time .hud-pill { gap: 8px; font-size: 12.5px; } .ov-time .date-chip { padding: 0 8px; } }
       body.pnl-on .ov-time { bottom: 0; }
       .drawer { margin-top: 0; border-radius: 0; border-top: 0; box-shadow: none; transition: height .34s var(--spring); }
       .drawer.peek { height: 36%; }
