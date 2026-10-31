@@ -1240,6 +1240,13 @@ const P2W = (() => { const sp = GEO.spots.find(q => q.id === 'living'), nb = 170
     [[13.12, 1.3, 15.45, 7.92], 's'], [[52, 1.3, 55.3, 7.92], 's'], [[25.31, 16.91, 26.37, 20.71], 'h']]) B.boxes.push([...lb(r), k]);   // + E stair / W stair #142 (stair cores; raster had a hole / was 1.5 m off) + chute stack (h: plain, hopper door on the wash side)
   // open air (TY 2026-10-31 circled areas: slots, corridor ends, lobby notch): render clips the raster here, relief treats it as outside (parapets/ledges); physics keeps the raster
   B.voids = [[22.34, -1.5, 30.26, 9.05], [21.77, -1.5, 30.83, 6.48], [22.34, 8.71, 30.26, 9.05], [43.53, -1.5, 51.99, 9.05], [42.98, -1.5, 43.53, 7.3], [34.2, 10.64, 46.98, 13.28], [39.07, 13.28, 42.11, 22], [3, 9.05, 9.36, 11.08], [58.9, 9.05, 62, 10.64], [19.96, 16.91, 20.89, 21]].map(lb); }
+// 33A / 31B lobbies, cores and open corridor ends from the brochure site plan (TY 2026-10-31 circled areas "these parts also", "check these too"; block-local m read off a
+// site.jpg overlay, ±0.5 m): the raster had them as unit boxes (lobby/lift/stair rendered as a windowed flat). Kinded boxes clip the raster for rendering (physics keeps it), voids = open air.
+{ const add = (nm, bx, vd) => { const B = SITE_BLOCKS.find(b => b.name === nm); B.boxes.push(...bx); if (vd) B.voids = (B.voids || []).concat(vd); };
+  add('Blk 33A', [[-40.5, 3, -25.5, 9, 'c'], [-40.1, 1.9, -29, 3, 'c'], [-36, -0.6, -29, 1.9, 'c'], [-37.2, 3.1, -34, 8.2, 'l'], [-31.4, 3.1, -28.2, 8.2, 'l'], [-41, 5.1, -40.5, 8.2, 'h'],   // W lift lobby (2 lift banks, refuse chute)
+    [17.5, -0.1, 25, 3.4, 'c'], [17.2, -5.4, 19.5, -0.1, 's']]);   // E lobby + stair (H symbol by #160)
+  add('Blk 31B', [[-10.5, -4.4, -7.6, 2.9, 's'], [0, -4.85, 2.95, 2.9, 'l'], [5.7, -0.5, 9.5, 2.9, 'c'], [6.2, 1.3, 9.4, 2.6, 'h'], [5.7, -4.6, 11.6, -2.0, 's']],   // #118 stair, lift bank, chute lobby, E stair
+    [[-16.6, 2.6, -13.8, 4.8], [-7.6, 1.7, 0, 2.9], [5.8, -2.0, 11.6, -0.6]]); }   // open: W corridor end (#120/#118), strip S of the corridor by the courtyard, notch N of the E stair
 const planRing = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].flatMap(([X, Y]) => P2W(X, Y));
 const VD = {
   fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [96, 132, 140]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [112, 128, 138]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
