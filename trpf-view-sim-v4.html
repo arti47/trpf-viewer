@@ -2645,7 +2645,7 @@ function drawClouds(ctx, cam, env) {
 }
 function drawSkyAndSea(ctx, cam, env, m) {
   const { w, h } = cam, dh = m.dh, center = cam.projectPoint(cam.ex + dh * Math.sin(cam.yaw), 0, cam.ez + dh * Math.cos(cam.yaw)), hy = center ? center.y : h / 2 + Math.tan(cam.pitch) * cam.fPx;
-  const sky = ctx.createLinearGradient(0, Math.min(0, hy - h), 0, Math.max(hy, 1)); sky.addColorStop(0, rgbStr(env.sky.top)); sky.addColorStop(0.65, rgbStr(env.sky.mid)); sky.addColorStop(1, rgbStr(env.sky.hor)); const gs = GPU.ok !== false && gpuSky(cam, env, ctx.canvas.width, ctx.canvas.height); if (gs) ctx.drawImage(GPU.cv, 0, 0, w, h); else { ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h); }   // GL sky + cloud layer (realism 2026-10-31), 2D gradient fallback
+  const sky = ctx.createLinearGradient(0, Math.min(0, hy - h), 0, Math.max(hy, 1)); sky.addColorStop(0, rgbStr(env.sky.top)); sky.addColorStop(0.65, rgbStr(env.sky.mid)); sky.addColorStop(1, rgbStr(env.sky.hor)); const gs = GPU.ok !== false && gpuSky(cam, env, ctx.canvas.width, ctx.canvas.height); if (gs) ctx.drawImage(GPU.cv, 0, gs.sy, gs.W, gs.H, 0, 0, w, h); else { ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h); }   // GL sky + cloud layer (realism 2026-10-31), 2D gradient fallback
   if (env.sun.elDeg < -6) { const a = clamp((-6 - env.sun.elDeg) / 8, 0, 1); STARS.forEach(s => { const v = compassToWorld(s.az, s.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (p && p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h) { if (s.mag < 0.7) return; ctx.fillStyle = `rgba(255,255,255,${a * 0.5 * (0.3 + 0.7 * s.mag)})`; ctx.fillRect(p[0], p[1], s.mag > 0.85 ? 2 : 1, s.mag > 0.85 ? 2 : 1); } }); }
   if (!gs) drawClouds(ctx, cam, env);
   if (env.sun.elDeg > -1.5 && env.W.sun > 0) { const p = cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); if (p) { const r = Math.max(2, Math.tan(0.2665 * DEG) * cam.fPx), RW = Math.tan(35 * DEG) * cam.fPx, gw = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], RW), wc = mix([255, 236, 200], [255, 190, 130], env.warm).map(Math.round).join(',');   // wide haze glow (matches GPU fogCol in-scatter)
@@ -3486,7 +3486,7 @@ const inShow = (hr, starts) => starts.some(t => hr >= t && hr < t + 0.25);
 // Step 2b: sea plane (Fresnel sky reflection, ripples, glitter) + mirrored city, glass-tower reflection/glint, wall-foot AO, instanced sprites/lines (street lamps,
 // cars, wakes, Supertrees/domes/MBS/Spectra, Flyer), ships, MSCP garden, lane lines; interior rendered as a second pass (over rain, exposure wash, pins) with sun patch,
 // open sashes, edge lines, junction shading, tile joints.
-const GPU = { ok: null };
+const GPU = { ok: null, noZ: /[?&]noz/.test(location.search) };   // ?noz: no Z-prepass (A/B with ?bench)
 // Linear lighting + tone map (realism 2026-10-31, L1): albedos/colours are sRGB → toLin; lighting is summed in linear 'scene' units (SW = sun/sky scale);
 // output = sRGB(ACES(EXPO·x)). untone() is the exact inverse, so display-space colours (2D sky horizon, fog, glass sky reflections) come out unchanged.
 const GL_TONE = `const float EXPO = 0.7, SUNK = 2.3;
@@ -3660,17 +3660,20 @@ void main() {
   if (uUnlit < 0.5 && mode > 9.5 && mode < 10.5) {   // trees: leaf clumps (2-octave noise on albedo + normal), darker canopy underside; trunk bark streaks
     vec3 p = vWorld; float fw = length(fwidth(p)), k1 = 1.0 - smoothstep(0.4, 1.6, fw), k2 = 1.0 - smoothstep(0.15, 0.6, fw);
     if (vTex.z > 10.1) { vec2 uv = vec2(vTex.w - 2.0 * floor(vTex.w * 0.5), vTex.y + 1.0) - 0.5; float sd = floor(vTex.w * 0.5) * 1.37, kc = 1.0 - smoothstep(0.08, 0.3, length(fwidth(uv)));   // leaf card: ragged cluster outline + gaps (alpha test), solid disc when ≲4 px
-      if (length(uv) * 2.0 > mix(0.75, 0.55 + 0.45 * vn2(uv * 6.0 + sd), kc) || vn2(uv * 14.0 + sd + 3.0) < 0.32 * kc) discard; }
-    if (vTex.y < 0.5) { float n1 = vn3(p * 0.9), n2 = vn3(p * 2.6 + 11.0); alb *= mix(1.0, 0.72 + 0.42 * n1, k1) * mix(1.0, 0.82 + 0.3 * n2, k2);
+#ifdef CARDS
+      if (length(uv) * 2.0 > mix(0.75, 0.55 + 0.45 * vn2(uv * 6.0 + sd), kc) || vn2(uv * 14.0 + sd + 3.0) < 0.32 * kc) discard;
+#endif
+      }
+    if (vTex.y < 0.5) { float n1 = k1 > 0.0 ? vn3(p * 0.9) : 0.0, n2 = k2 > 0.0 ? vn3(p * 2.6 + 11.0) : 0.0; alb *= mix(1.0, 0.72 + 0.42 * n1, k1) * mix(1.0, 0.82 + 0.3 * n2, k2);   /* noise only where it isn't faded out (same result) */
       alb = mix(alb, alb * vec3(1.12, 1.08, 0.7), 0.35 * smoothstep(0.55, 0.85, vn3(p * 0.35 + 5.0)));
-      nrm = normalize(nrm + (vec3(vn3(p * 1.3), vn3(p * 1.3 + 17.0), vn3(p * 1.3 + 31.0)) - 0.5) * 1.1 * k1);
+      if (k1 > 0.0) nrm = normalize(nrm + (vec3(vn3(p * 1.3), vn3(p * 1.3 + 17.0), vn3(p * 1.3 + 31.0)) - 0.5) * 1.1 * k1);
       alb *= 0.55 + 0.45 * smoothstep(-1.0, 0.5, vTex.x); }
-    else alb *= 0.8 + 0.3 * vn2(vec2(atan(nrm.z, nrm.x) * 3.0, p.y * 4.0)) * k2; }
+    else if (k2 > 0.0) alb *= 0.8 + 0.3 * vn2(vec2(atan(nrm.z, nrm.x) * 3.0, p.y * 4.0)) * k2; else alb *= 0.8; }
   else if (uUnlit < 0.5 && vDist < 3000.0 && mode < 9.5 && mode > -0.5) {   // weathering: vertical rain streaks + panel tone on walls, grime patches on roofs, asphalt/paving grain at grade
     bool wall = abs(nrm.y) < 0.3; vec2 tq = wall ? vec2(dot(vWorld.xz, vec2(-nrm.z, nrm.x)), vWorld.y) : vWorld.xz; float fw = length(fwidth(tq));
-    if (wall) { float st = vn2(vec2(tq.x * 0.9, tq.y * 0.035)), pn = vn2(tq * vec2(0.12, 0.05) + 3.0);
+    if (wall) { float st = fw < 2.5 ? vn2(vec2(tq.x * 0.9, tq.y * 0.035)) : 0.0, pn = fw < 12.0 ? vn2(tq * vec2(0.12, 0.05) + 3.0) : 0.5;
       alb *= 1.0 - (0.1 * smoothstep(0.45, 0.95, st) * (1.0 - smoothstep(0.4, 2.5, fw)) + 0.05 * (pn - 0.5) * (1.0 - smoothstep(3.0, 12.0, fw))) * (1.0 - gm); }
-    else { float n1 = vn2(tq * 0.18), n2 = vn2(tq * 1.7 + 9.0), g0 = vWorld.y < 0.6 ? 1.0 : 0.0;
+    else { float n1 = fw < 14.0 ? vn2(tq * 0.18) : 0.5, n2 = fw < 1.4 ? vn2(tq * 1.7 + 9.0) : 0.5, g0 = vWorld.y < 0.6 ? 1.0 : 0.0;
       alb *= 1.0 - (0.12 * (n1 - 0.5) * (1.0 - smoothstep(4.0, 14.0, fw)) + (0.06 + 0.06 * g0) * (n2 - 0.5) * (1.0 - smoothstep(0.4, 1.4, fw))); } }
   vec3 c;
   if (uUnlit > 0.5 && mode > 10.5) c = untone(min(alb * uEmis, vec3(1.0))) * (uEmis > 1.0 ? 1.8 : 1.0);   // light fittings (on: glowing; off: plain diffuser)
@@ -3737,7 +3740,7 @@ void main() {
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
 }`;
-const GL_VS = GL_HDR + `in vec3 aPos, aNor, aCol; in vec4 aTex; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist; uniform float uMirror;
+const GL_VS = GL_HDR + `invariant gl_Position; in vec3 aPos, aNor, aCol; in vec4 aTex; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist; uniform float uMirror;
 void main() { float d; gl_Position = project(uMirror > 0.5 ? aPos * vec3(1.0, -1.0, 1.0) : aPos, d); vDist = d; vNor = aNor; vCol = aCol; vTex = aTex; vWorld = aPos; }`;
 // trees: unit canopy (icosahedron, radius 1) + trunk (aPart 1), per instance (x, z, h, g)
 // canopy per instance: random yaw, width/height ±12%, lumpy outline (low-frequency sines over the unit sphere); same in the shadow pass
@@ -3753,7 +3756,7 @@ vec3 treePos(vec3 a, float part, vec4 I) { float h = I.z, sp = treeSp(I);
   if (sp > 0.5) return vec3(I.x + a.x * h * 0.55, h * 0.7 + a.y * h * 0.2, I.y + a.z * h * 0.55);
   return vec3(I.x + a.x * h * 0.38, h * 0.62 + a.y * h * 0.33, I.y + a.z * h * 0.38); }
 `;
-const GL_TREE_VS = GL_HDR + GL_TREE_POS + `in vec3 aPos; in float aPart; in vec4 aInst; uniform float uTime; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist;
+const GL_TREE_VS = GL_HDR + GL_TREE_POS + `invariant gl_Position; in vec3 aPos; in float aPart; in vec4 aInst; uniform float uTime; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist;
 // aPart ≥ 2: leaf card (less blocky 2026-10-31): camera-facing quad centred on the canopy surface, corner = aPart − 2 (u + 2v); sway on leaves/cards (uTime moves with ▶ Animate)
 void main() { float g = aInst.w; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
   if (cd) { float sp = treeSp(aInst), an0 = fract(sin(dot(aPos, vec3(12.9898, 78.233, 37.719))) * 43758.55), an = an0 * 6.2832 + 0.12 * sin(uTime * 2.7 + an0 * 40.0), s = aInst.z * (sp > 1.5 && sp < 2.5 ? 0.06 : sp > 2.5 ? 0.16 : 0.1);
@@ -3775,9 +3778,9 @@ float h3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fra
 float vn2(vec2 q) { vec3 p = vec3(q, 0.5), i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y); }
 void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF + uR * (q.x / uP.x) + uU * (q.y / uP.y));
   float t = d.y < -1e-5 ? min(uEye.y / -d.y, 40000.0) : 40000.0; vec2 w = uEye.xz + d.xz * t; float px = t * 2.0 / (uP.x * uRes.x * max(-d.y, 0.05));   // ground m per pixel (foreshortened)
-  float n = 0.0, wt = 0.0; for (int i = 0; i < 4; i++) { float L = 60.0 / pow(3.2, float(i)), k = 1.0 - smoothstep(L * 0.25, L * 0.9, px); n += (vn2(w / L + float(i) * 7.3) - 0.5) * k * (0.5 + 0.5 * float(i == 0)); wt += 0.5; }
+  float n = 0.0, wt = 0.0; for (int i = 0; i < 4; i++) { float L = 60.0 / pow(3.2, float(i)), k = 1.0 - smoothstep(L * 0.25, L * 0.9, px); if (k > 0.0) n += (vn2(w / L + float(i) * 7.3) - 0.5) * k * (0.5 + 0.5 * float(i == 0)); wt += 0.5; }   /* faded octaves skipped (same result) */
   vec3 c = uColor.rgb; float a = uCls > 1.5 && uCls < 2.5 ? 0.5 : uCls < 1.5 ? 0.2 : 0.16; c *= 1.0 + a * n;
-  if (uCls > 1.5 && uCls < 2.5) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
+  if (uCls > 1.5 && uCls < 2.5 && px < 60.0) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
   float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
   if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
   vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), L = toLin(c) * (uAmb * 0.3 * (0.82 + 0.34 * uSkyMid) + uDirect * 0.85 * max(uSun.y, 0.0) * cloudSh(vec3(w.x, 0.0, w.y), uSun) * tint) * SUNK;   // albedo lit as a level GL_FS face (linear)
@@ -3785,9 +3788,9 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
 // GL sky (realism 2026-10-31, L2/L4): palette gradient (skyPalette/weatherSky, display space) shaped per pixel — horizon haze band, sun-side aureole (Mie) and
 // anti-sun deepening (Rayleigh), plus the cloud layer (self-shadowed toward the sun, silver lining, faded with distance). Drawn by drawSkyAndSea in place of the 2D gradient + puff clouds.
 const GL_SKY_FS = `#version 300 es
-precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uTop, uMid, uHor, uClit, uCbase; uniform vec4 uP; uniform vec2 uRes; uniform float uWarm, uDirect; out vec4 o;
+precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uTop, uMid, uHor, uClit, uCbase; uniform vec4 uP; uniform vec2 uRes, uOff; uniform float uWarm, uDirect; out vec4 o;
 ` + GL_TONE + GL_CLOUD + `
-void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF + uR * (q.x / uP.x) + uU * (q.y / uP.y)); float e = max(d.y, 0.0), a = asin(e) / 1.5708, t = sqrt(a);
+void main() { vec2 q = (gl_FragCoord.xy - uOff) / uRes * 2.0 - 1.0; vec3 d = normalize(uF + uR * (q.x / uP.x) + uU * (q.y / uP.y)); float e = max(d.y, 0.0), a = asin(e) / 1.5708, t = sqrt(a);
   vec3 c = mix(uHor, uMid, smoothstep(0.0, 0.42, t)); c = mix(c, uTop, smoothstep(0.42, 1.0, t));
   float cg = dot(d, uSun), up = smoothstep(-0.12, 0.15, uSun.y); vec3 glow = vec3(1.0, 0.9 - 0.18 * uWarm, 0.76 - 0.36 * uWarm);
   c *= mix(1.0, 0.92 + 0.12 * (0.5 + 0.5 * cg), up);   // deeper blue away from the sun
@@ -3886,15 +3889,21 @@ function glPrism(A, P) {
   const pts = []; for (let i = 0; i < nn; i++) pts.push([NX[i], NZ[i]]); const tri = earClip(pts), z4 = [0, 0, mode < 0.5 ? mode : 0, 0];
   for (let k = 0; k < tri.length; k += 3) { for (const q of [tri[k], tri[k + 1], tri[k + 2]]) A.v([pts[q][0], t, pts[q][1]], [0, 1, 0], top, z4); if (b > 0) for (const q of [tri[k], tri[k + 2], tri[k + 1]]) A.v([pts[q][0], b, pts[q][1]], [0, -1, 0], bot, z4); }
 }
+// GL context + shader programs, started early in initApp so the driver compiles while the city is built (load, perf 2026-10-31); gpuInit finishes them (status + reflection)
+function gpuStart() { if (GPU.gl !== undefined) return GPU.gl;
+  const cv = document.createElement('canvas'), gl = cv.getContext('webgl2', { antialias: true, alpha: true, premultipliedAlpha: true, stencil: true, depth: true }); GPU.gl = gl || null; if (!gl) return null;
+    // load (perf 2026-10-31): each shader source compiled once (shared by programs), all programs linked before any status query, KHR_parallel_shader_compile → the driver compiles them concurrently
+    gl.getExtension('KHR_parallel_shader_compile'); const SHC = new Map(), PEND = [];
+    const sh = (t, s) => { const k = t + s; let o = SHC.get(k); if (!o) { o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); SHC.set(k, o); } return o; };
+    const prog = (vs, fs) => { const p = gl.createProgram(), v = sh(gl.VERTEX_SHADER, vs), f = sh(gl.FRAGMENT_SHADER, fs); gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p); const r = { p, u: {}, a: {} }; PEND.push([r, v, f]); return r; };
+    const progDone = () => { for (const [{ p, u, a }, v, f] of PEND) { if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { for (const o of [v, f]) if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); throw new Error(gl.getProgramInfoLog(p)); }
+      const nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < nu; i++) { const q = gl.getActiveUniform(p, i); u[q.name] = gl.getUniformLocation(p, q.name); } for (const k of ['aPos', 'aNor', 'aCol', 'aTex', 'aPart', 'aInst', 'aQ', 'aP', 'aS', 'aC', 'aT']) a[k] = gl.getAttribLocation(p, k); } PEND.length = 0; };
+  Object.assign(GPU, { cv, main: prog(GL_VS, GL_FS), tree: prog(GL_TREE_VS, GL_FS.replace('\n', '\n#define CARDS\n')), flat: prog(GL_FLAT_VS, GL_FLAT_FS), gfill: prog(GL_FLAT_VS, GL_GFILL_FS), sky: prog(GL_FLAT_VS, GL_SKY_FS), sh: prog(GL_SH_VS, GL_SH_FS), sht: prog(GL_SHT_VS, GL_SH_FS), zm: prog(GL_VS, GL_SH_FS), zt: prog(GL_TREE_VS, GL_SH_FS), spr: prog(GL_SPR_VS, GL_SPR_FS), line: prog(GL_LINE_VS, GL_LINE_FS), ver: -1, ikey: '', skey: '' });
+  GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.mk = prog(GL_MASK_VS, GL_SH_FS); GPU.progDone = progDone; return gl; }
 function gpuInit() {
   if (GPU.ok !== null) return GPU.ok;
   try {
-    const cv = document.createElement('canvas'), gl = cv.getContext('webgl2', { antialias: true, alpha: true, premultipliedAlpha: true, stencil: true, depth: true });
-    if (!gl) return (GPU.ok = false);
-    const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
-    const prog = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-      const u = {}, nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < nu; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); } const a = {}; for (const k of ['aPos', 'aNor', 'aCol', 'aTex', 'aPart', 'aInst', 'aQ', 'aP', 'aS', 'aC', 'aT']) a[k] = gl.getAttribLocation(p, k); return { p, u, a }; };
-    Object.assign(GPU, { cv, gl, main: prog(GL_VS, GL_FS), tree: prog(GL_TREE_VS, GL_FS), flat: prog(GL_FLAT_VS, GL_FLAT_FS), gfill: prog(GL_FLAT_VS, GL_GFILL_FS), sky: prog(GL_FLAT_VS, GL_SKY_FS), sh: prog(GL_SH_VS, GL_SH_FS), sht: prog(GL_SHT_VS, GL_SH_FS), spr: prog(GL_SPR_VS, GL_SPR_FS), line: prog(GL_LINE_VS, GL_LINE_FS), ver: -1, ikey: '', skey: '' });
+    const gl = gpuStart(), cv = GPU.cv; if (!gl) return (GPU.ok = false); GPU.progDone();
     GPU.corners = gpuBuf(new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1])); GPU.dyn = {};
     { const S = glArr(), up = [0, 1, 0], sea = [0, 0, -3, 0], c0 = [0, 0, 0], E = 36000, st = 1500;   // sea plane ±36 km (curved per vertex); land drawn over it
       for (let x = -E; x < E; x += st) for (let z = -E; z < E; z += st) S.quad([x, 0, z], [x + st, 0, z], [x + st, 0, z + st], [x, 0, z + st], up, c0, sea, sea, sea, sea); GPU.sea = gpuBuf(new Float32Array(S.a)); GPU.seaN = S.n; }
@@ -3911,7 +3920,7 @@ function gpuInit() {
     else { const K = roadKit(); GPU.markT = gpuTileSort(K.M.b, K.M.n); const m = new Float32Array(K.M.a.length ? K.M.a : [0]); GPU.mark = gpuBuf(m); GPU.markN = K.M.n; WC.rk = { m, n: K.M.n, markT: GPU.markT, lamps: K.lamps, lit: [...K.lit].map(R => ROADS.indexOf(R)) }; }   // road markings (roadKit), tiled for culling
     GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return { tx, fb }; });
-    GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.mk = prog(GL_MASK_VS, GL_SH_FS); GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
+     GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
     GPU.smI = GPU.sm.pop();   // 3rd map: interior sun shadows (unit walls/frames/furniture, ±12 m)
     // static: land use rings (stencil fans), far land, roads, trees, fullscreen quad
     const lu = [], luR = []; for (const L of LU) { const rs = []; for (const r of L.rings) { rs.push([lu.length / 3, r.length / 2]); for (let i = 0; i < r.length; i += 2) lu.push(r[i], 0, r[i + 1]); } luR.push({ L, rs }); }
@@ -3938,21 +3947,24 @@ function gpuInit() {
     const lo = []; F.forEach(f => f.forEach(k => lo.push(...V[k], 0)));
     const T4 = [0, 1, 2, 3, 4, 5].map(k => [Math.cos(k * Math.PI / 3), 0, Math.sin(k * Math.PI / 3)]);
     for (let k = 0; k < 6; k++) { const a = T4[k], b = T4[(k + 1) % 6]; tv.push(a[0], 0, a[2], 1, b[0], 0, b[2], 1, b[0], 1, b[2], 1, a[0], 0, a[2], 1, b[0], 1, b[2], 1, a[0], 1, a[2], 1); }
-    const tk = tv.slice(80 * 12); GPU.treeGeo = gpuBuf(new Float32Array(tv)); GPU.treeN = tv.length / 4; GPU.treeGeoL = gpuBuf(new Float32Array(lo.concat(tk))); GPU.treeNL = (lo.length + tk.length) / 4;
+    const tk = tv.slice(80 * 12); GPU.treeGeo = gpuIdx(tv, 4); GPU.treeN = tv.length / 4; GPU.treeGeoL = gpuIdx(lo.concat(tk), 4); GPU.treeNL = (lo.length + tk.length) / 4;
     { const o = []; for (const sy of [1, -1]) for (let k = 0; k < 4; k++) { const a = [Math.cos(k * Math.PI / 2), 0, Math.sin(k * Math.PI / 2)], b = [Math.cos((k + 1) * Math.PI / 2), 0, Math.sin((k + 1) * Math.PI / 2)]; o.push(...a, 0, ...(sy > 0 ? b : [0, -1, 0]), 0, ...(sy > 0 ? [0, 1, 0] : b), 0); }
-      GPU.treeGeoX = gpuBuf(new Float32Array(o)); GPU.treeNX = o.length / 4; }   // far LOD (tiles > 2.5 km from the eye, trees ≲2 px): 8-face canopy, no trunk (lag cut 2026-10-31)
+      GPU.treeGeoX = gpuIdx(o, 4); GPU.treeNX = o.length / 4; }   // far LOD (tiles > 2.5 km from the eye, trees ≲2 px): 8-face canopy, no trunk (lag cut 2026-10-31)
     { const o = [], N = 48, ga = Math.PI * (3 - Math.sqrt(5)); for (let i = 0; i < N; i++) { const y = 1 - 2 * (i + 0.5) / N; if (y < -0.75) continue; const r = Math.sqrt(1 - y * y), d = [Math.cos(i * ga) * r, y, Math.sin(i * ga) * r].map(c => c * 0.97);   // leaf cards: Fibonacci points on the canopy, 6 verts each (billboarded in GL_TREE_VS)
         for (const [a, b] of [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]]) o.push(...d, 2 + a + 2 * b); }
-      GPU.treeCard = gpuBuf(new Float32Array(o)); GPU.treeNC = o.length / 4; }
+      GPU.treeCard = gpuIdx(o, 4); GPU.treeNC = o.length / 4; }
     return (GPU.ok = true);
   } catch (e) { console.warn('GPU view unavailable:', e); return (GPU.ok = false); }
 }
+// indexed copy of a non-indexed triangle list (shared vertices once): the GPU's post-transform cache shades each unique vertex once instead of per triangle corner (perf 2026-10-31; same triangles/values → same pixels)
+function gpuIdx(a, st) { const f = new Float32Array(a), m = new Map(), V = [], I = []; for (let i = 0; i < f.length; i += st) { const k = f.subarray(i, i + st).join(','); let j = m.get(k); if (j === undefined) { j = V.length / st; m.set(k, j); for (let q = 0; q < st; q++) V.push(f[i + q]); } I.push(j); }
+  const gl = GPU.gl, b = gpuBuf(new Float32Array(V)), ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(I), gl.STATIC_DRAW); (GPU.tIdx || (GPU.tIdx = new Map())).set(b, { ib, n: I.length }); return b; }
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
 // Spatial tiles (lag cut 2026-10-31): opaque city triangles bucketed by centroid (150 m cells ≤1.5 km of #134, 600 m beyond; stable order inside a cell) → [start, count, minx, maxx, miny, maxy, minz, maxz];
 // each pass draws only the tiles in its view frustum / shadow cascade (adjacent visible tiles merged into one draw). Pure culling: pixels unchanged.
-function gpuTileSort(a, n, ux = UNIT134[0], uz = UNIT134[1]) {
+function gpuTileSort(a, n, ux = UNIT134[0], uz = UNIT134[1], cs = 0) {   // cs: one cell size everywhere (interior: 3 m)
   const nt = n / 3, key = new Int32Array(nt), m = new Map();
-  for (let t = 0; t < nt; t++) { const o = t * 39, x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = Math.hypot(x - ux, z - uz) < 1500, c = near ? 150 : 600;
+  for (let t = 0; t < nt; t++) { const o = t * 39, x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = cs ? true : Math.hypot(x - ux, z - uz) < 1500, c = cs || (near ? 150 : 600);
     const k = (near ? 0 : 1) * 1e8 + (Math.floor(z / c) + 5000) * 1e4 + (Math.floor(x / c) + 5000); let id = m.get(k); if (id === undefined) m.set(k, id = m.size); key[t] = id; }
   const ks = [...m.keys()].sort((p, q) => p - q), rank = new Int32Array(m.size); ks.forEach((k, i) => { rank[m.get(k)] = i; });
   const cnt = new Int32Array(m.size + 1); for (let t = 0; t < nt; t++) cnt[rank[key[t]] + 1]++; for (let i = 0; i < m.size; i++) cnt[i + 1] += cnt[i];
@@ -3972,7 +3984,16 @@ function lightCull(L, k) { const c = L.c[k], s = L.s[k][0] + 2, r = L.r, u = L.u
   return (x0, x1, y0, y1, z0, z1) => { const cx = (x0 + x1) / 2 - c[0], cyy = (y0 + y1) / 2 - c[1], cz = (z0 + z1) / 2 - c[2], hx = (x1 - x0) / 2, hy = (y1 - y0) / 2, hz = (z1 - z0) / 2;
     for (const A of [r, u]) if (Math.abs(A[0] * cx + A[1] * cyy + A[2] * cz) > s + Math.abs(A[0]) * hx + Math.abs(A[1]) * hy + Math.abs(A[2]) * hz) return false; return true; }; }
 // draw the opaque city range tile by tile (buffer + program already bound); no tiles (old cache) → whole range
-function cityDraw(test, T = GPU.tiles) { const gl = GPU.gl; if (!T) return gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); let s = -1, e = -1;
+// front-to-back (main pass, eye given): visible tiles sorted by distance so early depth rejects hidden fragments (perf 2026-10-31; was buffer order = far tiles shaded, then overdrawn)
+function f2b(T, test, ex, ez) { const V = []; for (const t of T) if (!test || test(t[2], t[3], t[4], t[5], t[6], t[7])) { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); V.push([dx * dx + dz * dz, t]); }
+  V.sort((p, q) => p[0] - q[0]); const R = []; for (const [, t] of V) { const l = R[R.length - 1]; if (l && l[0] + l[1] === t[0]) l[1] += t[1]; else R.push([t[0], t[1]]); } return R; }
+// screen rect (CSS px) covering a world box incl. earth-curvature drop (faces near-clipped via projDirPoly); used to scissor full-screen fill quads to the area they can touch
+function scrRect(cam, x0, x1, y0, y1, z0, z1, r) { const dx = Math.max(Math.abs(x0 - cam.ex), Math.abs(x1 - cam.ex)), dz = Math.max(Math.abs(z0 - cam.ez), Math.abs(z1 - cam.ez)); y0 -= (dx * dx + dz * dz) / (2 * R_EFF) + 3; y1 += 3;
+  const X = [x0 - 2 - cam.ex, x1 + 2 - cam.ex], Y = [y0 - cam.hEye, y1 - cam.hEye], Z = [z0 - 2 - cam.ez, z1 + 2 - cam.ez], v = (i, j, k) => [X[i], Y[j], Z[k]];
+  for (const f of [[v(0, 0, 0), v(1, 0, 0), v(1, 1, 0), v(0, 1, 0)], [v(0, 0, 1), v(1, 0, 1), v(1, 1, 1), v(0, 1, 1)], [v(0, 0, 0), v(0, 1, 0), v(0, 1, 1), v(0, 0, 1)], [v(1, 0, 0), v(1, 1, 0), v(1, 1, 1), v(1, 0, 1)], [v(0, 0, 0), v(1, 0, 0), v(1, 0, 1), v(0, 0, 1)], [v(0, 1, 0), v(1, 1, 0), v(1, 1, 1), v(0, 1, 1)]]) {
+    const q = cam.projDirPoly(f); if (q) for (const [a, b] of q) { if (a < r[0]) r[0] = a; if (b < r[1]) r[1] = b; if (a > r[2]) r[2] = a; if (b > r[3]) r[3] = b; } }
+  return r; }
+function cityDraw(test, T = GPU.tiles, eye) { const gl = GPU.gl; if (!T) return gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); if (eye) { for (const [s0, n] of f2b(T, test, eye[0], eye[1])) gl.drawArrays(gl.TRIANGLES, s0, n); return; } let s = -1, e = -1;
   for (const t of T) { if (!test(t[2], t[3], t[4], t[5], t[6], t[7])) continue; if (t[0] === e) e += t[1]; else { if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); s = t[0]; e = t[0] + t[1]; } }
   if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); }
 // Rooftop plant (realism 2026-10-31, G3; estimates): on existing buildings ≥ 10 m, ≥ 300 m² roof, within 2.5 km of #134: 1–3 boxes (AHU / water tank /
@@ -4158,13 +4179,13 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
       q([P(hg, 0, o0), P(hg, Wd, o0), P(hg, Wd, o1), P(hg, 0, o1)], true); fr(Wd - Fw, Wd, o0, o1); fr(0, Wd, o0, o0 + Fw); fr(0, Wd, o1 - Fw, o1);
       if (tz.length > 1) { const Rr = hd - tz[1] - M, cs = Math.cos(HOPPER_A), sn = Math.sin(HOPPER_A), Tt = r => [r * sn, hd - r * cs], tp = (sa, sb, r0, r1) => { const [p0, z0] = Tt(r0), [p1, z1] = Tt(r1); return [P(sa, p0, z0), P(sb, p0, z0), P(sb, p1, z1), P(sa, p1, z1)]; };
         q(tp(s0, s1, 0, Rr), true); q(tp(s0, s1, Rr - Fw, Rr)); q(tp(s0, s0 + Fw, 0, Rr)); q(tp(s1 - Fw, s1, 0, Rr)); } } }
-  const gl = GPU.gl; GPU.inBuf = gpuBuf(new Float32Array(A.a));
+  const gl = GPU.gl; GPU.inT = gpuTileSort(A.a, A.n, 0, 0, 3); GPU.inBuf = gpuBuf(new Float32Array(A.a));   // 3 m tiles: room pass + SSAO prepass draw only the tiles in view (perf 2026-10-31)
   { const a = A.a, M = []; for (let o = 0; o + 39 <= a.length; o += 39) { const P = [0, 13, 26].map(k => [a[o + k], a[o + k + 1], a[o + k + 2]]), e = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]), u = P[1].map((v, i) => v - P[0][i]), w = P[2].map((v, i) => v - P[0][i]);   // room mask triangles (see GL_MASK_VS)
       const ar = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]), alt = ar / Math.max(e(P[0], P[1]), e(P[1], P[2]), e(P[2], P[0]), 1e-6); if (alt < 0.25) continue;
       const c = [0, 1, 2].map(i => (P[0][i] + P[1][i] + P[2][i]) / 3); for (const p of P) M.push(p[0], p[1], p[2], c[0], c[1], c[2], alt); }
     GPU.mkBuf = gpuBuf(new Float32Array(M.length ? M : [0, 0, 0, 0, 0, 0, 0])); GPU.mkN = M.length / 7; } tint.push(...fGlass); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; GPU.frostBuf = gpuBuf(new Float32Array(fFrost.length ? fFrost : [0])); GPU.frostN = fFrost.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
   GPU.W = W; GPU.Wm = { o: [sp.x, sp.z], u, n, p: [px, py] }; GPU.pkey = ''; GPU.inN = A.n;
-  IC.set(key, { inBuf: GPU.inBuf, inN: GPU.inN, mkBuf: GPU.mkBuf, mkN: GPU.mkN, tintBuf: GPU.tintBuf, tintN: GPU.tintN, sheerBuf: GPU.sheerBuf, sheerN: GPU.sheerN, frostBuf: GPU.frostBuf, frostN: GPU.frostN, W, Wm: GPU.Wm });
+  IC.set(key, { inBuf: GPU.inBuf, inT: GPU.inT, inN: GPU.inN, mkBuf: GPU.mkBuf, mkN: GPU.mkN, tintBuf: GPU.tintBuf, tintN: GPU.tintN, sheerBuf: GPU.sheerBuf, sheerN: GPU.sheerN, frostBuf: GPU.frostBuf, frostN: GPU.frostN, W, Wm: GPU.Wm });
   while (IC.size > 4) { const [k0, e] = IC.entries().next().value; IC.delete(k0); for (const b of [e.inBuf, e.mkBuf, e.tintBuf, e.sheerBuf, e.frostBuf]) gl.deleteBuffer(b); }   // evict least recently used
   return GPU.inN;
 }
@@ -4178,8 +4199,8 @@ function gpuAttrib(pr, buf, inst) {
   if (pr === GPU.sh || pr === GPU.dep) on(pr.a.aPos, 3, 52, 0);
   else if (pr === GPU.sht) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
   else if (pr === GPU.mk) { on(pr.a.aPos, 3, 28, 0); on(pr.a.aNor, 3, 28, 12); on(pr.a.aPart, 1, 28, 24); }
-  else if (pr === GPU.main) { on(pr.a.aPos, 3, 52, 0); on(pr.a.aNor, 3, 52, 12); on(pr.a.aCol, 3, 52, 24); on(pr.a.aTex, 4, 52, 36); }
-  else if (pr === GPU.tree) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
+  else if (pr === GPU.main || pr === GPU.zm) { on(pr.a.aPos, 3, 52, 0); on(pr.a.aNor, 3, 52, 12); on(pr.a.aCol, 3, 52, 24); on(pr.a.aTex, 4, 52, 36); }
+  else if (pr === GPU.tree || pr === GPU.zt) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
   else on(pr.a.aPos, 3, 12, 0);
 }
 function gpuTreeInst() {   // instance buffers from TREES; rebuilt when TREES changes (a render before initApp2 filled TREES left phones with no trees, TY 2026-10-30)
@@ -4191,7 +4212,8 @@ function gpuTreeInst() {   // instance buffers from TREES; rebuilt when TREES ch
   const [na, nT] = tile(nr, 150), [fa, fT] = tile(fr, 600); GPU.treeT = nT; GPU.treeTF = fT;
   if (GPU.treeInst) { gl.deleteBuffer(GPU.treeInst); gl.deleteBuffer(GPU.treeInstF); } GPU.treeInst = gpuBuf(na); GPU.treeInstF = gpuBuf(fa); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; GPU.treeSrc = TREES.x; GPU.treeCnt = TREES.n; }
 function gpuTrees(pr, test, ex = state.vx, ez = state.vz) { const gl = GPU.gl; if (GPU.treeSrc !== TREES.x || GPU.treeCnt !== TREES.n) gpuTreeInst(); const d = GL_DIAG && pr === GPU.tree, e0 = d ? gl.getError() : 0;
-  const run = (geo, inst, T, nv) => { gpuAttrib(pr, geo, inst); gl.bindBuffer(gl.ARRAY_BUFFER, inst); let s = -1, e = -1; const go = () => { if (e > s) { gl.vertexAttribPointer(pr.a.aInst, 4, gl.FLOAT, false, 16, s * 16); gl.drawArraysInstanced(gl.TRIANGLES, 0, nv, e - s); } };
+  const run = (geo, inst, T, nv) => { gpuAttrib(pr, geo, inst); gl.bindBuffer(gl.ARRAY_BUFFER, inst); let s = -1, e = -1; const ix = GPU.tIdx && GPU.tIdx.get(geo); if (ix) gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ix.ib); const go = () => { if (e > s) { gl.vertexAttribPointer(pr.a.aInst, 4, gl.FLOAT, false, 16, s * 16); if (ix) gl.drawElementsInstanced(gl.TRIANGLES, ix.n, gl.UNSIGNED_SHORT, 0, e - s); else gl.drawArraysInstanced(gl.TRIANGLES, 0, nv, e - s); } };
+    if (pr === GPU.tree || pr === GPU.zt) { for (const [s0, n] of f2b(T, test, ex, ez)) { s = s0; e = s0 + n; go(); } return; }   // main pass: near tiles first (early depth)
     for (const t of T) { if (test && !test(t[2], t[3], t[4], t[5], t[6], t[7])) continue; if (t[0] === e) e += t[1]; else { go(); s = t[0]; e = t[0] + t[1]; } } go(); };
   const far = t => { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); return dx * dx + dz * dz > 6.25e6; };
   run(GPU.treeGeo, GPU.treeInst, GPU.treeT, GPU.treeN); if (pr === GPU.tree && GPU.treeCard) run(GPU.treeCard, GPU.treeInst, GPU.treeT.filter(t => { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); return dx * dx + dz * dz < 2.025e5; }), GPU.treeNC);   // leaf cards ≤450 m of the eye
@@ -4202,6 +4224,16 @@ function glDiag(k, e0, e1) { if (!GL_DIAG || GL_DIAG_R[k]) return; const gl = GP
   let el = document.getElementById('glDiag'); if (!el) { el = document.createElement('pre'); el.id = 'glDiag'; el.style.cssText = 'position:fixed;left:8px;right:8px;top:60px;z-index:99;background:#000d;color:#fde68a;font:11px/1.4 monospace;padding:8px;border-radius:8px;white-space:pre-wrap'; el.onclick = () => el.remove(); document.body.appendChild(el); }
   const ri = gl.getExtension('WEBGL_debug_renderer_info'), tl = [GPU.tree, GPU.sht, GPU.spr].map(q => q && JSON.stringify(Object.fromEntries(Object.entries(q.a).filter(([, v]) => v >= 0))));
   el.textContent = ['WebGL diag (tap to close)', navigator.userAgent, ri ? gl.getParameter(ri.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), 'trees ' + TREES.n + ' near ' + GPU.treeNn + ' far ' + GPU.treeNf + ' verts ' + GPU.treeN + '/' + GPU.treeNL, 'attribs tree ' + tl[0] + ' sht ' + tl[1] + ' spr ' + tl[2], 'maxAttribs ' + gl.getParameter(gl.MAX_VERTEX_ATTRIBS), ...Object.values(GL_DIAG_R)].join('\n'); }
+// ?bench in the URL (perf 2026-10-31): on-device frame timing of the current view, medians, GPU-synced by a 1-px readPixels: full render (renderNow), turning frame (drawFast),
+// moving frame (drawMove, as while dragging), time scrub (sun moves → shadow maps), + load time to the first view. Result card (tap to close); view/time restored.
+function glBench() { const gl = GPU.gl; if (!gl || !lastMath) return; const px = new Uint8Array(4), sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const run = (n, f) => { f(0); sync(); const a = []; for (let i = 1; i <= n; i++) { const t = performance.now(); f(i); sync(); a.push(performance.now() - t); } a.sort((x, y) => x - y); return Math.round(a[a.length >> 1]); };
+  const h0 = state.heading, hr = state.hour, turn = i => { state.heading = h0 + (i % 2 ? 1 : -1); };
+  const r = { full: run(5, () => renderNow()), turn: run(9, i => { turn(i); drawFast(lastMath); }), move: run(9, i => { turn(i); drawMove(lastMath); }), scrub: run(9, i => { state.hour = hr + (i % 2 ? 0.25 : 0.5); lastMath.env = lightingEnv(); drawMove(lastMath); }) };
+  state.heading = h0; state.hour = hr; lastMath.env = lightingEnv(); renderNow();
+  const ri = gl.getExtension('WEBGL_debug_renderer_info'), el = document.createElement('pre'); el.style.cssText = 'position:fixed;left:8px;right:8px;top:60px;z-index:99;background:#000d;color:#fde68a;font:12px/1.5 monospace;padding:10px;border-radius:8px;white-space:pre-wrap'; el.onclick = () => el.remove();
+  el.textContent = ['Benchmark (median ms, tap to close)', `load to first view ${Math.round(BENCH.load)}`, `full render ${r.full}`, `turning frame ${r.turn}`, `moving frame ${r.move}`, `time scrub ${r.scrub}`, `GL ${GPU.cv.width}×${GPU.cv.height}, ${ri ? gl.getParameter(ri.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)}`, navigator.userAgent].join('\n'); document.body.appendChild(el); }
+const BENCH = { load: 0 };
 // cloud field uniforms: fbm threshold for the weather's sky coverage (fbm ≈ N(0.48, 0.15)), wind ≈ 5 m/s from the E (as the 2D cloud drift)
 function cloudU(env) { const W = env.W, cov = W.cs > 2 ? Math.min(0.97, 0.55 + 0.13 * W.cs) : clamp(W.clouds / 70 * 0.36, 0, 0.6), t = simT();
   const z = x => { const q = Math.sqrt(-2 * Math.log(x)); return q - (2.515517 + 0.802853 * q + 0.010328 * q * q) / (1 + 1.432788 * q + 0.189269 * q * q + 0.001308 * q * q * q); };   // probit tail (Abramowitz–Stegun 26.2.23)
@@ -4210,11 +4242,13 @@ function cloudCols(env) { const el = env.sun.elDeg, day = clamp((el + 4) / 10, 0
   const lit = el > -6 ? mix(mix([255, 255, 255], [255, 196, 150], env.warm), [70, 74, 92], 1 - day) : [40, 44, 58], base = mix(mix(lit, [128, 136, 154], 0.42), [70, 74, 84], W.cg * 0.6);
   return [mix(lit, base, W.cg * 0.6), base]; }
 function gpuSky(cam, env, cw, ch) {   // fullscreen GL sky into GPU.cv (half backing res; composited by drawSkyAndSea, then gpuRender clears the canvas)
-  if (!gpuInit()) return false; const gl = GPU.gl, cv = GPU.cv, W = Math.max(2, Math.round(cw / 2)), H = Math.max(2, Math.round(ch / 2)); if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  if (!gpuInit()) return false; const gl = GPU.gl, cv = GPU.cv, [TW, TH] = GPU.tgt || [cw, ch], W = Math.max(2, Math.min(TW, Math.round(cw / 2))), H = Math.max(2, Math.min(TH, Math.round(ch / 2))); if (cv.width !== TW || cv.height !== TH) { cv.width = TW; cv.height = TH; }   // perf 2026-10-31: was resized to half and back to full every frame (2 backbuffer reallocations)
   gl.viewport(0, 0, W, H); gl.disable(gl.DEPTH_TEST); gl.disable(gl.STENCIL_TEST); gl.disable(gl.BLEND); const S = GPU.sky; gpuCam(S, cam, 1, 40000); const k = c => c.map(v => v / 255), [cl, cb] = cloudCols(env);
   gl.uniform1f(S.u.uClip, 1); gl.uniform2f(S.u.uRes, W, H); gl.uniform3f(S.u.uSun, ...env.sunVec); gl.uniform3f(S.u.uTop, ...k(env.sky.top)); gl.uniform3f(S.u.uMid, ...k(env.sky.mid)); gl.uniform3f(S.u.uHor, ...k(env.sky.hor));
   gl.uniform3f(S.u.uClit, ...k(cl)); gl.uniform3f(S.u.uCbase, ...k(cb)); gl.uniform1f(S.u.uWarm, env.warm); gl.uniform1f(S.u.uDirect, env.direct); gl.uniform4f(S.u.uCld, ...cloudU(env));
-  gpuAttrib(S, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); gl.enable(gl.BLEND); return true; }
+  gl.uniform2f(S.u.uOff, 0, 0); gpuAttrib(S, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6);
+  if (TW > W && TH > H) { gl.enable(gl.SCISSOR_TEST); for (const [ox, oy, x, y, w, h] of [[0, 1, 0, H, W, 1], [1, 0, W, 0, 1, H], [1, 1, W, H, 1, 1]]) { gl.viewport(ox, oy, W, H); gl.uniform2f(S.u.uOff, ox, oy); gl.scissor(x, y, w, h); gl.drawArrays(gl.TRIANGLES, 0, 6); } gl.disable(gl.SCISSOR_TEST); }   // 1-px edge copy above/right of the sky rect: drawImage's bilinear filter samples just outside the source rect
+  gl.enable(gl.BLEND); return { sy: TH - H, W, H }; }
 function gpuCam(pr, cam, near, far) {
   const gl = GPU.gl, cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   gl.useProgram(pr.p); gl.uniform3f(pr.u.uEye, cam.ex, cam.hEye, cam.ez); gl.uniform3f(pr.u.uR, cy, 0, -sy); gl.uniform3f(pr.u.uU, -sp * sy, cp, -sp * cy); gl.uniform3f(pr.u.uF, cp * sy, sp, cp * cy);
@@ -4253,37 +4287,52 @@ function gpuRender(cam, env, pxW, pxH) {
   // (shrunk ≥2 px, GL_MASK_VS) so outside pixels behind them are never shaded (looking at a wall cost the whole city twice; lag cut 2026-10-31). Not on the void deck (its interior pass is depth-masked by the soffit).
   const nIn = GPU.mask && gpuInterior(env) ? GPU.mkN : 0, mask = () => { if (!nIn) return; const K = GPU.mk; gpuCam(K, cam, 0.05, 400); gl.uniform2f(K.u.uMRes, pxW, pxH); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.ALWAYS); gl.depthMask(true); gl.depthRange(0, 0); gl.colorMask(false, false, false, false);
     gpuAttrib(K, GPU.mkBuf); gl.drawArrays(gl.TRIANGLES, 0, nIn); gl.depthRange(0, 1); gl.colorMask(true, true, true, true); gpuCam(M, cam, NEAR, FAR); };
-  const paint = () => { if (nIn) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); } else gl.disable(gl.DEPTH_TEST); gl.depthMask(false); };   // painter passes: no depth write, but not behind the room
+  // Z-prepass (perf 2026-10-31): opaque city + tree canopies/trunks into depth first (colour off, trivial FS, same vertex shaders, invariant gl_Position) and stencil bit 4 = city.
+  // Every later pass then shades only visible fragments: painter ground passes (sea, land use, roads, shadows) test LESS against it, the mirrored city skips city pixels, the city/tree pass shades each pixel once (LEQUAL).
+  const cc = camCull(cam), eye = [cam.ex, cam.ez], own = ownUnitTest(), Z = !!(GPU.zm && GPU.zt && !GPU.noZ);
+  const opaque = () => { cityDraw(cc, GPU.tiles, eye); if (GPU.rkT) cityDraw(cc, GPU.rkT, eye);
+    for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
+    if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); };
+  const paint = () => { if (nIn || Z) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); } else gl.disable(gl.DEPTH_TEST); gl.depthMask(false); };   // painter passes: no depth write, but not behind the room / city
   // ground layer (painter order): sea plane (reflection/glitter), far land, land use (stencil even-odd per class, constant colour as 2D), mirrored city over water, roads
-  gpuCam(M, cam, NEAR, FAR); gpuEnv(M, env, false); mask(); paint(); gpuAttrib(M, GPU.sea); gl.drawArrays(gl.TRIANGLES, 0, GPU.seaN);
+  gpuCam(M, cam, NEAR, FAR); gpuEnv(M, env, false); mask();
+  if (Z) { const zm = GPU.zm, zt = GPU.zt; gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.colorMask(false, false, false, false);
+    gl.enable(gl.STENCIL_TEST); gl.stencilMask(4); gl.stencilFunc(gl.ALWAYS, 4, 4); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+    gpuCam(zm, cam, NEAR, FAR); gl.uniform1f(zm.u.uMirror, 0); gpuAttrib(zm, GPU.city); opaque();
+    gpuCam(zt, cam, NEAR, FAR); gl.uniform1f(zt.u.uTime, simT() % 3600); gpuTrees(zt, cc, cam.ex, cam.ez);
+    gl.colorMask(true, true, true, true); gl.disable(gl.STENCIL_TEST); gl.stencilMask(0xff); gl.useProgram(M.p); }
+  paint(); gpuAttrib(M, GPU.sea); gl.drawArrays(gl.TRIANGLES, 0, GPU.seaN);
   // land first, marking stencil bit 2; the mirrored city is then drawn only where no land is (water) — same pixels as drawing it under the opaque land, without shading the hidden reflection (lag cut 2026-10-31)
-  gl.enable(gl.STENCIL_TEST); gl.stencilMask(0xff); gl.stencilFunc(gl.ALWAYS, 2, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+  gl.enable(gl.STENCIL_TEST); gl.stencilMask(3); gl.stencilFunc(gl.ALWAYS, 2, 3); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
   gpuAttrib(M, GPU.ground); gl.drawArrays(gl.TRIANGLES, 0, GPU.farN);
   gpuCam(F, cam, NEAR, FAR);
   for (const [cls, list] of GPU.luC) { if (cls === 0) continue; let any = false, rs0 = -1, re = -1;   // per class: stencil all its visible polygons (even-odd), then ONE fill quad (was one fullscreen quad per polygon: ~400/frame, lag cut 2026-10-31)
-    for (const e0 of list) { const L = e0.L; if (!cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue;
+    const sr = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const e0 of list) { const L = e0.L; if (!cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue; scrRect(cam, L.minx, L.maxx, 0, 0, L.minz, L.maxz, sr);
       if (!any) { any = true; gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.lu); gl.colorMask(false, false, false, false); gl.stencilMask(1); gl.stencilFunc(gl.ALWAYS, 0, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT); }
       if (e0.s === re) re += e0.n; else { if (re > rs0) gl.drawArrays(gl.TRIANGLES, rs0, re - rs0); rs0 = e0.s; re = e0.s + e0.n; } }
     if (re > rs0) gl.drawArrays(gl.TRIANGLES, rs0, re - rs0); if (!any) continue; const L = list[0].L;
     const col = GROUND_ALB[L.c], G = GPU.gfill;   // fill: per-pixel texture + haze (GL_GFILL_FS)
-    gl.colorMask(true, true, true, true); gl.stencilMask(0xff); gl.stencilFunc(gl.NOTEQUAL, 2, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE); gpuCam(G, cam, NEAR, FAR); gl.uniform1f(G.u.uClip, 1); gl.uniform4f(G.u.uColor, col[0] / 255, col[1] / 255, col[2] / 255, 1); gl.uniform1f(G.u.uCls, L.c);
+    gl.colorMask(true, true, true, true); gl.stencilMask(3); gl.stencilFunc(gl.NOTEQUAL, 2, 1); gl.stencilOp(gl.KEEP, gl.REPLACE, gl.REPLACE); if (Z) gl.depthRange(0.99995, 0.99995); /* fill quad just in front of the far plane: hidden behind the city prepass */ gpuCam(G, cam, NEAR, FAR); gl.uniform1f(G.u.uClip, 1); gl.uniform4f(G.u.uColor, col[0] / 255, col[1] / 255, col[2] / 255, 1); gl.uniform1f(G.u.uCls, L.c);
     gl.uniform2f(G.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform3f(G.u.uSun, ...env.sunVec); gl.uniform3f(G.u.uFog, ...env.sky.hor.map(v => v / 255)); gl.uniform1f(G.u.uBeta, env.beta); gl.uniform1f(G.u.uDirect, env.direct); gl.uniform1f(G.u.uWarm, env.warm); gl.uniform1f(G.u.uAmb, env.ambient); gl.uniform4f(G.u.uCld, ...cloudU(env)); gl.uniform1f(G.u.uWet, env.W.rain ? 1 : 0); gl.uniform3f(G.u.uSkyMid, ...env.sky.mid.map(v => v / 255));
-    gpuAttrib(G, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); gl.useProgram(F.p); }
-  gl.stencilMask(0); gl.stencilFunc(gl.EQUAL, 0, 2); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);   // reflections: city mirrored in y, water pixels only
+    const kx = pxW / cam.w, ky = pxH / cam.h, sx0 = Math.max(0, Math.floor(sr[0] * kx) - 2), sx1 = Math.min(pxW, Math.ceil(sr[2] * kx) + 2), sy0 = Math.max(0, Math.floor(sr[1] * ky) - 2), sy1 = Math.min(pxH, Math.ceil(sr[3] * ky) + 2);
+    if (sx1 > sx0 && sy1 > sy0) { gl.enable(gl.SCISSOR_TEST); gl.scissor(sx0, pxH - sy1, sx1 - sx0, sy1 - sy0); gpuAttrib(G, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); gl.disable(gl.SCISSOR_TEST); }   /* fill quad only over the class's screen rect (was full screen per class) */
+    gl.depthRange(0, 1); gl.useProgram(F.p); }
+  gl.stencilMask(0); gl.stencilFunc(gl.EQUAL, 0, Z ? 6 : 2); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);   // reflections: city mirrored in y, water pixels only
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gl.uniform1f(M.u.uMirror, 1); gl.uniform1f(M.u.uMirA, env.night ? 0.75 : 0.5);
-  gpuAttrib(M, GPU.city); cityDraw(camCull(cam, true)); gl.drawArrays(gl.TRIANGLES, GPU.opN, (CMP.on && GPU.newR[1] ? GPU.newR[0] : GPU.cityN) - GPU.opN); gl.uniform1f(M.u.uMirror, 0); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gpuAttrib(M, GPU.city); cityDraw(camCull(cam, true)); gl.drawArrays(gl.TRIANGLES, GPU.opN, (CMP.on && GPU.newR[1] ? GPU.newR[0] : GPU.cityN) - GPU.opN); gl.uniform1f(M.u.uMirror, 0);
+  if (Z) { gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 1); gpuAttrib(F, GPU.quad); gl.depthRange(1, 1); gl.depthFunc(gl.ALWAYS); gl.colorMask(false, false, false, false); gl.drawArrays(gl.TRIANGLES, 0, 6);   // mirror depth back to far (same stencil: water, not city); prepass depth kept
+    gl.depthRange(0, 1); gl.depthFunc(gl.LEQUAL); gl.colorMask(true, true, true, true); gl.useProgram(M.p); } else gl.clear(gl.DEPTH_BUFFER_BIT);
   gl.stencilMask(0xff); gl.disable(gl.STENCIL_TEST); mask(); paint();
   gl.useProgram(M.p); gpuAttrib(M, GPU.ground); if (state.showRoads) gl.drawArrays(gl.TRIANGLES, GPU.farN, GPU.groundN - GPU.farN);
   if (GPU.gxN) { gpuAttrib(M, GPU.gx); gl.drawArrays(gl.TRIANGLES, 0, GPU.gxN); gpuAttrib(M, GPU.ground); }
   if (state.showRoads && GPU.markN) { gpuAttrib(M, GPU.mark); cityDraw(camCull(cam), GPU.markT); gpuAttrib(M, GPU.ground); }   // lane lines / kerb lines / crossings / arrows (roadKit; over the plan roads too)
   if (GPU.L) cityDraw(camCull(cam), GPU.recvT);   // building/tree shadows on the ground
   // solids with depth
-  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); const cc = camCull(cam); cityDraw(cc); if (GPU.rkT) cityDraw(cc, GPU.rkT);
-  const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
-  if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city); opaque();   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez);
-  if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
+  gl.enable(gl.BLEND); if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
     gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
     gpuEdges(cam, env); }
   // traffic by day + wakes (opaque sprites), Flyer by day; then additive night lights (lamps, cars, landmarks, Flyer LEDs, Spectra), depth-tested, no depth write
@@ -4328,7 +4377,9 @@ function gpuRenderInterior(cam, env, kIn) {
   const ao = gpuDepth(cam, n); gpuCam(M, cam, 0.05, 400); gl.uniform1f(M.u.uAO, ao ? 1 : 0); if (ao) { gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, 0.05, 400); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
   if (onGround()) { const vc = gpuVdCols(); if (vc) { gl.colorMask(false, false, false, false); gpuAttrib(M, vc.buf); gl.drawArrays(gl.TRIANGLES, 0, vc.n); gl.colorMask(true, true, true, true); } }
   if (onGround() && !(state.walk.X > 12.3 && state.walk.X < 16.3 && state.walk.Y > 0.9 && state.walk.Y < 10)) { const sb = gpuSoffit(); if (sb) { gl.colorMask(false, false, false, false); gpuAttrib(M, sb.buf); gl.drawArrays(gl.TRIANGLES, 0, sb.n); gl.colorMask(true, true, true, true); } }   // void deck outside the stair core: 1F ceiling plates in depth first, so upper-storey interior (2F corridor slab, shafts, stair well) can't paint over the ceiling (TY 2026-10-30)
-  gpuAttrib(M, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n); gl.uniform1f(M.u.uAO, 0);
+  const icc = camCull(cam), ieye = [cam.ex, cam.ez];
+  if (GPU.zm && !GPU.noZ) { const zm = GPU.zm; gpuCam(zm, cam, 0.05, 400); gl.uniform1f(zm.u.uMirror, 0); gl.colorMask(false, false, false, false); gpuAttrib(zm, GPU.inBuf); cityDraw(icc, GPU.inT, ieye); gl.colorMask(true, true, true, true); gl.useProgram(M.p); }   // room Z-prepass (perf 2026-10-31): the heavy room shader runs once per pixel
+  gl.disable(gl.BLEND); gpuAttrib(M, GPU.inBuf); cityDraw(icc, GPU.inT, ieye); gl.enable(gl.BLEND); gl.uniform1f(M.u.uAO, 0);
   { const LD = liftDynGeo(); if (LD && LD.n) { gpuAttrib(M, gpuDyn('liftDoor', LD.a)); gl.drawArrays(gl.TRIANGLES, 0, LD.n); } }   // animated lift doors
   gpuCam(F, cam, 0.05, 400); gl.uniform1f(F.u.uClip, 0); gl.depthMask(false);
   if (GPU.tintN) { gl.uniform4f(F.u.uColor, 200 / 255, 215 / 255, 225 / 255, 0.16); gpuAttrib(F, GPU.tintBuf); gl.drawArrays(gl.TRIANGLES, 0, GPU.tintN); }
@@ -4342,7 +4393,7 @@ function gpuDepth(cam, n) {
   if (GPU.depWH !== w + 'x' + h) { GPU.depWH = w + 'x' + h; gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, GPU.depTx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); }
-  gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.viewport(0, 0, w, h); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gpuCam(pr, cam, 0.05, 400); gpuAttrib(pr, GPU.inBuf); gl.drawArrays(gl.TRIANGLES, 0, n);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.viewport(0, 0, w, h); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gpuCam(pr, cam, 0.05, 400); gpuAttrib(pr, GPU.inBuf); cityDraw(camCull(cam), GPU.inT);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.enable(gl.BLEND); gl.viewport(0, 0, w, h); return true;
 }
 // Window daylight sources (cached per interior): each glazed opening as a world rectangle (o, a along, b up; winding so the room side is positive) × each room rect it lights.
@@ -4520,8 +4571,8 @@ function gpuEdges(cam, env) {   // new-tower outlines in their group colour (as 
 function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { const t0 = performance.now(), full = cv === perspectiveCanvas && !PIN_VIS.fast && !PIN_VIS.lo; drawPerspective0(m, cv, ctx); if (full) { const dt = performance.now() - t0; GPU.fullMs = GPU.fullMs ? GPU.fullMs * 0.6 + dt * 0.4 : dt; } if (cv === perspectiveCanvas) { drawTape(); drawStrip(); } }   // on-screen: compass tape + floor strip follow every frame; GPU.fullMs = full-render cost (bloom readback syncs the GPU): fast devices keep full res while moving
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
-  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
-  const lo = PIN_VIS.lo && cv === perspectiveCanvas && !(GPU.fullMs < 50) ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
+  const lo = PIN_VIS.lo && cv === perspectiveCanvas && !(GPU.fullMs < 50) ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1; GPU.tgt = [Math.round(cv.width * lo), Math.round(cv.height * lo)];   // GL canvas size for this frame (the half-res sky goes into a corner of it: no realloc per frame)
+  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); const gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [];
   if (state.showLabels) {
@@ -5140,13 +5191,14 @@ window.addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey
 let initialized = false;
 function initApp() {
   if (initialized) return; initialized = true; splStep('Building the city…', 0.45);
+  try { gpuStart(); } catch (e) { console.warn(e); }   // shaders compile in the driver while the city is built
   buildGroupRows(); generateTowers(); rebuildIndex(); wcLoad().then(() => { splStep('Drawing the first view…', 0.8); setTimeout(initApp2, 30); }); }
 function splStep(t, k) { const a = $('splStep'), b = $('splBar'); if (a) a.textContent = t; if (b) b.style.width = `${k * 100}%`; }
 function initApp2() { const E = WC.e;
   if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees();
   furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
   setInterval(viewSave, 2000); addEventListener('pagehide', viewSave); document.addEventListener('visibilitychange', () => { if (document.hidden) viewSave(); });
-  const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); }
+  const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); } BENCH.load = performance.now(); if (/[?&]bench/.test(location.search)) setTimeout(glBench, 1500);
   let pending = false; const sz = () => [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement, planCanvas].map(e => `${e.clientWidth}x${e.clientHeight}`).join() + FURN.open, last = { k: sz() };
   const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; const k = sz(); if (k !== last.k) { last.k = k; resizeCanvases(); return; }   // observers fire once on observe: no full re-render unless a main pane changed size
     let ch = false; [$('compassTape'), $('floorStrip'), $('timeTrack')].forEach(c => { if (c.clientWidth > 4 && (c.clientWidth !== c._w || c.clientHeight !== c._h)) { sizeCanvas(c, c.clientWidth, c.clientHeight); ch = true; } });   // bar canvases settle after the first fill: redraw only them
