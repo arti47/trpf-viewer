@@ -1866,13 +1866,13 @@ function makeCamera(w, h, eye) {
   const dirToScreen = (dx, dy, dz) => { const xr = dx * cy - dz * sy, zr = dx * sy + dz * cy, yc = dy * cp - zr * sp, zc = dy * sp + zr * cp; return zc <= 1e-6 ? null : [w / 2 + (xr / zc) * fPx, h / 2 - (yc / zc) * fPx]; };
   const hfov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength);
   // conservative plan-wedge visibility test for a bbox
-  const inWedge = (minx, maxx, minz, maxz, range) => {
+  const inWedge = (minx, maxx, minz, maxz, range, wide = 0) => {
     if (ex >= minx && ex <= maxx && ez >= minz && ez <= maxz) return true;
     const cxb = clamp(ex, minx, maxx), czb = clamp(ez, minz, maxz); if (Math.hypot(cxb - ex, czb - ez) > range) return false;
     let lo = Infinity, hi = -Infinity;
     for (const [x, z] of [[minx, minz], [maxx, minz], [maxx, maxz], [minx, maxz]]) { let a = Math.atan2(x - ex, z - ez) - yaw; a = Math.atan2(Math.sin(a), Math.cos(a)); lo = Math.min(lo, a); hi = Math.max(hi, a); }
     if (hi - lo > Math.PI) return true;
-    const m = hfov / 2 + 0.15; return hi > -m && lo < m;
+    const m = hfov / 2 + 0.15 + wide; return hi > -m && lo < m;
   };
   const projDirPoly = vecs => { const c = vecs.map(([dx, dy, dz]) => { const xr = dx * cy - dz * sy, zr = dx * sy + dz * cy; return [xr, dy * cp - zr * sp, dy * sp + zr * cp]; });
     const out = []; const N = 0.02; for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length], ain = a[2] >= N, bin = b[2] >= N; if (ain) out.push(a); if (ain !== bin) { const t = (N - a[2]) / (b[2] - a[2]); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), N]); } }
@@ -3587,7 +3587,10 @@ precision highp float; uniform vec3 uLr, uLu, uLf, uLc; uniform vec2 uLs; vec4 l
 `;
 const GL_SH_VS = GL_SH_HDR + `in vec3 aPos; void main() { gl_Position = lproj(aPos); }`;
 const GL_SHT_VS = GL_SH_HDR + GL_TREE_POS + `in vec3 aPos; in float aPart; in vec4 aInst; void main() { gl_Position = lproj(treePos(aPos, aPart, aInst)); }`;
-const GL_DEP_VS = GL_HDR + `in vec3 aPos; void main() { float d; gl_Position = project(aPos, d); }`;   // interior depth prepass (SSAO)
+const GL_DEP_VS = GL_HDR + `in vec3 aPos; void main() { float d; gl_Position = project(aPos, d); }`;
+// room mask (lag cut 2026-10-31): room triangles (min altitude ≥ 0.25 m) shrunk toward their centroid so every edge moves ≥ 2 px inward → masks only pixels the room surely covers in full (no AA fringe at window edges)
+const GL_MASK_VS = GL_HDR + `in vec3 aPos, aNor; in float aPart; uniform vec2 uMRes; void main() { float d; vec4 P = project(aPos, d), C = project(aNor, d); gl_Position = P;
+  if (P.w < 0.05 || C.w < 0.05) return; vec2 p = P.xy / P.w, c = C.xy / C.w; float alt = aPart * uP.x * uMRes.x * 0.5 / P.w, k = clamp(6.0 / max(alt, 1e-3), 0.0, 0.6); gl_Position = vec4((p + k * (c - p)) * P.w, P.z, P.w); }`;   // interior depth prepass (SSAO)
 const GL_SH_FS = `#version 300 es
 precision mediump float; void main() {}`;
 // Ear clipping for simple polygons (pts [[x,z]...], any winding) → triangle index triples; fan fallback.
@@ -3653,11 +3656,13 @@ function gpuInit() {
       GPU.lanes = gpuBuf(new Float32Array(L)); GPU.laneN = L.length / 7; }
     GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); return { tx, fb }; });
-    GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
+    GPU.dep = prog(GL_DEP_VS, GL_SH_FS); GPU.mk = prog(GL_MASK_VS, GL_SH_FS); GPU.depTx = gl.createTexture(); GPU.depFb = gl.createFramebuffer(); GPU.depWH = '';
     GPU.smI = GPU.sm.pop();   // 3rd map: interior sun shadows (unit walls/frames/furniture, ±12 m)
     // static: land use rings (stencil fans), far land, roads, trees, fullscreen quad
     const lu = [], luR = []; for (const L of LU) { const rs = []; for (const r of L.rings) { rs.push([lu.length / 3, r.length / 2]); for (let i = 0; i < r.length; i += 2) lu.push(r[i], 0, r[i + 1]); } luR.push({ L, rs }); }
-    GPU.lu = gpuBuf(new Float32Array(lu)); GPU.luR = luR; GPU.quad = gpuBuf(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]));
+    GPU.luR = luR; GPU.luC = new Map(); for (const e of luR) { if (!GPU.luC.has(e.L.c)) GPU.luC.set(e.L.c, []); GPU.luC.get(e.L.c).push(e); }
+    { const t = []; for (const list of GPU.luC.values()) for (const e of list) { e.s = t.length / 3; for (const [s0, c] of e.rs) for (let i = 1; i + 1 < c; i++) for (const q of [s0, s0 + i, s0 + i + 1]) t.push(lu[q * 3], 0, lu[q * 3 + 2]); e.n = t.length / 3 - e.s; }
+      GPU.lu = gpuBuf(new Float32Array(t)); }   /* each ring's fan as plain triangles (same even-odd stencil), polygons grouped by class → one draw per run of visible polygons (was one TRIANGLE_FAN call per ring: ~700/frame) */ GPU.quad = gpuBuf(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]));
     const G = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], fl = [150, 150, 148].map(c => c / 255);
     [[-12000, -5200, -3300, 9000], [-12000, 12000, 1800, 12000], [2600, 12000, -1200, 1800]].forEach(([x0, x1, z0, z1]) => { const nx = 12, nz = 12; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const a = x0 + (x1 - x0) * i / nx, b = x0 + (x1 - x0) * (i + 1) / nx, c = z0 + (z1 - z0) * j / nz, d = z0 + (z1 - z0) * (j + 1) / nz; G.quad([a, 0, c], [b, 0, c], [b, 0, d], [a, 0, d], up, fl, z4, z4, z4, z4); } });
     GPU.farN = G.n; const asph = [70, 72, 78].map(c => c / 255);
@@ -3665,7 +3670,7 @@ function gpuInit() {
       if (ringIn(SITE_IMG, (ax + bx) / 2, (az + bz) / 2)) continue;   // inside the site plan: plan roads (gpuGrounds) instead
       G.quad([ax - px, 0, az - pz], [bx - px, 0, bz - pz], [bx + px, 0, bz + pz], [ax + px, 0, az + pz], up, asph, z4, z4, z4, z4); } }
     GPU.groundN = G.n; const rv = [0, 0, -2, 0], blk = [0, 0, 0];   // ground shadow receiver: ±6 km grid, 100 m cells (follows curvature)
-    for (let x = -6000; x < 6000; x += 100) for (let z = -6000; z < 6000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv);
+    GPU.recvT = []; for (let bz = -6000; bz < 6000; bz += 1000) for (let bx = -6000; bx < 6000; bx += 1000) { const s0 = G.n; for (let x = bx; x < bx + 1000; x += 100) for (let z = bz; z < bz + 1000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv); GPU.recvT.push([s0, G.n - s0, bx, bx + 1000, 0, 0.2, bz, bz + 1000]); }   // 1 km blocks (frustum-culled)
     GPU.recvN = G.n - GPU.groundN; GPU.ground = gpuBuf(new Float32Array(G.a));
     gpuTreeInst();
     const t = (1 + Math.sqrt(5)) / 2, V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(v => { const l = Math.hypot(...v); return v.map(c => c / l); });
@@ -3676,13 +3681,42 @@ function gpuInit() {
     const T4 = [0, 1, 2, 3, 4, 5].map(k => [Math.cos(k * Math.PI / 3), 0, Math.sin(k * Math.PI / 3)]);
     for (let k = 0; k < 6; k++) { const a = T4[k], b = T4[(k + 1) % 6]; tv.push(a[0], 0, a[2], 1, b[0], 0, b[2], 1, b[0], 1, b[2], 1, a[0], 0, a[2], 1, b[0], 1, b[2], 1, a[0], 1, a[2], 1); }
     const tk = tv.slice(80 * 12); GPU.treeGeo = gpuBuf(new Float32Array(tv)); GPU.treeN = tv.length / 4; GPU.treeGeoL = gpuBuf(new Float32Array(lo.concat(tk))); GPU.treeNL = (lo.length + tk.length) / 4;
+    { const o = []; for (const sy of [1, -1]) for (let k = 0; k < 4; k++) { const a = [Math.cos(k * Math.PI / 2), 0, Math.sin(k * Math.PI / 2)], b = [Math.cos((k + 1) * Math.PI / 2), 0, Math.sin((k + 1) * Math.PI / 2)]; o.push(...a, 0, ...(sy > 0 ? b : [0, -1, 0]), 0, ...(sy > 0 ? [0, 1, 0] : b), 0); }
+      GPU.treeGeoX = gpuBuf(new Float32Array(o)); GPU.treeNX = o.length / 4; }   // far LOD (tiles > 2.5 km from the eye, trees ≲2 px): 8-face canopy, no trunk (lag cut 2026-10-31)
     return (GPU.ok = true);
   } catch (e) { console.warn('GPU view unavailable:', e); return (GPU.ok = false); }
 }
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
+// Spatial tiles (lag cut 2026-10-31): opaque city triangles bucketed by centroid (150 m cells ≤1.5 km of #134, 600 m beyond; stable order inside a cell) → [start, count, minx, maxx, miny, maxy, minz, maxz];
+// each pass draws only the tiles in its view frustum / shadow cascade (adjacent visible tiles merged into one draw). Pure culling: pixels unchanged.
+function gpuTileSort(a, n, ux = UNIT134[0], uz = UNIT134[1]) {
+  const nt = n / 3, key = new Int32Array(nt), m = new Map();
+  for (let t = 0; t < nt; t++) { const o = t * 39, x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = Math.hypot(x - ux, z - uz) < 1500, c = near ? 150 : 600;
+    const k = (near ? 0 : 1) * 1e8 + (Math.floor(z / c) + 5000) * 1e4 + (Math.floor(x / c) + 5000); let id = m.get(k); if (id === undefined) m.set(k, id = m.size); key[t] = id; }
+  const ks = [...m.keys()].sort((p, q) => p - q), rank = new Int32Array(m.size); ks.forEach((k, i) => { rank[m.get(k)] = i; });
+  const cnt = new Int32Array(m.size + 1); for (let t = 0; t < nt; t++) cnt[rank[key[t]] + 1]++; for (let i = 0; i < m.size; i++) cnt[i + 1] += cnt[i];
+  const pos = cnt.slice(0, m.size), src = a.slice(0, n * 13), T = [];
+  for (let t = 0; t < nt; t++) { const r = rank[key[t]]; a.set(src.subarray(t * 39, t * 39 + 39), pos[r]++ * 39); }
+  for (let i = 0; i < m.size; i++) { const s0 = cnt[i] * 3, c0 = (cnt[i + 1] - cnt[i]) * 3, b = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
+    for (let v = s0; v < s0 + c0; v++) { const o = v * 13; for (let k = 0; k < 3; k++) { const q = a[o + k]; if (q < b[2 * k]) b[2 * k] = q; if (q > b[2 * k + 1]) b[2 * k + 1] = q; } }
+    T.push([s0, c0, b[0], b[1], b[2], b[3], b[4], b[5]]); }
+  return T; }
+// visibility tests on a bbox (minx, maxx, miny, maxy, minz, maxz): camera frustum (side planes, 8% margin, curvature drop, optional y-mirror) and shadow cascade (ortho square)
+function camCull(cam, mirror) { const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), R = [cy, 0, -sy], U = [-sp * sy, cp, -sp * cy], F = [cp * sy, sp, cp * cy], kx = cam.w / (2 * cam.fPx) * 1.08, ky = cam.h / (2 * cam.fPx) * 1.08;
+  const P = [[R, 1, kx], [R, -1, kx], [U, 1, ky], [U, -1, ky]].map(([A, sg, k]) => [sg * A[0] + k * F[0], sg * A[1] + k * F[1], sg * A[2] + k * F[2]]), ex = cam.ex, ey = cam.hEye, ez = cam.ez;
+  return (x0, x1, y0, y1, z0, z1) => { if (mirror) { const t = -y1; y1 = -y0; y0 = t; } const dx = Math.max(Math.abs(x0 - ex), Math.abs(x1 - ex)), dz = Math.max(Math.abs(z0 - ez), Math.abs(z1 - ez)); y0 -= (dx * dx + dz * dz) / (2 * R_EFF) + 3; y1 += 3;
+    const cx = (x0 + x1) / 2 - ex, cyy = (y0 + y1) / 2 - ey, cz = (z0 + z1) / 2 - ez, hx = (x1 - x0) / 2 + 2, hy = (y1 - y0) / 2, hz = (z1 - z0) / 2 + 2;
+    for (const N of P) if (N[0] * cx + N[1] * cyy + N[2] * cz + Math.abs(N[0]) * hx + Math.abs(N[1]) * hy + Math.abs(N[2]) * hz < 0) return false; return true; }; }
+function lightCull(L, k) { const c = L.c[k], s = L.s[k][0] + 2, r = L.r, u = L.u;
+  return (x0, x1, y0, y1, z0, z1) => { const cx = (x0 + x1) / 2 - c[0], cyy = (y0 + y1) / 2 - c[1], cz = (z0 + z1) / 2 - c[2], hx = (x1 - x0) / 2, hy = (y1 - y0) / 2, hz = (z1 - z0) / 2;
+    for (const A of [r, u]) if (Math.abs(A[0] * cx + A[1] * cyy + A[2] * cz) > s + Math.abs(A[0]) * hx + Math.abs(A[1]) * hy + Math.abs(A[2]) * hz) return false; return true; }; }
+// draw the opaque city range tile by tile (buffer + program already bound); no tiles (old cache) → whole range
+function cityDraw(test, T = GPU.tiles) { const gl = GPU.gl; if (!T) return gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); let s = -1, e = -1;
+  for (const t of T) { if (!test(t[2], t[3], t[4], t[5], t[6], t[7])) continue; if (t[0] === e) e += t[1]; else { if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); s = t[0]; e = t[0] + t[1]; } }
+  if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
-  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
@@ -3694,14 +3728,14 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
-  GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
+  GPU.tiles = gpuTileSort(A.b, GPU.opN); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck paving, driveways, plazas (wavy stripes), court, pads, jogging loop (white edges + centre line)
   const up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), poly = (r, y, col) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), z4); };
@@ -3843,10 +3877,14 @@ function gpuInterior(env) {   // #134 unit in world coords (plan → world via t
       q([P(hg, 0, o0), P(hg, Wd, o0), P(hg, Wd, o1), P(hg, 0, o1)], true); fr(Wd - Fw, Wd, o0, o1); fr(0, Wd, o0, o0 + Fw); fr(0, Wd, o1 - Fw, o1);
       if (tz.length > 1) { const Rr = hd - tz[1] - M, cs = Math.cos(HOPPER_A), sn = Math.sin(HOPPER_A), Tt = r => [r * sn, hd - r * cs], tp = (sa, sb, r0, r1) => { const [p0, z0] = Tt(r0), [p1, z1] = Tt(r1); return [P(sa, p0, z0), P(sb, p0, z0), P(sb, p1, z1), P(sa, p1, z1)]; };
         q(tp(s0, s1, 0, Rr), true); q(tp(s0, s1, Rr - Fw, Rr)); q(tp(s0, s0 + Fw, 0, Rr)); q(tp(s1 - Fw, s1, 0, Rr)); } } }
-  const gl = GPU.gl; GPU.inBuf = gpuBuf(new Float32Array(A.a)); tint.push(...fGlass); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; GPU.frostBuf = gpuBuf(new Float32Array(fFrost.length ? fFrost : [0])); GPU.frostN = fFrost.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
+  const gl = GPU.gl; GPU.inBuf = gpuBuf(new Float32Array(A.a));
+  { const a = A.a, M = []; for (let o = 0; o + 39 <= a.length; o += 39) { const P = [0, 13, 26].map(k => [a[o + k], a[o + k + 1], a[o + k + 2]]), e = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]), u = P[1].map((v, i) => v - P[0][i]), w = P[2].map((v, i) => v - P[0][i]);   // room mask triangles (see GL_MASK_VS)
+      const ar = Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]), alt = ar / Math.max(e(P[0], P[1]), e(P[1], P[2]), e(P[2], P[0]), 1e-6); if (alt < 0.25) continue;
+      const c = [0, 1, 2].map(i => (P[0][i] + P[1][i] + P[2][i]) / 3); for (const p of P) M.push(p[0], p[1], p[2], c[0], c[1], c[2], alt); }
+    GPU.mkBuf = gpuBuf(new Float32Array(M.length ? M : [0, 0, 0, 0, 0, 0, 0])); GPU.mkN = M.length / 7; } tint.push(...fGlass); GPU.sheerBuf = gpuBuf(new Float32Array(fSheer.length ? fSheer : [0])); GPU.sheerN = fSheer.length / 3; GPU.frostBuf = gpuBuf(new Float32Array(fFrost.length ? fFrost : [0])); GPU.frostN = fFrost.length / 3; GPU.tintBuf = gpuBuf(new Float32Array(tint.length ? tint : [0])); GPU.tintN = tint.length / 3;
   GPU.W = W; GPU.Wm = { o: [sp.x, sp.z], u, n, p: [px, py] }; GPU.pkey = ''; GPU.inN = A.n;
-  IC.set(key, { inBuf: GPU.inBuf, inN: GPU.inN, tintBuf: GPU.tintBuf, tintN: GPU.tintN, sheerBuf: GPU.sheerBuf, sheerN: GPU.sheerN, frostBuf: GPU.frostBuf, frostN: GPU.frostN, W, Wm: GPU.Wm });
-  while (IC.size > 4) { const [k0, e] = IC.entries().next().value; IC.delete(k0); for (const b of [e.inBuf, e.tintBuf, e.sheerBuf, e.frostBuf]) gl.deleteBuffer(b); }   // evict least recently used
+  IC.set(key, { inBuf: GPU.inBuf, inN: GPU.inN, mkBuf: GPU.mkBuf, mkN: GPU.mkN, tintBuf: GPU.tintBuf, tintN: GPU.tintN, sheerBuf: GPU.sheerBuf, sheerN: GPU.sheerN, frostBuf: GPU.frostBuf, frostN: GPU.frostN, W, Wm: GPU.Wm });
+  while (IC.size > 4) { const [k0, e] = IC.entries().next().value; IC.delete(k0); for (const b of [e.inBuf, e.mkBuf, e.tintBuf, e.sheerBuf, e.frostBuf]) gl.deleteBuffer(b); }   // evict least recently used
   return GPU.inN;
 }
 function gpuInteriorPrefetch(f) {   // build storey f's interior into the cache in idle time, keep the current one
@@ -3858,14 +3896,24 @@ function gpuAttrib(pr, buf, inst) {
   const on = (loc, n, stride, off) => { if (loc < 0) return; gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, stride, off); };
   if (pr === GPU.sh || pr === GPU.dep) on(pr.a.aPos, 3, 52, 0);
   else if (pr === GPU.sht) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
+  else if (pr === GPU.mk) { on(pr.a.aPos, 3, 28, 0); on(pr.a.aNor, 3, 28, 12); on(pr.a.aPart, 1, 28, 24); }
   else if (pr === GPU.main) { on(pr.a.aPos, 3, 52, 0); on(pr.a.aNor, 3, 52, 12); on(pr.a.aCol, 3, 52, 24); on(pr.a.aTex, 4, 52, 36); }
   else if (pr === GPU.tree) { on(pr.a.aPos, 3, 16, 0); on(pr.a.aPart, 1, 16, 12); gl.bindBuffer(gl.ARRAY_BUFFER, inst); on(pr.a.aInst, 4, 16, 0); gl.vertexAttribDivisor(pr.a.aInst, 1); }
   else on(pr.a.aPos, 3, 12, 0);
 }
 function gpuTreeInst() {   // instance buffers from TREES; rebuilt when TREES changes (a render before initApp2 filled TREES left phones with no trees, TY 2026-10-30)
   const gl = GPU.gl, nr = [], fr = []; for (let i = 0; i < TREES.n; i++) (Math.hypot(TREES.x[i] - UNIT134[0], TREES.z[i] - UNIT134[1]) < 900 ? nr : fr).push(TREES.x[i], TREES.z[i], TREES.h[i], TREES.g[i]);   // LOD: rounded canopy ≤900 m of #134, 20-face beyond
-  if (GPU.treeInst) { gl.deleteBuffer(GPU.treeInst); gl.deleteBuffer(GPU.treeInstF); } GPU.treeInst = gpuBuf(new Float32Array(nr)); GPU.treeInstF = gpuBuf(new Float32Array(fr)); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; GPU.treeSrc = TREES.x; GPU.treeCnt = TREES.n; }
-function gpuTrees(pr) { const gl = GPU.gl; if (GPU.treeSrc !== TREES.x || GPU.treeCnt !== TREES.n) gpuTreeInst(); const d = GL_DIAG && pr === GPU.tree, e0 = d ? gl.getError() : 0; gpuAttrib(pr, GPU.treeGeo, GPU.treeInst); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeN, GPU.treeNn); gpuAttrib(pr, GPU.treeGeoL, GPU.treeInstF); gl.drawArraysInstanced(gl.TRIANGLES, 0, GPU.treeNL, GPU.treeNf); if (d) glDiag('trees', e0, gl.getError()); }
+  const tile = (I, c) => { const m = new Map(); for (let i = 0; i < I.length; i += 4) { const k = Math.floor(I[i + 1] / c) * 1e5 + Math.floor(I[i] / c); let g = m.get(k); if (!g) m.set(k, g = []); g.push(i); }   // instances bucketed per cell (culled per pass, as the city tiles)
+    const o = new Float32Array(I.length), T = []; let n = 0; for (const k of [...m.keys()].sort((p, q) => p - q)) { const g = m.get(k), b = [Infinity, -Infinity, 0, -Infinity, Infinity, -Infinity], s0 = n;
+      for (const i of g) { const r = I[i + 2] * 0.5 + 1; o.set(I.subarray ? I.subarray(i, i + 4) : I.slice(i, i + 4), n * 4); n++; b[0] = Math.min(b[0], I[i] - r); b[1] = Math.max(b[1], I[i] + r); b[3] = Math.max(b[3], I[i + 2] * 1.05 + 1); b[4] = Math.min(b[4], I[i + 1] - r); b[5] = Math.max(b[5], I[i + 1] + r); }
+      T.push([s0, n - s0, ...b]); } return [o, T]; };
+  const [na, nT] = tile(nr, 150), [fa, fT] = tile(fr, 600); GPU.treeT = nT; GPU.treeTF = fT;
+  if (GPU.treeInst) { gl.deleteBuffer(GPU.treeInst); gl.deleteBuffer(GPU.treeInstF); } GPU.treeInst = gpuBuf(na); GPU.treeInstF = gpuBuf(fa); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; GPU.treeSrc = TREES.x; GPU.treeCnt = TREES.n; }
+function gpuTrees(pr, test, ex = state.vx, ez = state.vz) { const gl = GPU.gl; if (GPU.treeSrc !== TREES.x || GPU.treeCnt !== TREES.n) gpuTreeInst(); const d = GL_DIAG && pr === GPU.tree, e0 = d ? gl.getError() : 0;
+  const run = (geo, inst, T, nv) => { gpuAttrib(pr, geo, inst); gl.bindBuffer(gl.ARRAY_BUFFER, inst); let s = -1, e = -1; const go = () => { if (e > s) { gl.vertexAttribPointer(pr.a.aInst, 4, gl.FLOAT, false, 16, s * 16); gl.drawArraysInstanced(gl.TRIANGLES, 0, nv, e - s); } };
+    for (const t of T) { if (test && !test(t[2], t[3], t[4], t[5], t[6], t[7])) continue; if (t[0] === e) e += t[1]; else { go(); s = t[0]; e = t[0] + t[1]; } } go(); };
+  const far = t => { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); return dx * dx + dz * dz > 6.25e6; };
+  run(GPU.treeGeo, GPU.treeInst, GPU.treeT, GPU.treeN); run(GPU.treeGeoL, GPU.treeInstF, GPU.treeTF.filter(t => !far(t)), GPU.treeNL); run(GPU.treeGeoX, GPU.treeInstF, GPU.treeTF.filter(far), GPU.treeNX); if (d) glDiag('trees', e0, gl.getError()); }
 // ?diag in the URL (TY 2026-10-30: trees + cars missing on iPhone): one-time on-screen WebGL readout (errors around the instanced draws, renderer, counts); tap to close
 const GL_DIAG = /[?&]diag/.test(location.search), GL_DIAG_R = {};
 function glDiag(k, e0, e1) { if (!GL_DIAG || GL_DIAG_R[k]) return; const gl = GPU.gl; GL_DIAG_R[k] = `${k}: before ${e0} after ${e1}`; if (Object.keys(GL_DIAG_R).length < 2) return;
@@ -3896,8 +3944,8 @@ function gpuShadows(env) {
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
-    gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
-    gl.useProgram(GPU.sht.p); gpuTrees(GPU.sht); }
+    const lc = lightCull(L, k); gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); cityDraw(lc); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
+    gl.useProgram(GPU.sht.p); gpuTrees(GPU.sht, lc); }
   gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 // Render the scene into GPU.cv (same pixel size as the 2D canvas); caller draws it over the 2D sky. Returns false if WebGL2 is unavailable.
@@ -3906,31 +3954,40 @@ function gpuRender(cam, env, pxW, pxH) {
   gpuWorld(); gpuShadows(env); gl.viewport(0, 0, pxW, pxH); gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
   gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const M = GPU.main, F = GPU.flat, NEAR = state.walk && onGround() ? 0.4 : 1, FAR = 40000;   // void deck walk: closer near plane (columns at arm's length)
-  // ground layer (painter order, no depth): sea plane (reflection/glitter), mirrored city, far land, land use (stencil even-odd per class, constant colour as 2D), roads
-  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
-  gpuCam(M, cam, NEAR, FAR); gpuEnv(M, env, false); gpuAttrib(M, GPU.sea); gl.drawArrays(gl.TRIANGLES, 0, GPU.seaN);
-  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.uniform1f(M.u.uMirror, 1); gl.uniform1f(M.u.uMirA, env.night ? 0.75 : 0.5);   // reflections: city mirrored in y; land drawn next covers what is not over water
-  gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, CMP.on && GPU.newR[1] ? GPU.newR[0] : GPU.cityN); gl.uniform1f(M.u.uMirror, 0); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  // Room interior on: the room's opaque walls/frames/furniture (drawn later over this, alpha 1) go into depth at 0 first
+  // (shrunk ≥2 px, GL_MASK_VS) so outside pixels behind them are never shaded (looking at a wall cost the whole city twice; lag cut 2026-10-31). Not on the void deck (its interior pass is depth-masked by the soffit).
+  const nIn = GPU.mask && gpuInterior(env) ? GPU.mkN : 0, mask = () => { if (!nIn) return; const K = GPU.mk; gpuCam(K, cam, 0.05, 400); gl.uniform2f(K.u.uMRes, pxW, pxH); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.ALWAYS); gl.depthMask(true); gl.depthRange(0, 0); gl.colorMask(false, false, false, false);
+    gpuAttrib(K, GPU.mkBuf); gl.drawArrays(gl.TRIANGLES, 0, nIn); gl.depthRange(0, 1); gl.colorMask(true, true, true, true); gpuCam(M, cam, NEAR, FAR); };
+  const paint = () => { if (nIn) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); } else gl.disable(gl.DEPTH_TEST); gl.depthMask(false); };   // painter passes: no depth write, but not behind the room
+  // ground layer (painter order): sea plane (reflection/glitter), far land, land use (stencil even-odd per class, constant colour as 2D), mirrored city over water, roads
+  gpuCam(M, cam, NEAR, FAR); gpuEnv(M, env, false); mask(); paint(); gpuAttrib(M, GPU.sea); gl.drawArrays(gl.TRIANGLES, 0, GPU.seaN);
+  // land first, marking stencil bit 2; the mirrored city is then drawn only where no land is (water) — same pixels as drawing it under the opaque land, without shading the hidden reflection (lag cut 2026-10-31)
+  gl.enable(gl.STENCIL_TEST); gl.stencilMask(0xff); gl.stencilFunc(gl.ALWAYS, 2, 0xff); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
   gpuAttrib(M, GPU.ground); gl.drawArrays(gl.TRIANGLES, 0, GPU.farN);
-  gpuCam(F, cam, NEAR, FAR); gl.enable(gl.STENCIL_TEST);
-  for (const { L, rs } of GPU.luR) { if (L.c === 0 || !cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue;
-    gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.lu); gl.colorMask(false, false, false, false); gl.stencilFunc(gl.ALWAYS, 0, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
-    for (const [s, c] of rs) gl.drawArrays(gl.TRIANGLE_FAN, s, c);
+  gpuCam(F, cam, NEAR, FAR);
+  for (const [cls, list] of GPU.luC) { if (cls === 0) continue; let any = false, rs0 = -1, re = -1;   // per class: stencil all its visible polygons (even-odd), then ONE fill quad (was one fullscreen quad per polygon: ~400/frame, lag cut 2026-10-31)
+    for (const e0 of list) { const L = e0.L; if (!cam.inWedge(L.minx, L.maxx, L.minz, L.maxz, 12000)) continue;
+      if (!any) { any = true; gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.lu); gl.colorMask(false, false, false, false); gl.stencilMask(1); gl.stencilFunc(gl.ALWAYS, 0, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT); }
+      if (e0.s === re) re += e0.n; else { if (re > rs0) gl.drawArrays(gl.TRIANGLES, rs0, re - rs0); rs0 = e0.s; re = e0.s + e0.n; } }
+    if (re > rs0) gl.drawArrays(gl.TRIANGLES, rs0, re - rs0); if (!any) continue; const L = list[0].L;
     const col = shade(GROUND_ALB[L.c], [0, 1, 0], env), G = GPU.gfill;   // fill: per-pixel texture + haze (GL_GFILL_FS)
-    gl.colorMask(true, true, true, true); gl.stencilFunc(gl.NOTEQUAL, 0, 1); gl.stencilOp(gl.ZERO, gl.ZERO, gl.ZERO); gpuCam(G, cam, NEAR, FAR); gl.uniform1f(G.u.uClip, 1); gl.uniform4f(G.u.uColor, col[0] / 255, col[1] / 255, col[2] / 255, 1); gl.uniform1f(G.u.uCls, L.c);
+    gl.colorMask(true, true, true, true); gl.stencilMask(0xff); gl.stencilFunc(gl.NOTEQUAL, 2, 1); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE); gpuCam(G, cam, NEAR, FAR); gl.uniform1f(G.u.uClip, 1); gl.uniform4f(G.u.uColor, col[0] / 255, col[1] / 255, col[2] / 255, 1); gl.uniform1f(G.u.uCls, L.c);
     gl.uniform2f(G.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform3f(G.u.uSun, ...env.sunVec); gl.uniform3f(G.u.uFog, ...env.sky.hor.map(v => v / 255)); gl.uniform1f(G.u.uBeta, env.beta); gl.uniform1f(G.u.uDirect, env.direct); gl.uniform1f(G.u.uWarm, env.warm);
     gpuAttrib(G, GPU.quad); gl.drawArrays(gl.TRIANGLES, 0, 6); gl.useProgram(F.p); }
-  gl.disable(gl.STENCIL_TEST);
+  gl.stencilMask(0); gl.stencilFunc(gl.EQUAL, 0, 2); gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);   // reflections: city mirrored in y, water pixels only
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gl.uniform1f(M.u.uMirror, 1); gl.uniform1f(M.u.uMirA, env.night ? 0.75 : 0.5);
+  gpuAttrib(M, GPU.city); cityDraw(camCull(cam, true)); gl.drawArrays(gl.TRIANGLES, GPU.opN, (CMP.on && GPU.newR[1] ? GPU.newR[0] : GPU.cityN) - GPU.opN); gl.uniform1f(M.u.uMirror, 0); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.stencilMask(0xff); gl.disable(gl.STENCIL_TEST); mask(); paint();
   gl.useProgram(M.p); gpuAttrib(M, GPU.ground); if (state.showRoads) gl.drawArrays(gl.TRIANGLES, GPU.farN, GPU.groundN - GPU.farN);
   if (state.showRoads) { gpuLines(cam, env, GPU.lanes, GPU.laneN, false, 900); gl.useProgram(M.p); gpuAttrib(M, GPU.ground); }
   if (GPU.gxN) { gpuAttrib(M, GPU.gx); gl.drawArrays(gl.TRIANGLES, 0, GPU.gxN); gpuAttrib(M, GPU.ground); }
-  if (GPU.L) gl.drawArrays(gl.TRIANGLES, GPU.groundN, GPU.recvN);   // building/tree shadows on the ground
+  if (GPU.L) cityDraw(camCull(cam), GPU.recvT);   // building/tree shadows on the ground
   // solids with depth
-  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); const cc = camCull(cam); cityDraw(cc);
   const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
   if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]);
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
-  gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree);
+  gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez);
   if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
     gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
     gpuEdges(cam, env); }
@@ -4071,7 +4128,11 @@ function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, addit
 }
 function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr.length ? arr : [0]), gl.DYNAMIC_DRAW); return b; }
 // Per-frame moving / night items: ships (prisms) + wakes, cars (drawCars/deckCars via CAR_SINK), Flyer ring + capsules, night landmarks. Uploads dynamic buffers; returns counts.
-function gpuFx(cam, env) {
+// cars/ships/night sprites are rebuilt only when time, light, eye or roads change, or the view turns > 0.45 rad: built for a wedge 0.5 rad wider each side (off-screen sprites are clipped), so turning reuses them (lag cut 2026-10-31)
+function gpuFx(cam0, env) {
+  const C = GPU.fxC, t = simT(); if (C && C.env === env && C.t === t && C.ex === cam0.ex && C.ez === cam0.ez && C.roads === state.showRoads && C.hfov === cam0.hfov && Math.abs(Math.atan2(Math.sin(cam0.yaw - C.yaw), Math.cos(cam0.yaw - C.yaw))) < 0.45) return C.r;
+  const cam = Object.assign({}, cam0, { inWedge: (a, b, c, d, r) => cam0.inWedge(a, b, c, d, r, 0.5) }), r = gpuFx0(cam, env); GPU.fxC = { env, t, ex: cam0.ex, ez: cam0.ez, roads: state.showRoads, hfov: cam0.hfov, yaw: cam0.yaw, r }; return r; }
+function gpuFx0(cam, env) {
   const add = [], opq = [], la = [], lo = [], Sh = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
   SHIPS.forEach(([x, z, len]) => { glPrism(Sh, makePrism('ship', 'existing', 12, 0, box(x - len / 2, z - len * 0.08, x + len / 2, z + len * 0.08))); glPrism(Sh, makePrism('ship', 'existing', 30, 12, box(x - len * 0.4, z - len * 0.06, x - len * 0.2, z + len * 0.06))); });
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
@@ -4118,7 +4179,7 @@ function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { drawPerspectiv
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
-  const gpu = gpuRender(cam, env, cv.width, cv.height); if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); }
+  const lo = PIN_VIS.lo && cv === perspectiveCanvas ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [];
   if (state.showLabels) {
@@ -4179,7 +4240,9 @@ function renderAll() { if (renderPending) return; renderPending = true; requestA
 let viewPending = false, idleT = 0;
 const PIN_VIS = { m: new Map(), fast: false };   // pin anchor visible through the room (name → bool), from the last full render
 const drawFast = m => { PIN_VIS.fast = true; try { drawPerspective(m); } finally { PIN_VIS.fast = false; } };
-function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; tiltCap(); if (!renderPending) drawFast(lastMath); }); }
+// while dragging / walking / scrubbing: 3D view rendered at ≤1.4 px per CSS px (phones are 2×) and scaled up; the full render 250 ms after input stops is full resolution again (lag cut 2026-10-31)
+const drawMove = m => { PIN_VIS.lo = true; try { drawFast(m); } finally { PIN_VIS.lo = false; } };
+function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; tiltCap(); if (!renderPending) drawMove(lastMath); }); }
 function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
@@ -4203,7 +4266,7 @@ const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.valu
 bind('pitchSlider', v => { state.pitchDeg = parseFloat(v); });
 bind('focalSlider', v => { state.focalLength = parseInt(v, 10); }); bind('visSlider', v => { state.visibilityKm = parseInt(v, 10); });
 // Time scrubber: pointer drag anywhere on the track (iOS range inputs only move when the 6 px thumb itself is grabbed); while dragging only the 3D view redraws (lighting env refreshed), full render on release
-function hourSet(h, fast) { h = clamp(Math.round(h * 4) / 4, 5, 23); if (h === state.hour) return; state.hour = h; $('inlineHour').value = h; $('inlineHourVal').textContent = fmtHour(h); if (!lastMath) return renderAll(); lastMath.env = lightingEnv(); if (!fast) return renderView(); clearTimeout(idleT); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawFast(lastMath); }); }
+function hourSet(h, fast) { h = clamp(Math.round(h * 4) / 4, 5, 23); if (h === state.hour) return; state.hour = h; $('inlineHour').value = h; $('inlineHourVal').textContent = fmtHour(h); if (!lastMath) return renderAll(); lastMath.env = lightingEnv(); if (!fast) return renderView(); clearTimeout(idleT); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; if (!renderPending) drawMove(lastMath); }); }
 $('inlineHour').addEventListener('input', e => hourSet(parseFloat(e.target.value)));
 (() => { const tr = $('timeTrack').parentElement; let id = null; const at = e => { const r = tr.getBoundingClientRect(); return 5 + clamp((e.clientX - r.left - 13) / Math.max(1, r.width - 26), 0, 1) * 18; };
   tr.addEventListener('pointerdown', e => { if (e.button > 0) return; e.preventDefault(); e.stopPropagation(); id = e.pointerId; tr.setPointerCapture(id); tr.classList.add('drag'); buzz(); hourSet(at(e), true); });
