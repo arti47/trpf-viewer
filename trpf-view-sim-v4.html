@@ -959,10 +959,59 @@ function prismHit(P, p0, dv, ex, ez) {
 
 /* ===================== WORLD CONTENT ===================== */
 const EXISTING = GEO.b.map(([h, e, n, flat]) => makePrism(n || '', 'existing', h, 0, flat, e));
-{ // MBS SkyPark (elevated deck, base 191m)
-  const a = [-2006, -1561], b = [-1919, -1352], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, px = -uz * 19, pz = ux * 19;
-  const s0 = [a[0] - ux * 25, a[1] - uz * 25], s1 = [b[0] + ux * 90, b[1] + uz * 90];
-  EXISTING.push(makePrism('Marina Bay Sands SkyPark', 'existing', 200, 191, [s0[0] - px, s0[1] - pz, s1[0] - px, s1[1] - pz, s1[0] + px, s1[1] + pz, s0[0] + px, s0[1] + pz], 2));
+// Hand-modelled CBD / Marina Bay (TY 2026-10-31 "buildings don't look real", stage 1; physics too): OSM footprints, shapes from published descriptions, sizes estimates (est 2).
+// Stacked pieces carry P.sb/P.st (storey base / building top) so the window grid + parapet coping run continuously across the pieces; topc = facade colour (no dark ledges).
+const MBS_AX = { a: [-2006, -1561], b: [-1919, -1352] };   // SkyPark long axis (Spectra beams)
+const CBD_HAND = [];
+{
+  const P0 = n => EXISTING.findIndex(P => P.name === n), take = n => { const i = P0(n); if (i < 0) return null; const P = EXISTING[i]; EXISTING.splice(i, 1); return P; };
+  const add = (n, h, b, flat, o) => { const P = Object.assign(makePrism(n, 'existing', h, b, flat, 2), o || {}); EXISTING.push(P); CBD_HAND.push(P); return P; };
+  const ptsOf = P => [...P.xs].map((x, k) => [x, P.zs[k]]), fl = a => a.flat();
+  const scl = (pts, c, s) => pts.map(([x, z]) => [c[0] + (x - c[0]) * s, c[1] + (z - c[1]) * s]);
+  const rot = (pts, c, a) => { const C = Math.cos(a), S = Math.sin(a); return pts.map(([x, z]) => [c[0] + (x - c[0]) * C - (z - c[1]) * S, c[1] + (x - c[0]) * S + (z - c[1]) * C]); };
+  const clip = (pts, d, t) => { const o = [], f = p => p[0] * d[0] + p[1] * d[1] - t; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], fa = f(a), fb = f(b); if (fa <= 0) o.push(a); if ((fa < 0) !== (fb < 0) && fa !== fb) { const s = fa / (fa - fb); o.push([a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s]); } } return o; };   // keep p·d ≤ t (Sutherland–Hodgman)
+  // raked crown: top H metres cut by a plane sloping down along d (k slices, each keeps p·d ≤ t), below = original outline
+  const raked = (n, pts, h, H, d, k, lo, o) => { const pr = pts.map(p => p[0] * d[0] + p[1] * d[1]), mx = Math.max(...pr), mn = Math.min(...pr);
+    add(n, h - H, 0, fl(pts), Object.assign({ sb: 0, st: h }, o)); for (let i = 0; i < k; i++) { const q = clip(pts, d, mx - (mx - mn) * (1 - lo) * (i + 1) / (k + 0.5)); if (q.length >= 3) add(n, h - H + H * (i + 1) / k, h - H + H * i / k, fl(q), Object.assign({ sb: 0, st: h }, o)); } };
+  // Marina Bay Sands (2010, 55 storeys, 191 m to the SkyPark soffit): 3 hotel towers, each a vertical W leg + an E leg that curves out and leans in to meet it at ~L23 (≈70 m);
+  // OSM footprint = joined upper tower (≈50 m across); legs splay E at the base by 0.35 × width (estimate). OSM 'SkyPark' outline was a 207 m solid from the ground → now the deck (191–200 m).
+  { const u = (() => { const dx = MBS_AX.b[0] - MBS_AX.a[0], dz = MBS_AX.b[1] - MBS_AX.a[1], L = Math.hypot(dx, dz); return [dx / L, dz / L]; })(), v = [u[1], -u[0]];   // v → ESE (E legs)
+    const alb = [184, 196, 206], top = [150, 158, 166], Hj = 70, tw = 191;
+    for (const n of ['Marina Bay Sands Tower 1', 'Marina Bay Sands Tower 2', 'Marina Bay Sands Tower 3']) { const T = take(n); if (!T) continue;
+      let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9; for (let k = 0; k < T.n; k++) { const pu = T.xs[k] * u[0] + T.zs[k] * u[1], pv = T.xs[k] * v[0] + T.zs[k] * v[1]; u0 = Math.min(u0, pu); u1 = Math.max(u1, pu); v0 = Math.min(v0, pv); v1 = Math.max(v1, pv); }
+      const W = v1 - v0, box = (a0, a1, b0, b1) => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].flatMap(([p, q]) => [p * u[0] + q * v[0], p * u[1] + q * v[1]]), o = { sb: 0, st: tw, glass: true, alb, topc: top };
+      add(n, tw, 0, box(u0, u1, v0, v0 + W * 0.48), o);   // W leg, vertical
+      add(n, tw, Hj, box(u0, u1, v0 + W * 0.46, v1), o);   // E leg above the join
+      const K = 22; for (let i = 0; i < K; i++) { const y0 = (Hj * i) / K, y1 = (Hj * (i + 1)) / K, g = W * 0.35 * Math.pow(1 - (y0 + y1) / 2 / Hj, 1.5);   // E leg below the join: curved, leaning in
+        add(n, y1, y0, box(u0, u1, v0 + W * 0.52 + g, v1 + g), o); } }
+    const S = take('SkyPark'); if (S) add('Marina Bay Sands SkyPark', 200, 191, fl(ptsOf(S)), { plain: true, alb: [214, 218, 222], topc: [120, 150, 110], botc: [190, 194, 198] });   // hull + garden/pool deck
+  }
+  // Guoco Tower (2016, 290 m, 64 storeys, SOM): podium over Tanjong Pagar MRT + rectangular tower whose facade bands stop at staggered heights (stepped crown); band heights estimates
+  { const T = take('Guoco Tower'); if (T) { const p = ptsOf(T), A = p[0], B = p[1], D = p[3], ux = [B[0] - A[0], B[1] - A[1]], vx = [D[0] - A[0], D[1] - A[1]], q = (a, b) => [A[0] + ux[0] * a + vx[0] * b, A[1] + ux[1] * a + vx[1] * b];
+    const box = (a0, a1, b0, b1) => fl([q(a0, b0), q(a1, b0), q(a1, b1), q(a0, b1)]), o = { sb: 0, st: 290, glass: true, alb: [168, 182, 194] };
+    add('Guoco Tower', 34, 0, box(0, 1, 0, 1), { alb: [196, 198, 200] });
+    const hs = [262, 276, 290, 284, 270]; hs.forEach((h, i) => add('Guoco Tower', h, 34, box(0.2 + 0.6 * i / 5, 0.2 + 0.6 * (i + 1) / 5, 0.12, 0.88), o)); } }
+  // UOB Plaza One (1992, 280 m, Kenzo Tange): two octagonal prisms, the upper one turned 45°, + crown; split heights estimates
+  { const T = take('UOB Plaza Tower 1'); if (T) { const p = ptsOf(T), c = [T.cx, T.cz], o = { sb: 0, st: 280, alb: [178, 170, 160] };
+    add('UOB Plaza Tower 1', 168, 0, fl(p), o); add('UOB Plaza Tower 1', 262, 168, fl(scl(rot(p, c, Math.PI / 4), c, 0.96)), o); add('UOB Plaza Tower 1', 280, 262, fl(scl(rot(p, c, Math.PI / 4), c, 0.82)), o); } }
+  // Republic Plaza (1996, 280 m, Kisho Kurokawa): tower tapering through chamfered setbacks to a pointed crown (heights estimates)
+  { const T = take('Republic Plaza'); if (T) { const p = ptsOf(T), c = [T.cx, T.cz], o = { sb: 0, st: 280, alb: [176, 176, 172] };
+    add('Republic Plaza', 232, 0, fl(p), o); [[248, 0.86], [262, 0.72], [272, 0.56], [280, 0.36]].reduce((y0, [y1, s]) => (add('Republic Plaza', y1, y0, fl(scl(p, c, s)), o), y1), 232); } }
+  // MBFC (2010–13, KPF): Tower 1 200 m (33 storeys), Towers 2/3 245 m; raked glass crowns (slope directions estimates)
+  { const T1 = take('Marina Bay Financial Centre Tower 1'), T2 = take('Marina Bay Financial Centre Tower 2'), T3 = take('Marina Bay Financial Centre Tower 3'), o = { glass: true, alb: [160, 178, 192] };
+    if (T1) raked('Marina Bay Financial Centre Tower 1', ptsOf(T1), 200, 22, [0.6, 0.8], 5, 0.45, o);
+    if (T2) raked('Marina Bay Financial Centre Tower 2', ptsOf(T2), 245, 26, [-0.6, -0.8], 5, 0.4, o);
+    if (T3) raked('Marina Bay Financial Centre Tower 3', ptsOf(T3), 245, 26, [0.8, -0.6], 5, 0.4, o); }
+  // The Sail @ Marina Bay (2008, OSM: Marina Bay Tower 245 m, Central Park Tower 215 m): sail-like slanted tops (raked crowns, slope toward the bay, estimates)
+  { const A = take('Marina Bay Tower'), B = take('Central Park Tower'), o = { glass: true, alb: [176, 190, 202] };
+    if (A) raked('Marina Bay Tower', ptsOf(A), 245, 40, [0.7, 0.7], 6, 0.3, o); if (B) raked('Central Park Tower', ptsOf(B), 215, 36, [0.7, 0.7], 6, 0.3, o); }
+  // Marina One (2017, Ingenhoven): office block (OSM one outline, 160 m) = podium + 2 towers with a gap mid-length, terraced toward the gap (Green Heart); residences 141 m terraced ends; estimates
+  { const T = take('Marina One Offices'); if (T) { const p = ptsOf(T); let mx = [0, 0], best = 0; for (const a of p) for (const b of p) { const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (d > best) { best = d; mx = [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; } }
+    const pr = p.map(q => q[0] * mx[0] + q[1] * mx[1]), lo = Math.min(...pr), hi = Math.max(...pr), mid = (lo + hi) / 2, o = { sb: 0, st: 160, glass: true, alb: [172, 186, 190] }, neg = [-mx[0], -mx[1]];
+    add('Marina One Offices', 26, 0, fl(p), { alb: [200, 204, 200], topc: [110, 150, 96] });   // podium, planted roof
+    for (const [y0, y1, g] of [[26, 136, 8], [136, 148, 18], [148, 160, 28]]) for (const q of [clip(p, mx, mid - g), clip(p, neg, -(mid + g))]) if (q.length >= 3) add('Marina One Offices', y1, y0, fl(q), o); }
+    for (const n of ['Marina One Residences - Garden Tower', 'Marina One Residences - Park Tower']) { const T = take(n); if (!T) continue; const p = ptsOf(T), c = [T.cx, T.cz], o = { sb: 0, st: 141 };
+      add(n, 117, 0, fl(p), o); add(n, 129, 117, fl(scl(p, c, 0.86)), o); add(n, 141, 129, fl(scl(p, c, 0.7)), o); } }
 }
 // Real landmarks NW of #134 (TY 2026-10-29): Sports Hub across the Geylang River, Kallang Basin far bank, Tanjong Rhu condos. OSM footprints;
 // heights from public figures where found, else estimates (est 2). Curved roofs = GPU meshes (`LM_MESH`); sightlines use stacked prisms flagged `nogl`.
@@ -3864,7 +3913,7 @@ function glPrism(A, P) {
   const al = (P.style ? (P.style === 'club' ? [150, 175, 190] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0) + (P.kind === 'existing' && !P.glass && P.h >= 20 && P.h <= 160 && (P.res ?? (P.res = (luAt(P.cx, P.cz) || {}).c === 3)) ? 200 : 0);   // +200: residential (HDB/condo style in GL_FS mode 1)
-  const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
+  const b = P.base, t = P.h, sb = P.sb ?? b, vt = ((P.st ?? t) - sb - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
   const aoOn = !GPU.noAO && P.h >= 8 && !P.tank && P.kind !== 'road' && Math.hypot(P.cx, P.cz) < 3000;
   const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = P.ck ? { c: 6, l: 7, s: 8, h: 7 }[P.ck] : ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
   // bevels (less blocky 2026-10-31): generic facades ≤1.5 km get 0.4 m chamfers at corners turning > 20°, normals blended across the chamfer (rounded light edge); plan polygon (roof too) uses the chamfered outline
@@ -3875,7 +3924,7 @@ function glPrism(A, P) {
   const EN = m => { const a = (m + nn) % nn, b = (a + 1) % nn, ex = NX[b] - NX[a], ez = NZ[b] - NZ[a], L = Math.hypot(ex, ez) || 1; return [ez / L, 0, -ex / L]; }, AOE = CH ? [] : null;
   if (CH) for (let m = 0; m < nn; m++) { const b = (m + 1) % nn, L = Math.hypot(NX[b] - NX[m], NZ[b] - NZ[m]); AOE.push(!CH[m] && aoOn && L >= 2 ? faceAO(P, NX[m], NZ[m], NX[b], NZ[b], EN(m), P.base, P.h) : [1, 1]); }
   for (let i = 0, j = nn - 1; i < nn; j = i++) { const x0 = NX[j], z0 = NZ[j], x1 = NX[i], z1 = NZ[i], ex = x1 - x0, ez = z1 - z0, L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], u1 = L / 3.6;
-    if (CH && CH[j]) { const pa = (j - 1 + nn) % nn, na = EN(pa), nb = EN(i), [aa, ta] = AOE[pa], [ab2, tb] = AOE[i], T0 = y => [0, (y - b - y0) / fh, 0, 0];   // chamfer strip: plain wall, normal = neighbour faces' normals
+    if (CH && CH[j]) { const pa = (j - 1 + nn) % nn, na = EN(pa), nb = EN(i), [aa, ta] = AOE[pa], [ab2, tb] = AOE[i], T0 = y => [0, (y - sb - y0) / fh, 0, 0];   // chamfer strip: plain wall, normal = neighbour faces' normals
       const nab = na.map(v => v * aa), nat = na.map(v => v * ta), nbb = nb.map(v => v * ab2), nbt = nb.map(v => v * tb);
       A.v([x0, b, z0], nab, al, T0(b)); A.v([x1, b, z1], nbb, al, T0(b)); A.v([x1, t, z1], nbt, al, T0(t)); A.v([x0, b, z0], nab, al, T0(b)); A.v([x1, t, z1], nbt, al, T0(t)); A.v([x0, t, z0], nat, al, T0(t)); continue; }
     let T; if (mscp) { const k = Math.max(1, Math.round(L / 8)), dh = (P.h - 1) / MSCP_DECKS; T = (s, y) => [s * k, y, 7, dh]; }   // facade styles evaluated in the fragment shader
@@ -3883,7 +3932,7 @@ function glPrism(A, P) {
       T = (s, y) => [short ? am : inf.a0 + (inf.a1 - inf.a0) * s, y, 6, w6]; }
     else if (P.style === 'club') T = (s, y) => [s, y, 9, 0];
     else if (P.style) { const k = Math.max(1, Math.round(L / 7.2)); T = (s, y) => [s * k, y, 8, P.h - CONDO.roof - 0.5]; }
-    else T = (s, y) => [s * u1, (y - b - y0) / fh, mode, seed + 1000 * Math.max(0, Math.round(vt * 10))];   // + top storey ×10 in the thousands (parapet coping in GL_FS)
+    else T = (s, y) => [s * u1, (y - sb - y0) / fh, mode, seed + 1000 * Math.max(0, Math.round(vt * 10))];   // + top storey ×10 in the thousands (parapet coping in GL_FS)
     const [ab, at] = AOE ? AOE[j] : aoOn && L >= 2 ? faceAO(P, x0, z0, x1, z1, n, b, t) : [1, 1], nb = n.map(v => v * ab), nt = n.map(v => v * at);   // sky-visibility AO baked into the normal length (realism L3)
     A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, b, z1], nb, al, T(1, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, t, z0], nt, al, T(0, t)); }
   const pts = []; for (let i = 0; i < nn; i++) pts.push([NX[i], NZ[i]]); const tri = earClip(pts), z4 = [0, 0, mode < 0.5 ? mode : 0, 0];
@@ -4548,7 +4597,7 @@ function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, c
   LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => S(add, l.x, l.h * 0.5, l.z, 0, 0, l.span * 0.7, 3, [170 / 255, 220 / 255, 1], 0.3, 0, l.span * 0.6));
   const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark'); if (!SP) return; const ec = [1, 235 / 255, 200 / 255];
   for (let i = 0, j = SP.n - 1; i < SP.n; j = i++) la.push(SP.xs[j], SP.base, SP.zs[j], ...ec, 0.85, SP.xs[i], SP.base, SP.zs[i], ...ec, 0.85);
-  if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = SP.xs[0] + (SP.xs[1] - SP.xs[0]) * f, z = SP.zs[0] + (SP.zs[1] - SP.zs[0]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
+  if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = MBS_AX.a[0] + (MBS_AX.b[0] - MBS_AX.a[0]) * f, z = MBS_AX.a[1] + (MBS_AX.b[1] - MBS_AX.a[1]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
     la.push(x, SP.h, z, ...c, 0.55, x + 1500 * Math.sin(sw + 0.4) * 0.5, SP.h + 1500, z + 1500 * Math.cos(sw + 0.4) * 0.5, ...c, 0); } }
 }
 function gpuSprites(cam, env, buf, n, additive, range) {
