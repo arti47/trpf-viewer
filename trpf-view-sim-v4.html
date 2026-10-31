@@ -3593,16 +3593,31 @@ void main() {
       float sp = dens > 1e-3 ? step(hash(mod(floor(gl_FragCoord.xy / 1.6), 509.0) + mod(floor(t * 6.0), 97.0) * vec2(7.13, 3.71)), dens * 0.2) : 0.0;   /* small hash args: large ones lose sin precision */ c += vec3(1.0, 0.96 - 0.16 * uWarm, 0.88 - 0.35 * uWarm) * (dens * 0.3 + sp) * uDirect * T; }
     o = vec4(grade(clamp(c, 0.0, 1.0)), 1.0); return; }
   if (mode < -1.5) { float a = (1.0 - shadowAt(vWorld, vec3(0.0, 1.0, 0.0))) * uGroundSh * exp(-uBeta * vDist); o = vec4(0.0, 0.0, 0.05 * a, a); return; }
-  if (mode > 0.5 && mode < 3.5) {   // procedural windows: bays 3.6 m × storeys; faded to their mean when a cell is < ~3 px (no moire)
+  if (mode > 0.5 && mode < 3.5) {   // procedural windows: bays 3.6 m × storeys; faded to their mean when a cell is < ~3 px (no moire). Realism 2026-10-31: facade types, frames/sills/reveals, shopfronts, coping
     vec2 g = vTex.xy, fw = fwidth(g), f = fract(g), aa = fw * 0.75 + 1e-4; float det = 1.0 - smoothstep(0.2 + 0.25 * uNight, 0.5 + 0.3 * uNight, max(fw.x, fw.y));   // night: lit windows stay resolved down to ~1.3 px (as litWindows)
-    float wx = mode > 2.5 ? 0.92 : 0.6, wy = mode > 2.5 ? 0.86 : 0.5, x0 = 0.5 - wx * 0.5, x1 = 0.5 + wx * 0.5, y0 = 0.28, y1 = 0.28 + wy;
+    float sw = mod(vTex.w, 1000.0), tw = floor(vTex.w / 1000.0) / 10.0, res = step(199.0, sw), bh = hash(vec2(sw, 3.7)), ty = mode > 2.5 ? 4.0 : res > 0.5 ? 0.0 : floor(bh * 4.0);   // type: 0 punched, 1 ribbon (office), 2 fins + tall windows, 3 square grid, 4 curtain wall
+    float wx = ty > 3.5 ? 0.92 : ty > 2.5 ? 0.78 : ty > 1.5 ? 0.62 : ty > 0.5 ? 1.2 : 0.6, wy = ty > 3.5 ? 0.86 : ty > 2.5 ? 0.62 : ty > 1.5 ? 0.68 : ty > 0.5 ? 0.5 : 0.5, y0 = ty > 3.5 ? 0.07 : ty > 1.5 ? 0.2 : 0.3, x0 = 0.5 - wx * 0.5, x1 = 0.5 + wx * 0.5, y1 = y0 + wy, dk = det * smoothstep(0.3, 0.12, max(fw.x, fw.y));
     float m = smoothstep(x0 - aa.x, x0 + aa.x, f.x) * (1.0 - smoothstep(x1 - aa.x, x1 + aa.x, f.x)) * smoothstep(y0 - aa.y, y0 + aa.y, f.y) * (1.0 - smoothstep(y1 - aa.y, y1 + aa.y, f.y));
-    float k = mix(wx * wy, m, det) * step(0.0, g.y), on = step(hash(floor(g) + vTex.w), mode > 2.5 ? 0.5 : 0.3);
-    if (mode < 2.5 && vTex.w > 199.0 && g.y > 0.0) { float sl = band(f.y, -0.01, 0.07, aa.y) * smoothstep(0.15, 0.06, fw.y), ac = step(0.62, hash(floor(g) + 11.0)) * band(f.x, 0.62, 0.92, aa.x) * band(f.y, 0.08, 0.27, aa.y) * det;   // residential (realism G4): white slab edge per storey + A/C condenser ledges under some windows
-      alb = mix(alb, vec3(0.93, 0.92, 0.89), sl); alb = mix(alb, vec3(0.55, 0.56, 0.56), ac); alb = mix(alb, vec3(0.3), ac * (1.0 - smoothstep(0.06, 0.09, length((f - vec2(0.77, 0.175)) * vec2(1.0, 1.6))))); }
-    float cu = mode < 2.5 ? step(0.72, hash(floor(g) + vTex.w + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
+    if (ty > 0.5 && ty < 1.5) m *= 1.0 - band(f.x, -1.0, 0.025, aa.x) * dk;   // ribbon: thin mullion per bay
+    float k = mix(wx * wy, m, det) * step(0.0, g.y) * step(g.y, tw - 0.25 + step(tw, 0.0) * 999.0), on = step(hash(floor(g) + sw), mode > 2.5 ? 0.5 : 0.3);
+    vec3 tn = vec3(-nrm.z, 0.0, nrm.x); float sl = dot(tn, uSun), lt = step(0.0, dot(nrm, uSun));
+    if (ty > 1.5 && ty < 2.5) { float fin = band(f.x, -1.0, 0.07, aa.x) + band(f.x, 0.93, 2.0, aa.x); alb = mix(alb, alb * 1.12 + 0.03, fin * dk);   // vertical fins: lighter pilasters + their shadow on the wall beside them
+      alb *= 1.0 - 0.3 * lt * dk * (sl > 0.0 ? band(f.x, 0.07, 0.12, aa.x) : band(f.x, 0.88, 0.93, aa.x)); }
+    if (mode < 2.5 && res > 0.5 && g.y > 0.0) { float sb = band(f.y, -0.01, 0.07, aa.y) * smoothstep(0.15, 0.06, fw.y), ac = step(0.62, hash(floor(g) + 11.0)) * band(f.x, 0.62, 0.92, aa.x) * band(f.y, 0.08, 0.27, aa.y) * det;   // residential (realism G4): white slab edge per storey + A/C condenser ledges under some windows
+      alb = mix(alb, vec3(0.93, 0.92, 0.89), sb); alb = mix(alb, vec3(0.55, 0.56, 0.56), ac); alb = mix(alb, vec3(0.3), ac * (1.0 - smoothstep(0.06, 0.09, length((f - vec2(0.77, 0.175)) * vec2(1.0, 1.6))))); }
+    if (ty < 3.5 && g.y > 0.0 && dk > 0.0) {   // window frame (light or bronze per building) + projecting sill with its shadow
+      float fr = (band(f.x, x0 - 0.03, x0, aa.x) + band(f.x, x1, x1 + 0.03, aa.x)) * band(f.y, y0 - 0.02, y1 + 0.02, aa.y) + band(f.y, y1, y1 + 0.025, aa.y) * band(f.x, x0 - 0.03, x1 + 0.03, aa.x);
+      float si = band(f.y, y0 - 0.045, y0, aa.y) * band(f.x, x0 - 0.05, x1 + 0.05, aa.x), ss = band(f.y, y0 - 0.1, y0 - 0.045, aa.y) * band(f.x, x0 - 0.05, x1 + 0.05, aa.x);
+      vec3 fc = fract(bh * 7.3) > 0.5 ? vec3(0.86, 0.86, 0.84) : vec3(0.3, 0.26, 0.22); float nr = 1.0 - step(abs(ty - 1.0), 0.5); alb = mix(alb, fc, clamp(fr, 0.0, 1.0) * dk * nr); alb = mix(alb, alb * 1.15 + 0.06, si * dk * nr); alb *= 1.0 - 0.35 * ss * dk * nr; }
+    float cu = mode < 2.5 ? step(0.72, hash(floor(g) + sw + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
     alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
-    if (mode < 2.5 && det > 0.01) { float im = det * smoothstep(0.35, 0.15, max(fw.x, fw.y)); wroom = k * im * (1.0 - 0.85 * cu) * roomIM(f, vec2(3.6, 3.2), vv, nrm, hash(floor(g) + vTex.w + 3.0), on); lit *= 1.0 - 0.8 * im; }
+    if (ty < 3.5 && dk > 0.0) { float rv = (band(f.y, y1 - 0.09, y1, aa.y) + 0.6 * (sl > 0.0 ? band(f.x, x0, x0 + 0.05, aa.x) : band(f.x, x1 - 0.05, x1, aa.x))) * lt * k * dk; alb *= 1.0 - 0.45 * clamp(rv, 0.0, 1.0); }   // reveal: lintel + jamb shadow on the glass (sun side)
+    if (mode < 2.5 && det > 0.01) { float im = det * smoothstep(0.35, 0.15, max(fw.x, fw.y)); wroom = k * im * (1.0 - 0.85 * cu) * roomIM(f, vec2(3.6, 3.2), vv, nrm, hash(floor(g) + sw + 3.0), on); lit *= 1.0 - 0.8 * im; }
+    if (g.y < 0.0 && g.y > -2.0) { float sp = band(g.y, -0.95, -0.22, aa.y), cn = band(g.y, -0.22, -0.13, aa.y), mu = band(fract(g.x * 2.0), -1.0, 0.04, aa.x * 2.0) * dk;   // ground storey: shopfront glazing + mullions + canopy band (offices) / dark void-deck recess + columns (residential)
+      if (res < 0.5 && mode < 2.5) { float sk = sp * (1.0 - mu); alb = mix(alb, vec3(0.2, 0.22, 0.24), sk * 0.9); alb = mix(alb, vec3(0.3, 0.3, 0.31), cn); gm = max(gm, sk * 0.7); lit = max(lit, uNight * sk * 0.55);
+        wroom += sk * dk * toLin(vec3(0.75, 0.68, 0.58)) * (uAmb * 0.3 * SUNK * 0.35 + uNight * 0.6); }
+      else if (res > 0.5) alb = mix(alb * 0.55, alb, band(f.x, -1.0, 0.09, aa.x) + band(f.x, 0.91, 2.0, aa.x)); }
+    if (tw > 0.0) { float cp = smoothstep(tw - 0.14 - aa.y, tw - 0.14 + aa.y, g.y); alb = mix(alb, vec3(0.86, 0.86, 0.84), cp); alb *= 1.0 - 0.3 * band(g.y, tw - 0.2, tw - 0.14, aa.y); }   // roof parapet coping + its shadow line
   } else if (mode > 5.5 && mode < 6.5 && vTex.w > 5.5) {   // TRPF common corridor (6) / lift core (7) / stair (8) (31A, TY 2026-10-31): greige walls + white slab edge per storey; corridor = 1.0 m parapet, open (shaded, lit at night) to the 2.4 m beam, posts every 6 m; stair = vent band
     float wi = floor(vTex.w + 0.5), al = vTex.x, y = vTex.y, fa = fwidth(al), fy = fwidth(y), px = FH / max(fy, 1e-4);
     alb = C_GREIGE;
@@ -3621,6 +3636,9 @@ void main() {
       float wm = (band(bx, 0.18, 0.48, fb) + band(bx, 0.52, 0.82, fb)) * band(yy, 0.9, 2.3, fy) * smoothstep(4.0, 6.0, px);
       float on = step(hash(vec2(floor(ls / (SW * 0.5)) + si * 7.0 + off, fl) + vTex.w * 3.1), 0.35);
       alb = mix(alb, uGlass, wm); lit = uNight * wm * on; gm = wm;
+      { float dq = smoothstep(6.0, 11.0, px), fr = (band(bx, 0.165, 0.18, fb) + band(bx, 0.48, 0.52, fb) + band(bx, 0.82, 0.835, fb)) * band(yy, 0.87, 2.33, fy) + band(yy, 2.3, 2.34, fy) * band(bx, 0.165, 0.835, fb);   // frames, sill + its shadow, lintel shadow on the glass (realism 2026-10-31)
+        float si = band(yy, 0.82, 0.9, fy) * band(bx, 0.15, 0.85, fb), ss = band(yy, 0.7, 0.82, fy) * band(bx, 0.15, 0.85, fb), lt = step(0.0, dot(nrm, uSun));
+        alb = mix(alb, brown ? vec3(0.22, 0.17, 0.14) : vec3(0.9, 0.9, 0.88), clamp(fr, 0.0, 1.0) * dq); alb = mix(alb, vec3(0.92, 0.91, 0.88), si * dq); alb *= 1.0 - 0.3 * ss * dq * lt; alb *= 1.0 - 0.45 * band(yy, 2.12, 2.3, fy) * wm * dq * lt; }
       { float im = smoothstep(8.0, 16.0, px); wroom = wm * im * roomIM(vec2(bx, yy / FH), vec2(SW * 0.5, FH), vv, nrm, hash(vec2(floor(ls / (SW * 0.5)) + si * 7.0 + off, fl) + 1.7), on); lit *= 1.0 - 0.8 * im; }
       alb = mix(alb, brown && mod(fl, 5.0) < 0.5 ? C_BROWN : C_WHITE, band(yy, -0.01, 0.22, fy) * smoothstep(2.0, 3.0, px)); }
     if (y >= VOID) { float j = floor(al / SW + 0.5), dj = abs(al - j * SW), tl = mod(j - 1.0 + off, 3.0), tr = mod(j + off, 3.0);   // frame strips at stack joints
@@ -3845,7 +3863,7 @@ function glPrism(A, P) {
       T = (s, y) => [short ? am : inf.a0 + (inf.a1 - inf.a0) * s, y, 6, w6]; }
     else if (P.style === 'club') T = (s, y) => [s, y, 9, 0];
     else if (P.style) { const k = Math.max(1, Math.round(L / 7.2)); T = (s, y) => [s * k, y, 8, P.h - CONDO.roof - 0.5]; }
-    else T = (s, y) => [s * u1, (y - b - y0) / fh, mode, seed];
+    else T = (s, y) => [s * u1, (y - b - y0) / fh, mode, seed + 1000 * Math.max(0, Math.round(vt * 10))];   // + top storey ×10 in the thousands (parapet coping in GL_FS)
     const [ab, at] = aoOn && L >= 2 ? faceAO(P, x0, z0, x1, z1, n, b, t) : [1, 1], nb = n.map(v => v * ab), nt = n.map(v => v * at);   // sky-visibility AO baked into the normal length (realism L3)
     A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, b, z1], nb, al, T(1, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, t, z0], nt, al, T(0, t)); }
   const pts = []; for (let i = 0; i < P.n; i++) pts.push([X[i], Z[i]]); const tri = earClip(pts), z4 = [0, 0, mode < 0.5 ? mode : 0, 0];
@@ -4416,6 +4434,13 @@ function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[na
 function gpuFx(cam0, env) {
   const C = GPU.fxC, t = simT(); if (C && C.env === env && C.t === t && C.ex === cam0.ex && C.ez === cam0.ez && C.roads === state.showRoads && C.hfov === cam0.hfov && Math.abs(Math.atan2(Math.sin(cam0.yaw - C.yaw), Math.cos(cam0.yaw - C.yaw))) < 0.45) return C.r;
   const cam = Object.assign({}, cam0, { inWedge: (a, b, c, d, r) => cam0.inWedge(a, b, c, d, r, 0.5) }), r = gpuFx0(cam, env); GPU.fxC = { env, t, ex: cam0.ex, ez: cam0.ez, roads: state.showRoads, hfov: cam0.hfov, yaw: cam0.yaw, r }; return r; }
+// 3D car (realism 2026-10-31; sizes estimates): tyre/sill slab (dark), body 4.4 × 1.78 m to 0.85 m, cabin 2.3 × 1.56 m to 1.45 m with dark glazing band; 3 type mixes by k (sedan / MPV taller cabin / van-taxi)
+function carMesh(A, x, y, z, hx, hz, k) { const L = Math.hypot(hx, hz) || 1, ux = hx / L, uz = hz / L, vx = -uz, vz = ux, t0 = [0, 0, 0, 0], col = CAR_COL[k % CAR_COL.length].map(v => v / 255), ty = k % 5 === 0 ? 2 : k % 3 === 0 ? 1 : 0;
+  const bx = (a0, a1, w, y0, y1, c) => { const P = (a, b, yy) => [x + ux * a + vx * b, y + yy, z + uz * a + vz * b], q = [[a0, -w], [a1, -w], [a1, w], [a0, w]];
+    for (let i = 0; i < 4; i++) { const [p, r] = [q[i], q[(i + 1) % 4]], ex = (r[0] - p[0]), eb = (r[1] - p[1]), nx = ux * eb - vx * ex, nz = uz * eb - vz * ex, nl = Math.hypot(nx, nz) || 1, n = [nx / nl, 0, nz / nl]; A.quad(P(p[0], p[1], y0), P(r[0], r[1], y0), P(r[0], r[1], y1), P(p[0], p[1], y1), n, c, t0, t0, t0, t0); }
+    A.quad(P(a0, -w, y1), P(a1, -w, y1), P(a1, w, y1), P(a0, w, y1), [0, 1, 0], c, t0, t0, t0, t0); };
+  const dark = [0.08, 0.08, 0.09], glass = [0.12, 0.15, 0.18], h1 = ty === 2 ? 1.95 : ty === 1 ? 1.62 : 1.45, cl = ty === 2 ? [-2.0, 1.4] : ty === 1 ? [-1.7, 1.2] : [-1.25, 1.05];
+  bx(-2.1, 2.1, 0.86, 0.05, 0.38, dark); bx(-2.2, 2.2, 0.89, 0.3, 0.85, col); bx(cl[0], cl[1], 0.78, 0.85, h1 - 0.42, glass); bx(cl[0] + 0.05, cl[1] - 0.05, 0.76, h1 - 0.42, h1, col); }
 function gpuFx0(cam, env) {
   const add = [], opq = [], la = [], lo = [], Sh = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
   SHIPS.forEach(([x, z, len]) => { glPrism(Sh, makePrism('ship', 'existing', 12, 0, box(x - len / 2, z - len * 0.08, x + len / 2, z + len * 0.08))); glPrism(Sh, makePrism('ship', 'existing', 30, 12, box(x - len * 0.4, z - len * 0.06, x - len * 0.2, z + len * 0.06))); });
@@ -4423,8 +4448,9 @@ function gpuFx0(cam, env) {
     glPrism(Sh, makePrism('ship', 'existing', big ? 10 : 3, 0, box(x - len / 2, z - len * 0.08, x + len / 2, z + len * 0.08))); glPrism(Sh, makePrism('ship', 'existing', big ? 26 : 6, big ? 10 : 3, box(Math.min(a, b), z - len * 0.06, Math.max(a, b), z + len * 0.06)));
     S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2); });
   if (state.showRoads) { const cc = {};
-    CAR_SINK = (x, y, z, hx, hz, k, dd) => { if (night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0; S(add, x, y + 0.8, z, 0, 0, 0.8, 1.2, tow ? [1, 0.97, 0.88] : [1, 0.16, 0.12], tow ? 0.9 : 0.8, 1); }
-      else { const i = k % CAR_COL.length, c = cc[i] || (cc[i] = shade(CAR_COL[i], [0, 1, 0], env).map(v => v / 255)); S(opq, x, y + 0.8, z, hx, hz, 2.25, 0.9, c, 1, 3); } };
+    CAR_SINK = (x, y, z, hx, hz, k, dd) => { const near = Math.hypot(x - cam.ex, z - cam.ez) < 700; if (near) carMesh(Sh, x, y, z, hx, hz, k);   // ≤700 m: 3D car (realism 2026-10-31); beyond: sprite rect
+      if (night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0; S(add, x, y + 0.8, z, 0, 0, 0.8, 1.2, tow ? [1, 0.97, 0.88] : [1, 0.16, 0.12], tow ? 0.9 : 0.8, 1); }
+      else if (!near) { const i = k % CAR_COL.length, c = cc[i] || (cc[i] = shade(CAR_COL[i], [0, 1, 0], env).map(v => v / 255)); S(opq, x, y + 0.8, z, hx, hz, 2.25, 0.9, c, 1, 3); } };
     try { drawCars(null, cam, env); for (const P of DECKS) { if (P.name === 'Pier' || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2200 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 2300)) continue; deckCars(null, cam, env, P); } } finally { CAR_SINK = null; } }
   { const ax = Math.sin(60 * DEG), az = Math.cos(60 * DEG), P = t => [FLYER[0] + ax * 75 * Math.cos(t), 90 + 75 * Math.sin(t), FLYER[1] + az * 75 * Math.cos(t)], o = night ? la : lo, c = night ? [150 / 255, 200 / 255, 1] : [235 / 255, 235 / 255, 240 / 255];   // Flyer rim (+ 24 lit capsules at night)
     for (let i = 0; i < 48; i++) { const p = P((2 * Math.PI * i) / 48), q = P((2 * Math.PI * (i + 1)) / 48); o.push(...p, ...c, 1, ...q, ...c, 1); if (night && i % 2 === 0) S(add, ...p, 0, 0, 0, 1.3, [200 / 255, 230 / 255, 1], 0.8, 1); } }
