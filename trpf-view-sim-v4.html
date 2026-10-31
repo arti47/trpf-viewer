@@ -1523,6 +1523,36 @@ function roadKit() {
 }
 function gpuRoadKit(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of roadKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of playKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
+// Estate lights (TY 2026-10-31 "at night very dark, no street lamps around the estate"; typical HDB estate LED lighting, positions/sizes estimates): 8 m single-arm road lamps along the internal drives / drop-off loops (every 24 m, 1 m off the kerb), 4.5 m post-top lanterns along the jogging loops (every 20 m, alternating sides, 3 m off the centre line) and the site edge (every 26 m, 4.5 m inside), LED downlights under the covered linkways (every 6 m). Geometry (grey poles, lens mode 0.48 = lit at night only) in the opaque city range; night glow = sprites (core + halo + ground pool, 4000 K, `GPU.elamps`). Posts block walking (`ELAMP.posts`). Rebuilt per TRPF (31A gap slider).
+let ELAMP = null;
+function estateLamps() {
+  if (ELAMP && ELAMP.t === TRPF) return ELAMP; const T = [], S = [], posts = [], cc = v => v.map(q => q / 255), POLE = cc([128, 132, 136]), HEAD = cc([92, 96, 100]), LENS = cc([236, 238, 240]), z4 = [0, 0, 0, 0], ln = [0, 0, 0.48, 0];
+  const obs = TRPF.filter(P => P.base < 1.25 && P.h > 0.05).map(P => ({ P, f: Array.from(P.xs).flatMap((v, i) => [v, P.zs[i]]) })), drives = [...VD_FLAT.drives, ...SITE_ROADS.filter(r => ringIn(GEO.trpf, (r[0] + r[4]) / 2, (r[1] + r[5]) / 2))];
+  const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, tri = (a, b, d, n, c, t = z4) => T.push([a, b, d, n, c, t]), quad = (a, b, d, e, n, c, t) => { tri(a, b, d, n, c, t); tri(a, d, e, n, c, t); };
+  const box = (cx, cz, y0, y1, ux, uz, hu, hv, c, t, tb = t) => { const V = [-uz, ux], p = (su, sv, y) => [cx + ux * su * hu + V[0] * sv * hv, y, cz + uz * su * hu + V[1] * sv * hv], R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2]; quad(p(a0, b0, y0), p(a1, b1, y0), p(a1, b1, y1), p(a0, b0, y1), nz([ux * m[0] + V[0] * m[1], 0, uz * m[0] + V[1] * m[1]]), c, t); }
+    quad(...R.map(([a, b]) => p(a, b, y1)), [0, 1, 0], c, t); quad(...[...R].reverse().map(([a, b]) => p(a, b, y0)), [0, -1, 0], tb === t ? c : LENS, tb); };
+  const cyl = (x, z, y0, y1, r, c, t = z4) => { for (let k = 0; k < 8; k++) { const t0 = k * Math.PI / 4, t1 = t0 + Math.PI / 4, tm = t0 + Math.PI / 8; quad([x + r * Math.cos(t0), y0, z + r * Math.sin(t0)], [x + r * Math.cos(t1), y0, z + r * Math.sin(t1)], [x + r * Math.cos(t1), y1, z + r * Math.sin(t1)], [x + r * Math.cos(t0), y1, z + r * Math.sin(t0)], [Math.cos(tm), 0, Math.sin(tm)], c, t); } };
+  const busy = (x, z) => [...VD_FLAT.pads.map(q => q.r), ...VD_FLAT.plazas, ...VD_FLAT.porches, VD_FLAT.court].some(r => ringIn(r, x, z) || polyD(r, x, z) < 1.2) || VD_LINKS.some(l => l.some((p, i) => i && segD(x, z, l[i - 1][0], l[i - 1][1], p[0], p[1]) < 2.2));
+  const free = (x, z, rd = 0.6) => ringIn(GEO.trpf, x, z) && !drives.some(r => ringIn(r, x, z) || polyD(r, x, z) < rd) && !obs.some(({ P, f }) => x > P.minx - 1 && x < P.maxx + 1 && z > P.minz - 1 && z < P.maxz + 1 && (pointIn(P, x, z) || polyD(f, x, z) < 0.8)) && !posts.some(([a, b]) => Math.hypot(a - x, b - z) < 9);
+  const pool = (x, z, r, a, ax = 1, az = 0, rb = r) => S.push(x, 0.12, z, ax, az, r, rb, 0.78, 0.84, 0.96, a, 2, 0);
+  const glow = (x, y, z, rh, pull) => S.push(x, y, z, 0, 0, rh, 2.4, 0.82, 0.88, 1.0, 0.24, 0, pull, x, y, z, 0, 0, rh * 0.22, 1.0, 0.95, 0.97, 1.0, 0.92, 1, pull);
+  const road = (x, z, ux, uz) => { const hx = x + ux * 1.2, hz = z + uz * 1.2; posts.push([x, z]); cyl(x, z, 0, 0.5, 0.16, POLE); cyl(x, z, 0.5, 8.0, 0.075, POLE); box((x + hx) / 2, (z + hz) / 2, 7.92, 8.0, ux, uz, 0.62, 0.035, POLE);
+    box(hx, hz, 7.78, 7.98, ux, uz, 0.36, 0.14, HEAD, z4, ln); glow(hx, 7.74, hz, 1.3, 2); pool(hx, hz, 10, 0.3); };
+  const lantern = (x, z) => { posts.push([x, z]); cyl(x, z, 0, 0.35, 0.12, POLE); cyl(x, z, 0.35, 4.0, 0.055, POLE); cyl(x, z, 4.0, 4.45, 0.2, LENS, ln); box(x, z, 4.45, 4.55, 1, 0, 0.26, 0.26, HEAD); glow(x, 4.22, z, 0.9, 1.5); pool(x, z, 6.5, 0.28); };
+  for (const r of drives) { const n = r.length / 2; if (n < 3) continue; let ar = 0; for (let i = 0, j = n - 1; i < n; j = i++) ar += r[2 * j] * r[2 * i + 1] - r[2 * i] * r[2 * j + 1]; const sg = ar > 0 ? 1 : -1;   // CCW (x E, z N): outward normal = (ez, −ex)
+    let s = hash01(r[0], r[1], 61) * 28; for (let i = 0; i < n; i++) { const ax = r[2 * i], az = r[2 * i + 1], bx = r[(2 * i + 2) % r.length], bz = r[(2 * i + 3) % r.length], L = Math.hypot(bx - ax, bz - az); if (L < 1e-3) continue; const ex = (bx - ax) / L, ez = (bz - az) / L, ox = ez * sg, oz = -ex * sg;
+      for (; s < L; s += 24) { const x = ax + ex * s + ox * 1.0, z = az + ez * s + oz * 1.0; if (free(x, z, 0.5) && !busy(x, z)) road(x, z, -ox, -oz); } s -= L; } }
+  VD_TRACKS.forEach((Tk, ti) => { const m = Tk.length - (Tk.open ? 1 : 0); let s = 8 + 6 * ti, k = 0;
+    for (let i = 0; i < m; i++) { const a = Tk[i], b = Tk[(i + 1) % Tk.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-3) continue; const ex = (b[0] - a[0]) / L, ez = (b[1] - a[1]) / L;
+      for (; s < L; s += 20) { const sd = k++ % 2 ? 1 : -1, x = a[0] + ex * s + ez * 3 * sd, z = a[1] + ez * s - ex * 3 * sd; if (free(x, z) && !busy(x, z) && !VD_TRACKS.some(Q => Q.some((p, j) => j && segD(x, z, Q[j - 1][0], Q[j - 1][1], p[0], p[1]) < 2.0))) lantern(x, z); } s -= L; } });
+  { const r = GEO.trpf, n = r.length / 2; let ar = 0; for (let i = 0, j = n - 1; i < n; j = i++) ar += r[2 * j] * r[2 * i + 1] - r[2 * i] * r[2 * j + 1]; const sg = ar > 0 ? -1 : 1; let s = 10;   // site edge path: inward normal
+    for (let i = 0; i < n; i++) { const ax = r[2 * i], az = r[2 * i + 1], bx = r[(2 * i + 2) % r.length], bz = r[(2 * i + 3) % r.length], L = Math.hypot(bx - ax, bz - az); if (L < 1e-3) continue; const ex = (bx - ax) / L, ez = (bz - az) / L;
+      for (; s < L; s += 26) { const x = ax + ex * s + ez * 4.5 * sg, z = az + ez * s - ex * 4.5 * sg; if (free(x, z) && !busy(x, z)) lantern(x, z); } s -= L; } }
+  for (const l of VD_LINKS) for (let i = 1; i < l.length; i++) { const [ax, az] = l[i - 1], [bx, bz] = l[i], L = Math.hypot(bx - ax, bz - az); if (L < 1) continue; const ex = (bx - ax) / L, ez = (bz - az) / L;
+    for (let s = 3; s < L - 1; s += 6) { const x = ax + ex * s, z = az + ez * s; box(x, z, 2.64, 2.69, ex, ez, 0.6, 0.07, LENS, ln); S.push(x, 2.6, z, 0, 0, 0.18, 1.2, 0.95, 0.97, 1.0, 0.8, 1, 0.3); pool(x, z, 2.4, 0.22, ex, ez, 1.6); } }
+  return (ELAMP = { t: TRPF, T, S: new Float32Array(S.length ? S : new Array(13).fill(0)), n: S.length / 13, posts }); }
+function gpuEstate(A) { for (const [a, b, d, n, col, t] of estateLamps().T) { A.v(a, n, col, t); A.v(b, n, col, t); A.v(d, n, col, t); } }
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
 const VD_NLAWN = pxRing([[170, 230], [1110, 130], [1110, 318], [930, 335], [880, 342], [600, 362], [300, 418], [170, 425]]);   // N lawn between Tanjong Rhu Rd and the blocks (site px)
 const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.length - (T.open ? 1 : 0); i++) { const a = T[i], b = T[(i + 1) % T.length]; if (segD(x, z, a[0], a[1], b[0], b[1]) < 2.8) return true; }
@@ -2817,7 +2847,7 @@ const tiltMax = () => { const w = state.walk; if (!w || !onGround() || Math.abs(
   for (const P of OVH.a) { if (x < P.minx || x > P.maxx || z < P.minz || z > P.maxz) continue; if (pointIn(P, x, z)) return 30; } return 85; };
 const tiltCap = () => { const m = tiltMax(); if (state.pitchDeg > m) state.pitchDeg = m; const sl = $('pitchSlider'); if (sl && +sl.max !== m) sl.max = m; };
 const groundObs = () => { if (GOBS.t !== TRPF) GOBS = { t: TRPF, a: TRPF.filter(P => P.base < 1.25 && P.h > 0.05 && !P.wdoor && !P.wlift) }; return GOBS.a; };   // lift core: plan walls (GROUND_WALLS + liftWalls) collide instead
-const groundFree = (X, Y, r) => { const [x, z] = P2W(X, Y); if (!ringIn(GEO.trpf, x, z)) return false; r = r ? Math.max(r, 0.25) : 0;
+const groundFree = (X, Y, r) => { const [x, z] = P2W(X, Y); if (!ringIn(GEO.trpf, x, z)) return false; r = r ? Math.max(r, 0.25) : 0; if (estateLamps().posts.some(([a, b]) => Math.hypot(a - x, b - z) < 0.2 + r)) return false;
   for (const P of groundObs()) { if (x < P.minx - r || x > P.maxx + r || z < P.minz - r || z > P.maxz + r) continue; if (pointIn(P, x, z)) return false; if (r > 0) { for (let i = 0, j = P.n - 1; i < P.n; j = i++) if (segD(x, z, P.xs[j], P.zs[j], P.xs[i], P.zs[i]) < r) return false; } } return true; };
 const liftBlock = (X, Y) => { if (LIFT.busy) return true; const L = LIFT.open && LIFT.o < 0.8 && LIFTS.find(q => q.id === LIFT.open); if (!L || !state.walk) return false; const sd = (x, y) => y > L.yc - 0.8 && y < L.yc + 0.8 && L.s * (x - L.g) < -0.02; return sd(X, Y) !== sd(state.walk.X, state.walk.Y); };   // closed/closing doors block the door plane; riding: no walking
 const walkFree = (X, Y, r = 0.2, esc = false, Z = state.walk ? state.walk.Z || 0 : 0) => { const z = walkZ(X, Y, Z); return z !== null && !liftBlock(X, Y) && (onGround() ? groundFree(X, Y, r) : ringIn(walkRing, X, Y) || inCorr(X, Y) || LIFTS.some(({ area: [a, b, c, d] }) => X > a && X < c && Y > b && Y < d)) &&   // walls overlapping the body (feet + 0.05 … + 1.2 m) block; stair treads/slabs are surfaces
@@ -3798,7 +3828,7 @@ void main() {
       c = mix(c, untone(r.y > 0.0 ? mix(uFog, uSkyTop, sqrt(r.y)) : mix(uFog, vec3(0.27, 0.3, 0.32), 0.6)), 0.22 + 0.55 * F); c += vec3(1.0, 0.96, 0.86) * pow(max(dot(r, uSun), 0.0), 900.0) * uDirect * vis * 3.0 * SUNK; }
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
-    if (mode > 0.2 && mode < 0.4) c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96);   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > 0.4 && mode < 0.5) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); }
+    if (mode > 0.2 && mode < 0.4) c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96);   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > 0.4 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
   vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
@@ -4124,7 +4154,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
   if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
-  gpuPlay(A);
+  gpuPlay(A); gpuEstate(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new' && !P.nogl) {   // nogl = physics-only (32A raster boxes spanning the corridor/slots, corridor boxes): drawing them filled the slots (TY 2026-10-31)
@@ -4458,6 +4488,7 @@ function gpuRender(cam, env, pxW, pxH) {
   if (fx.opq) gpuSprites(cam, env, GPU.dyn.opq, fx.opq, false, 1e9); if (fx.lo) gpuLines(cam, env, GPU.dyn.lo, fx.lo, false);
   gl.depthMask(false); gl.blendFunc(gl.ONE, gl.ONE);
   if (env.night && state.showRoads) gpuSprites(cam, env, GPU.lamps, GPU.lampN, true, 2500);
+  if (env.night) { const E = estateLamps(); if (GPU.elT !== E) { if (GPU.elamps) gl.deleteBuffer(GPU.elamps); GPU.elamps = gpuBuf(E.S); GPU.elT = E; } if (E.n) gpuSprites(cam, env, GPU.elamps, E.n, true, 2500); }   // estate lights (estateLamps)
   if (fx.add) gpuSprites(cam, env, GPU.dyn.add, fx.add, true, 1e9); if (fx.la) gpuLines(cam, env, GPU.dyn.la, fx.la, true);
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true);
   return true;
