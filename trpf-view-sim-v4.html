@@ -1063,23 +1063,34 @@ let TRPF = [], TRPF_RELIEF = [];
 // at stack joints next to a brown stack; common corridors (ck c, solid prism hidden): floor slab per storey, 1.0 m parapet + beam (2.4–2.6 m) on the open edges, posts at run ends / ≤6 m. Sizes estimates.
 function trpfRelief(B) {
   const out = [], SW = 7.5, TY = ['brown', 'greige', 'white'], off = B.name.charCodeAt(4) + B.name.charCodeAt(6), brown = al => (((Math.floor(al / SW) + off) % 3) + 3) % 3 === 0;
-  const WH = [240, 238, 232], BR = [64, 46, 40], FL = [196, 192, 184], top = B.h, nS = Math.round((BLK_TOP - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);
+  const plain = B.name === 'Blk 31B', own32 = B.name === 'Blk 32A', WH = [240, 238, 232], BR = [64, 46, 40], FL = [196, 192, 184], top = B.h, nS = Math.round((BLK_TOP - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);
   const inOther = (bi, x, z) => B.boxes.some((b, j) => j !== bi && x > b[0] && x < b[2] && z > b[1] && z < b[3]);
-  const pr = (y0, y1, ring, alb) => { const P = makePrism(B.name + ' relief', 'trpf', y1, y0, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb; out.push(P); };
+  const pr = (y0, y1, ring, alb) => { const w = ring.map(([a, b]) => blkToWorld(B, a, b)), P = makePrism(B.name + ' relief', 'trpf', y1, y0, w.flat(), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb;
+    if (own32) { const q = w.map(([x, z]) => P2W.inv(x, z)), X0 = Math.min(...q.map(v => v[0])), X1 = Math.max(...q.map(v => v[0])), Y0 = Math.min(...q.map(v => v[1])), Y1 = Math.max(...q.map(v => v[1])); P.rel32 = X1 > -1.5 && X0 < 61 && Y1 > -1.5 && Y0 < 22; }   // 32A around #134 / corridor / slots: hidden with the own-unit boxes (Room interior draws its own traced exterior there)
+    out.push(P); };
+  if (!B.boxes.some(b => b[4])) {   // 0.5 m raster blocks (32A/33A/31B): ledges/fins along the simplified outline (blkOutline, 0.3 m) — per-box edges gave ~20k prisms on the staircase wings
+    for (const L of blkOutline(B, 0, 0.3)) for (let i = 0; i < L.length; i++) { const [ax, az] = L[i], [bx, bz] = L[(i + 1) % L.length], len = Math.hypot(bx - ax, bz - az); if (len < 1.5) continue;
+      const dx = (bx - ax) / len, dz = (bz - az) / len, ox = dz, oz = -dx, k = Math.abs(dx) >= Math.abs(dz) ? 0 : 1, al = t => (k ? az + dz * t : ax + dx * t);
+      const q = (t0, t1, d0, d1) => [[ax + dx * t0 + ox * d0, az + dz * t0 + oz * d0], [ax + dx * t1 + ox * d0, az + dz * t1 + oz * d0], [ax + dx * t1 + ox * d1, az + dz * t1 + oz * d1], [ax + dx * t0 + ox * d1, az + dz * t0 + oz * d1]];
+      const cuts = [-0.3]; if (!plain) { const g0 = Math.min(al(0), al(len)), g1 = Math.max(al(0), al(len)), sl = (k ? dz : dx) || 1; for (let j = Math.ceil(g0 / SW); j * SW < g1; j++) cuts.push((j * SW - (k ? az : ax)) / sl); } cuts.push(len + 0.3); cuts.sort((p, r) => p - r);
+      for (let s = 0; s <= nS; s++) { const y = VOID_DECK_HEIGHT + s * FLOOR_HEIGHT, band = s > 0 && s % 5 === 0 && !plain;
+        if (!band) pr(y - 0.05, y + 0.2, q(-0.3, len + 0.3, 0, 0.3), WH); else for (let c = 0; c < cuts.length - 1; c++) if (cuts[c + 1] - cuts[c] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[c], cuts[c + 1], 0, 0.3), brown(al((cuts[c] + cuts[c + 1]) / 2)) ? BR : WH); }
+      if (!plain) for (let c = 1; c < cuts.length - 1; c++) { const t = cuts[c]; if (t > 0.4 && t < len - 0.4 && (brown(al(t) - 0.1) || brown(al(t) + 0.1))) pr(VOID_DECK_HEIGHT, top, q(t - 0.3, t + 0.3, 0, 0.35), BR); } }
+    return out; }
   B.boxes.forEach((b, bi) => { const [x0, z0, x1, z1] = b, cor = b[4] === 'c'; if (b[4] && !cor) return;
     for (const [ax, c, a0, a1, nx, nz] of [['x', z0, x0, x1, 0, -1], ['z', x1, z0, z1, 1, 0], ['x', z1, x0, x1, 0, 1], ['z', x0, z0, z1, -1, 0]]) {
       const P = (t, d) => (ax === 'x' ? [t, c + nz * d] : [c + nx * d, t]), runs = []; let s = null;
       for (let t = a0 + 0.125; t < a1; t += 0.25) { const [px, pz] = P(t, 0.15), ex = !inOther(bi, px, pz); if (ex && s === null) s = t - 0.125; if (!ex && s !== null) { runs.push([s, t - 0.125]); s = null; } }
       if (s !== null) runs.push([s, a1]);
-      for (const [r0, r1] of runs) { if (r1 - r0 < 0.3) continue; const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
+      for (const [r0, r1] of runs) { if (r1 - r0 < (cor ? 0.3 : 1.0)) continue; const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
         if (cor) { const e0 = r0 - 0.15, e1 = r1 + 0.15;
           for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y, y + 1.0, q(e0, e1, -0.15, 0.02), WH); if (i < nS) pr(y + 2.4, y + 2.6, q(e0, e1, -0.3, 0.02), WH); }
           const np = Math.max(1, Math.ceil((r1 - r0) / 6)); for (let k = 0; k <= np; k++) { const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pr(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
           continue; }
         const e0 = r0 - 0.3, e1 = r1 + 0.3, cuts = [e0]; for (let j = Math.ceil(e0 / SW); j * SW < e1; j++) cuts.push(j * SW); cuts.push(e1);
         for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT, band = i > 0 && i % 5 === 0;
-          if (!band) pr(y - 0.05, y + 0.2, q(e0, e1, 0, 0.3), WH); else for (let k = 0; k < cuts.length - 1; k++) if (cuts[k + 1] - cuts[k] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[k], cuts[k + 1], 0, 0.3), brown((cuts[k] + cuts[k + 1]) / 2) ? BR : WH); }
-        for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (brown(j * SW - 0.1) || brown(j * SW + 0.1)) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
+          if (!band) pr(y - 0.05, y + 0.2, q(e0, e1, 0, 0.3), WH); else for (let k = 0; k < cuts.length - 1; k++) if (cuts[k + 1] - cuts[k] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[k], cuts[k + 1], 0, 0.3), !plain && brown((cuts[k] + cuts[k + 1]) / 2) ? BR : WH); }
+        for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (!plain && brown(j * SW - 0.1) || brown(j * SW + 0.1)) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
   for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); });   // corridor floor slabs (roof slab at i = nS)
   return out; }
 function rebuildTRPF() {
@@ -1112,7 +1123,7 @@ function rebuildTRPF() {
   for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3, B.name === 'Blk 31A' ? 0 : 4)) {   // 31A: clean site-plan boxes, no closing (it would roof over the courtyard, whose W opening is ≈2 m)
     const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
-  TRPF_RELIEF = SITE_BLOCKS.filter(B => B.name === 'Blk 31A').flatMap(trpfRelief);
+  TRPF_RELIEF = SITE_BLOCKS.filter(B => B.h > BLK_TOP).flatMap(trpfRelief);   // all residential blocks (TY 2026-10-31 "do for all blocks")
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
 const TRPF_GROUND = [[23.6, -2.9, 8, 3.5, [80, 140, 205]], [41.6, -6.1, 3, 3, [190, 190, 184]]];
@@ -2243,7 +2254,7 @@ function facadeAlb(P) {
 // TRPF facade from developer renderings + model (31A/32A/33A fronts, 31A side facing #134): ~7.5m unit stacks cycling
 // brown-framed grey / greige / white-framed grey; white ledge each floor; 2-pane dark windows per 3.6m bay; brown bands every 5F
 // inside brown frames; void deck recessed. MSCP: grey screens, white pilasters + slab edges, green planter strips. Visual only.
-const TRPF_PAL = { white: [236, 234, 228], greige: [210, 198, 176], grey: [172, 174, 176], brown: [64, 46, 40], crown: [214, 204, 184], glass: [62, 70, 80], lit: [255, 214, 150], void: [96, 100, 104], screen: [128, 134, 140], green: [96, 142, 72] };
+const TRPF_PAL = { white: [240, 239, 234], greige: [224, 212, 192], grey: [198, 200, 202], brown: [64, 46, 40], crown: [228, 222, 208], glass: [62, 70, 80], lit: [255, 214, 150], void: [96, 100, 104], screen: [128, 134, 140], green: [96, 142, 72] };
 const STACK_W = 7.5, STACK_TYPES = ['brown', 'greige', 'white'];
 function trpfFaceInfo(P, f) {
   const B = P.B, p0 = f.pts[0], p1 = f.pts[1], loc = (x, z) => { const dx = x - B.ox, dz = z - B.oz; return [B.c * dx + B.s * dz, -B.s * dx + B.c * dz]; };
@@ -3507,14 +3518,15 @@ function gpuInit() {
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
-  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
-  for (const P of TRPF_RELIEF) glPrism(A, P);
+  for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
+  { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
@@ -3524,7 +3536,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck paving, driveways, plazas (wavy stripes), court, pads, jogging loop (white edges + centre line)
   const up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), poly = (r, y, col) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), z4); };
@@ -3718,7 +3730,7 @@ function gpuShadows(env) {
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
-    gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
+    gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
     gl.useProgram(GPU.sht.p); gpuTrees(GPU.sht); }
   gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
@@ -3750,6 +3762,7 @@ function gpuRender(cam, env, pxW, pxH) {
   // solids with depth
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.useProgram(M.p); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, 0, GPU.opN);
   const own = ownUnitTest(); for (const [P, s, c] of GPU.own) if (P.wdoor ? !(state.walk && onGround()) : P.wlift ? !(onGround() && groundIndoor()) : !own || !own(P)) gl.drawArrays(gl.TRIANGLES, s, c);
+  if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]);
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree);
   if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
