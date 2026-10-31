@@ -3668,7 +3668,7 @@ void main() {
     if (d > 0.0) { vis = shadowAt(vWorld, normalize(vNor)) * cloudSh(vWorld, uSun); d *= vis; } vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), v = normalize(vWorld - uEye);
     float sa = clamp(uSun.y * 5.0 + 0.5, 0.0, 1.0) * (1.0 - abs(nrm.y)) * max(0.0, dot(nrm.xz, uSun.xz) / max(length(uSun.xz), 1e-3));   // brighter sky on the sun side
     vec3 hemi = mix(vec3(0.6, 0.58, 0.54) * (1.0 + 0.12 * uWarm), 0.82 + 0.34 * uSkyMid, 0.5 + 0.5 * nrm.y) + 0.12 * sa;   // sky dome above, warm ground bounce below
-    vec3 al = toLin(alb); c = al * (uAmb * 0.3 * hemi + d * tint) * SUNK + lit * vec3(1.0, 0.68, 0.27) * 0.75;
+    vec3 al = toLin(alb); float ao = clamp(length(vNor), 0.25, 1.0); c = al * (uAmb * 0.3 * hemi * ao + d * tint) * SUNK + lit * vec3(1.0, 0.68, 0.27) * 0.75;
     if (leaf) c += al * vec3(0.55, 0.7, 0.25) * 0.5 * SUNK * pow(max(0.0, dot(v, uSun)), 3.0) * uDirect * vis;   // sunlight through the canopy (backlit leaves)
     if (gm > 0.0 && abs(nrm.y) < 0.5) { vec3 n = dot(v, nrm) > 0.0 ? -nrm : nrm, r = reflect(v, n); float F = 0.04 + 0.96 * pow(1.0 - max(0.0, -dot(v, n)), 5.0);   // window glass: Fresnel sky reflection + sun glint
       vec3 sr = r.y > 0.0 ? mix(fogCol(r), uSkyTop, sqrt(r.y)) : mix(uFog, vec3(0.3, 0.32, 0.33) * (0.3 + uAmb), 0.6);
@@ -3772,6 +3772,18 @@ const glArr = () => ({ b: new Float32Array(13 * 256), l: 0, get a() { return thi
   v(p, n, c, t) { let b = this.b, l = this.l; if (l + 13 > b.length) { const g = new Float32Array(b.length * 2); g.set(b); this.b = b = g; }
     b[l] = p[0]; b[l + 1] = p[1]; b[l + 2] = p[2]; b[l + 3] = n[0]; b[l + 4] = n[1]; b[l + 5] = n[2]; b[l + 6] = c[0]; b[l + 7] = c[1]; b[l + 8] = c[2]; b[l + 9] = t[0]; b[l + 10] = t[1]; b[l + 11] = t[2]; b[l + 12] = t[3]; this.l = l + 13; },
   quad(p0, p1, p2, p3, n, c, t0, t1, t2, t3) { this.v(p0, n, c, t0); this.v(p1, n, c, t1); this.v(p2, n, c, t2); this.v(p0, n, c, t0); this.v(p2, n, c, t2); this.v(p3, n, c, t3); }, get n() { return this.l / 13; } });
+// Wall sky-visibility AO (realism 2026-10-31, L3): from 2 points on the face, march out along the normal (≤75 m) through the 40 m grid; the steepest
+// obstruction elevation θ above the wall's foot / top (other prisms ≥ 8 m, not the same block) → ao = 1 − 0.7·sin θ, 0.3..1. Stored as the length of the
+// face normal (base / top vertices); GL_FS scales the sky ambient by it. Visual only.
+const AO_D = [3, 6, 10, 15, 22, 30, 40, 55, 75];
+function faceAO(P, x0, z0, x1, z1, n, b, t) {
+  let sb = 0, st = 0; const yb = b + 1.5;
+  for (const f of [0.25, 0.75]) { const px = x0 + (x1 - x0) * f + n[0] * 0.3, pz = z0 + (z1 - z0) * f + n[2] * 0.3; let mb = 0, mt = 0;
+    for (const d of AO_D) { const x = px + n[0] * d, z = pz + n[2] * d, i = Math.floor((x - GX0) / CELL), j = Math.floor((z - GZ0) / CELL); if (i < 0 || j < 0 || i >= NI || j >= NJ) break; const c = GRID[i * NJ + j]; if (!c) continue;
+      for (const Q of c) { if (Q === P || Q.h < 8 || Q.kind === 'road' || Q.kind === 'new' && P.kind !== 'new' || (P.B && Q.B === P.B) || Q.h - yb <= 0) continue; if (!pointIn(Q, x, z)) continue;
+        mb = Math.max(mb, Math.atan2(Q.h - yb, d)); if (Q.h > t) mt = Math.max(mt, Math.atan2(Q.h - t, d)); } }
+    sb += Math.sin(mb) / 2; st += Math.sin(mt) / 2; }
+  return [clamp(1 - 0.7 * sb, 0.3, 1), clamp(1 - 0.7 * st, 0.3, 1)]; }
 function glPrism(A, P) {
   // each prism grown 1–3 cm about its centroid (varies by prism): coplanar faces of adjacent/overlapping raster boxes (TRPF 0.5 m boxes) no longer z-fight or crack
   const e = P.kind === 'road' ? 0 : 0.01 + 0.002 * ((GPU.pid = (GPU.pid || 0) + 1) % 11), X = new Float64Array(P.n), Z = new Float64Array(P.n);
@@ -3780,6 +3792,7 @@ function glPrism(A, P) {
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
   const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
+  const aoOn = !GPU.noAO && P.h >= 8 && !P.tank && P.kind !== 'road' && Math.hypot(P.cx, P.cz) < 3000;
   const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = P.ck ? { c: 6, l: 7, s: 8, h: 7 }[P.ck] : ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
   for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = X[j], z0 = Z[j], x1 = X[i], z1 = Z[i], ex = x1 - x0, ez = z1 - z0, L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], u1 = L / 3.6;
     let T; if (mscp) { const k = Math.max(1, Math.round(L / 8)), dh = (P.h - 1) / MSCP_DECKS; T = (s, y) => [s * k, y, 7, dh]; }   // facade styles evaluated in the fragment shader
@@ -3788,7 +3801,8 @@ function glPrism(A, P) {
     else if (P.style === 'club') T = (s, y) => [s, y, 9, 0];
     else if (P.style) { const k = Math.max(1, Math.round(L / 7.2)); T = (s, y) => [s * k, y, 8, P.h - CONDO.roof - 0.5]; }
     else T = (s, y) => [s * u1, (y - b - y0) / fh, mode, seed];
-    A.quad([x0, b, z0], [x1, b, z1], [x1, t, z1], [x0, t, z0], n, al, T(0, b), T(1, b), T(1, t), T(0, t)); }
+    const [ab, at] = aoOn && L >= 2 ? faceAO(P, x0, z0, x1, z1, n, b, t) : [1, 1], nb = n.map(v => v * ab), nt = n.map(v => v * at);   // sky-visibility AO baked into the normal length (realism L3)
+    A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, b, z1], nb, al, T(1, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, b, z0], nb, al, T(0, b)); A.v([x1, t, z1], nt, al, T(1, t)); A.v([x0, t, z0], nt, al, T(0, t)); }
   const pts = []; for (let i = 0; i < P.n; i++) pts.push([X[i], Z[i]]); const tri = earClip(pts), z4 = [0, 0, mode < 0.5 ? mode : 0, 0];
   for (let k = 0; k < tri.length; k += 3) { for (const q of [tri[k], tri[k + 1], tri[k + 2]]) A.v([pts[q][0], t, pts[q][1]], [0, 1, 0], top, z4); if (b > 0) for (const q of [tri[k], tri[k + 2], tri[k + 1]]) A.v([pts[q][0], b, pts[q][1]], [0, -1, 0], bot, z4); }
 }
@@ -3884,13 +3898,13 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
-  for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P);
+  GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
   if (state.showExisting) gpuLandmarks(A);
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
-  { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
+  { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; for (const P of ALL) if (P.kind === 'new') { glPrism(A, P); const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
@@ -4299,6 +4313,25 @@ function gpuHand(HV) {   // after the room: depth cleared, hand (main program, r
   HV.blade.forEach(({ k, a }, i) => { if (i === 1) { gl.depthMask(false); gl.blendFunc(gl.ONE, gl.ONE); } gl.uniform4f(F.u.uColor, ...(i ? [0.12, 1, 0.2, k * fl] : [0.82, 1, 0.85, 1]));   /* premultiplied: alpha = k so the glow also shows over the transparent (sky) part of the canvas */ gpuAttrib(F, gpuDyn('blade' + i, a)); gl.drawArrays(gl.TRIANGLES, 0, a.length / 3); });
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true);
 }
+// Bloom + vignette (realism 2026-10-31, L5; 2D, full renders only): the outdoor frame (sky + city) is reduced to ~1/12 size, pixels above luminance 0.8
+// kept (soft knee), box-blurred twice on the CPU and drawn back upscaled with 'lighter' after the room pass, so bright sky/sun/glints/night lights bleed over
+// window frames and dark edges. Vignette: −12% at the corners (multiply).
+const BLOOM = { a: null, b: null };
+function bloomGrab(ctx, w, h) {
+  const bw = Math.max(16, Math.round(w / 12)), bh = Math.max(10, Math.round(h / 12)), mk = () => { const c = document.createElement('canvas'); return c; };
+  const A = BLOOM.a || (BLOOM.a = mk()), B = BLOOM.b || (BLOOM.b = mk()); A.width = bw * 3; A.height = bh * 3; B.width = bw; B.height = bh;
+  const ca = A.getContext('2d'), cb = B.getContext('2d', { willReadFrequently: true }); ca.drawImage(ctx.canvas, 0, 0, A.width, A.height); cb.drawImage(A, 0, 0, bw, bh);
+  const im = cb.getImageData(0, 0, bw, bh), d = im.data, N = bw * bh, R = new Float32Array(N * 3); let any = 0;
+  for (let i = 0; i < N; i++) { const r = d[4 * i] / 255, g = d[4 * i + 1] / 255, b = d[4 * i + 2] / 255, Y = 0.3 * r + 0.59 * g + 0.11 * b, k = Y > 0.8 ? Math.min(1, (Y - 0.8) / 0.2) ** 1.5 : 0; R[3 * i] = r * k; R[3 * i + 1] = g * k; R[3 * i + 2] = b * k; any += k; }
+  if (any < 0.5) return false;
+  const T = new Float32Array(N * 3), blur = (S, D, dx, dy, r) => { for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let a0 = 0, a1 = 0, a2 = 0, n = 0; for (let k = -r; k <= r; k++) { const xx = x + dx * k, yy = y + dy * k; if (xx < 0 || yy < 0 || xx >= bw || yy >= bh) continue; const j = 3 * (yy * bw + xx); a0 += S[j]; a1 += S[j + 1]; a2 += S[j + 2]; n++; } const o = 3 * (y * bw + x); D[o] = a0 / n; D[o + 1] = a1 / n; D[o + 2] = a2 / n; } };
+  for (let p = 0; p < 2; p++) { blur(R, T, 1, 0, 2); blur(T, R, 0, 1, 2); }
+  for (let i = 0; i < N; i++) { d[4 * i] = Math.min(255, R[3 * i] * 255 * 1.6); d[4 * i + 1] = Math.min(255, R[3 * i + 1] * 255 * 1.6); d[4 * i + 2] = Math.min(255, R[3 * i + 2] * 255 * 1.6); d[4 * i + 3] = 255; }
+  cb.putImageData(im, 0, 0); return true; }
+function bloomApply(ctx, w, h, on) {
+  if (on) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.imageSmoothingEnabled = true; ctx.drawImage(BLOOM.b, 0, 0, w, h); ctx.restore(); }
+  const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) / 2); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+  ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); ctx.restore(); }
 function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, additive)
   const P = p => [HV.vm.w / 2 + (p[0] / p[2]) * HV.f, HV.vm.h / 2 - (p[1] / p[2]) * HV.f], a = P(HV.B0), b = P(HV.B1), r = (0.009 / HV.B0[2]) * HV.f;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (const [k, al] of [[14, 0.05], [8, 0.08], [4, 0.12]]) { ctx.strokeStyle = `rgba(40,255,80,${al})`; ctx.lineWidth = r * k; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); } ctx.restore();
@@ -4356,7 +4389,7 @@ function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { drawPerspectiv
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m);
-  const lo = PIN_VIS.lo && cv === perspectiveCanvas ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); }
+  const lo = PIN_VIS.lo && cv === perspectiveCanvas ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1, gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [];
   if (state.showLabels) {
@@ -4402,6 +4435,7 @@ function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscree
         const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
       if (!pinsDone) drawPins(); } }
   else drawPins();
+  if (gpu && !(PIN_VIS.fast && cv === perspectiveCanvas)) bloomApply(ctx, w, h, bloom);
   if (state.showBalcony && !curSpot()) {
     const pw = Math.max(10, w * 0.015); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, pw, h); ctx.fillRect(w - pw, 0, pw, h);
     // W1 window: 550mm parapet, eye 1.55m above floor, standing 0.5m behind the glass → sight cut-off at −atan(1.0/0.5) ≈ −63.4°.
