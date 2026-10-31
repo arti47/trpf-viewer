@@ -1064,26 +1064,26 @@ let TRPF = [], TRPF_RELIEF = [];
 function trpfRelief(B) {
   const out = [], SW = 7.5, TY = ['brown', 'greige', 'white'], off = B.name.charCodeAt(4) + B.name.charCodeAt(6), brown = al => (((Math.floor(al / SW) + off) % 3) + 3) % 3 === 0;
   const plain = B.name === 'Blk 31B', own32 = B.name === 'Blk 32A', WH = [240, 238, 232], BR = [64, 46, 40], FL = [196, 192, 184], top = B.h, nS = Math.round((BLK_TOP - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);
-  const inOther = (bi, x, z) => B.boxes.some((b, j) => j !== bi && x > b[0] && x < b[2] && z > b[1] && z < b[3]);
+  const inOther = (bi, x, z) => B.boxes.some((b, j) => j !== bi && x > b[0] && x < b[2] && z > b[1] && z < b[3]), hit = (bi, x, z) => { const f = k => B.boxes.find((b, j) => j !== bi && !!b[4] === k && x > b[0] && x < b[2] && z > b[1] && z < b[3]); return f(true) || f(false); };
   const pr = (y0, y1, ring, alb, cv) => { const w = ring.map(([a, b]) => blkToWorld(B, a, b)), P = makePrism(B.name + ' relief', 'trpf', y1, y0, w.flat(), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb; if (cv) P.cov = 1;   // cov: corridor fill light (bounce + lamps at night, shader mode 0.3)
     if (own32) { const q = w.map(([x, z]) => P2W.inv(x, z)), X0 = Math.min(...q.map(v => v[0])), X1 = Math.max(...q.map(v => v[0])), Y0 = Math.min(...q.map(v => v[1])), Y1 = Math.max(...q.map(v => v[1])); P.rel32 = X1 > -1.5 && X0 < 61 && Y1 > -1.5 && Y0 < 22; }   // 32A around #134 / corridor / slots: hidden with the own-unit boxes (Room interior draws its own traced exterior there)
     out.push(P); return P; }, pc = (y0, y1, ring, alb) => pr(y0, y1, ring, alb, 1);
-  if (!B.boxes.some(b => b[4])) {   // 0.5 m raster blocks (32A/33A/31B): ledges/fins along the simplified outline (blkOutline, 0.3 m) — per-box edges gave ~20k prisms on the staircase wings
+  const raster = B.name !== 'Blk 31A';
+  if (raster) {   // 0.5 m raster blocks (32A/33A/31B): ledges/fins along the simplified outline (blkOutline, 0.3 m) — per-box edges gave ~20k prisms on the staircase wings
     for (const L of blkOutline(B, 0, 0.3)) for (let i = 0; i < L.length; i++) { const [ax, az] = L[i], [bx, bz] = L[(i + 1) % L.length], len = Math.hypot(bx - ax, bz - az); if (len < 1.5) continue;
       const dx = (bx - ax) / len, dz = (bz - az) / len, ox = dz, oz = -dx, k = Math.abs(dx) >= Math.abs(dz) ? 0 : 1, al = t => (k ? az + dz * t : ax + dx * t);
       const q = (t0, t1, d0, d1) => [[ax + dx * t0 + ox * d0, az + dz * t0 + oz * d0], [ax + dx * t1 + ox * d0, az + dz * t1 + oz * d0], [ax + dx * t1 + ox * d1, az + dz * t1 + oz * d1], [ax + dx * t0 + ox * d1, az + dz * t0 + oz * d1]];
       const cuts = [-0.3]; if (!plain) { const g0 = Math.min(al(0), al(len)), g1 = Math.max(al(0), al(len)), sl = (k ? dz : dx) || 1; for (let j = Math.ceil(g0 / SW); j * SW < g1; j++) cuts.push((j * SW - (k ? az : ax)) / sl); } cuts.push(len + 0.3); cuts.sort((p, r) => p - r);
       for (let s = 0; s <= nS; s++) { const y = VOID_DECK_HEIGHT + s * FLOOR_HEIGHT, band = s > 0 && s % 5 === 0 && !plain;
         if (!band) pr(y - 0.05, y + 0.2, q(-0.3, len + 0.3, 0, 0.3), WH); else for (let c = 0; c < cuts.length - 1; c++) if (cuts[c + 1] - cuts[c] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[c], cuts[c + 1], 0, 0.3), brown(al((cuts[c] + cuts[c + 1]) / 2)) ? BR : WH); }
-      if (!plain) for (let c = 1; c < cuts.length - 1; c++) { const t = cuts[c]; if (t > 0.4 && t < len - 0.4 && (brown(al(t) - 0.1) || brown(al(t) + 0.1))) pr(VOID_DECK_HEIGHT, top, q(t - 0.3, t + 0.3, 0, 0.35), BR); } }
-    return out; }
-  B.boxes.forEach((b, bi) => { const [x0, z0, x1, z1] = b, cor = b[4] === 'c'; if (b[4] && !cor) return;
+      if (!plain) for (let c = 1; c < cuts.length - 1; c++) { const t = cuts[c]; if (t > 0.4 && t < len - 0.4 && (brown(al(t) - 0.1) || brown(al(t) + 0.1))) pr(VOID_DECK_HEIGHT, top, q(t - 0.3, t + 0.3, 0, 0.35), BR); } } }
+  B.boxes.forEach((b, bi) => { const [x0, z0, x1, z1] = b, cor = b[4] === 'c'; if (b[4] && !cor || raster && !cor) return;
     for (const [ax, c, a0, a1, nx, nz] of [['x', z0, x0, x1, 0, -1], ['z', x1, z0, z1, 1, 0], ['x', z1, x0, x1, 0, 1], ['z', x0, z0, z1, -1, 0]]) {
       const P = (t, d) => (ax === 'x' ? [t, c + nz * d] : [c + nx * d, t]), runs = []; let s = null;
       for (let t = a0 + 0.125; t < a1; t += 0.25) { const [px, pz] = P(t, 0.15), ex = !inOther(bi, px, pz); if (ex && s === null) s = t - 0.125; if (!ex && s !== null) { runs.push([s, t - 0.125]); s = null; } }
       if (s !== null) runs.push([s, a1]);
       if (cor) { const lr = []; let s2 = 0, kd = null;   // corridor back wall (TY 2026-10-31 "the depth"): edges against a unit / lift / stair box get a shaded liner (hides the unit window grid) + per storey unit door + kitchen window, lift doors, stair door; lamp under each slab
-        for (let t = a0 + 0.125; t < a1 + 0.125; t += 0.25) { let k = null; if (t < a1) { const [px, pz] = P(t, 0.15), o = B.boxes.find((bb, j) => j !== bi && px > bb[0] && px < bb[2] && pz > bb[1] && pz < bb[3]); k = o && o[4] !== 'c' ? o[4] || 'u' : null; }
+        for (let t = a0 + 0.125; t < a1 + 0.125; t += 0.25) { let k = null; if (t < a1) { const [px, pz] = P(t, 0.15), o = hit(bi, px, pz); k = o && o[4] !== 'c' ? o[4] || 'u' : null; }
           if (k !== kd) { if (kd) lr.push([s2, Math.min(a1, t - 0.125), kd]); s2 = t - 0.125; kd = k; } }
         const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
         for (const [r0, r1, k] of lr) { if (r1 - r0 < 0.3) continue; pc(VOID_DECK_HEIGHT, BLK_TOP, q(r0, r1, -0.08, -0.02), [178, 172, 160]);
@@ -1114,6 +1114,11 @@ function rebuildTRPF() {
     const res = B.h > BLK_TOP, [cx, cz] = blkToWorld(B, (x0 + x1) / 2, (z0 + z1) / 2), fac = res && VD.fac.some(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz));
     const ms = B.name.startsWith('MSCP'), ck = bx[4], P = makePrism(B.name, 'trpf', ck === 'c' ? BLK_TOP + 1.0 : ck === 's' ? BLK_TOP + 3.0 : B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (ck) P.ck = ck; if (ck === 'c') P.nogl = true; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // box kind ck (31A from the site plan): c common corridor (roof parapet 1 m), s stair (roof access +3 m), l lift core (to the crown);   // residential: on the void deck (white soffit)
     if (ms) TRPF.push(vdP('Blk 32 preschool (8) + utility centre, 1st storey', VOID_DECK_HEIGHT, 0, pts, [188, 168, 132]));   // MSCP 1st storey (owner Blk 32 1st-storey plan 2026-10-30: preschool (8) + UC rooms + stair cores; finish estimate); car decks above
+    if (!ck && B.boxes.some(c => c[4] === 'c' && c[0] < x1 - 0.05 && c[2] > x0 + 0.05 && c[1] < z1 - 0.05 && c[3] > z0 + 0.05)) {   // raster box spanning a corridor: physics keeps it, render draws it minus the corridor boxes
+      P.nogl = true; let parts = [[x0, z0, x1, z1]];
+      for (const c of B.boxes) if (c[4] === 'c') parts = parts.flatMap(([a0, b0, a1, b1]) => { if (c[0] >= a1 || c[2] <= a0 || c[1] >= b1 || c[3] <= b0) return [[a0, b0, a1, b1]]; const o = [], m0 = Math.max(a0, c[0]), m1 = Math.min(a1, c[2]);
+        if (c[0] > a0) o.push([a0, b0, c[0], b1]); if (c[2] < a1) o.push([c[2], b0, a1, b1]); if (c[1] > b0) o.push([m0, b0, m1, c[1]]); if (c[3] < b1) o.push([m0, c[3], m1, b1]); return o; });
+      for (const [a0, b0, a1, b1] of parts) if (a1 - a0 > 0.05 && b1 - b0 > 0.05) { const Q = makePrism(B.name, 'trpf', B.h, P.base, [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].flatMap(([a, b]) => blkToWorld(B, a, b)), 0); Q.B = B; Q.ownOf = P; Q.botc = P.botc; TRPF.push(Q); } }
     if (fac) { const F = VD.fac.find(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz)); TRPF.push(vdP(F[2], VOID_DECK_HEIGHT, 0, pts, F[3])); }   // 1st-storey facility under it: glazed shopfront / centre (colour per VD.fac)
   }));
   // Rooftop water tanks (estimate from model photo): 3 cylinders r 2.2m, 3m tall on the crown, in a row along the block axis at the plan centroid.
@@ -1152,6 +1157,12 @@ const pxRing = pts => pts.flatMap(([a, b]) => SITE_PX(a, b));
 // #134 unit-plan metres → world (same frame as the interior: living spot, facade normal 170.3°)
 const P2W = (() => { const sp = GEO.spots.find(q => q.id === 'living'), nb = 170.3 * DEG, n = [Math.sin(nb), Math.cos(nb)], u = [Math.cos(nb), -Math.sin(nb)], px = 11.25, py = 1.38;
   const f = (X, Y) => [sp.x + u[0] * (X - px) - n[0] * (Y - py), sp.z + u[1] * (X - px) - n[1] * (Y - py)]; f.inv = (x, z) => { const dx = x - sp.x, dz = z - sp.z; return [px + u[0] * dx + u[1] * dz, py - (n[0] * dx + n[1] * dz)]; }; return f; })();
+// Blk 32A common corridor / lift lobby / wash area ('c') + lift banks ('l') as block-local boxes from the traced storey plan (TY 2026-10-31 corridors on all blocks): the raster boxes span the corridor,
+// so rebuildTRPF clips them for rendering (physics keeps the raster); relief draws the corridor (open only at the ends / slots / wash area: double-loaded)
+{ const B = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), loc = (x, z) => { const dx = x - B.ox, dz = z - B.oz; return [B.c * dx + B.s * dz, -B.s * dx + B.c * dz]; };
+  for (const [r, k] of [[[9.36, 9.05, 58.9, 10.64], 'c'], [[18.73, 10.64, 26.06, 11.33], 'c'], [[19.96, 11.33, 23.07, 16.91], 'c'], [[20.89, 16.91, 25.31, 20.71], 'c'], [[16.96, 11.33, 19.96, 16.91], 'l'], [[23.07, 11.33, 26.06, 16.91], 'l']]) {
+    const q = [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]].map(([X, Y]) => loc(...P2W(X, Y))), xs = q.map(v => v[0]), zs = q.map(v => v[1]), rd = v => Math.round(v * 100) / 100;
+    B.boxes.push([rd(Math.min(...xs)), rd(Math.min(...zs)), rd(Math.max(...xs)), rd(Math.max(...zs)), k]); } }
 const planRing = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].flatMap(([X, Y]) => P2W(X, Y));
 const VD = {
   fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [96, 132, 140]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [112, 128, 138]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
@@ -2593,7 +2604,7 @@ function ownUnitTest() {
   const OPEN = sp.id === 'corr' ? [[21.92, -3, 30.68, 8.75], [43.13, -3, 51.55, 8.75], [33.8, 10.95, 47.38, 24], [57, 9.15, 66, 10.5]] : null, T = (x, z) => { const rx = x - sp.x, rz = z - sp.z; return [px + rx * u[0] + rz * u[1], py - (rx * n[0] + rz * n[1])]; };
   const hitOpen = P => { if (P._ob === undefined) { const q = Array.from(P.xs, (x, i) => T(x, P.zs[i])), xs = q.map(v => v[0]), ys = q.map(v => v[1]), b = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     P._ob = OPEN.some(r => b[0] < r[2] && b[2] > r[0] && b[1] < r[3] && b[3] > r[1]); } return P._ob; };
-  return P => { if (P.name !== 'Blk 32A' || P.tank) return false; if (OPEN && hitOpen(P)) return true; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 27 && Y > 7.4 && Y < 21.5) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5) || (X > 33.65 && X < 47.53 && Y > 10.6 && Y < 20) || (X > 42.98 && X < 51.87 && Y > 1.35 && Y < 9.05) || (X > 21.77 && X < 30.83 && Y > 1.35 && Y < 9.05); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
+  return P => { if (P.ownOf) P = P.ownOf; if (P.name !== 'Blk 32A' || P.tank) return false; if (OPEN && hitOpen(P)) return true; const rx = P.cx - sp.x, rz = P.cz - sp.z, X = px + rx * u[0] + rz * u[1], Y = py - (rx * n[0] + rz * n[1]); return (X > -0.6 && X < 13.7 && Y > -0.8 && Y < 9.4) || (X > 9 && X < 60 && Y >= 9.4 && Y < 10.6) || (X > 13 && X < 27 && Y > 7.4 && Y < 21.5) || (X > 4 && X < 9.7 && Y > 12 && Y < 19.5) || (X > 33.65 && X < 47.53 && Y > 10.6 && Y < 20) || (X > 42.98 && X < 51.87 && Y > 1.35 && Y < 9.05) || (X > 21.77 && X < 30.83 && Y > 1.35 && Y < 9.05); };   // + #132 E end (replaced by traced ext faces/ledges)   // + the common corridor strip (traced corridor replaces it)
 }
 /* ===================== FURNITURE (layout editor) ===================== */
 // Loose furniture in #134 (owner 2026-10-27; visual only, readings stay furniture-free): items in plan metres (X along facade 0 = E → W, Y into the flat), IKEA-style default sizes
