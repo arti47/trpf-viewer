@@ -1147,6 +1147,7 @@ function trpfRelief(B) {
   if (raster) {   // 0.5 m raster blocks (32A/33A/31B): ledges/fins along the simplified outline (blkOutline, 0.3 m) — per-box edges gave ~20k prisms on the staircase wings
     for (const L of blkOutline(B, 0, 0.3)) for (let i = 0; i < L.length; i++) { const [ax, az] = L[i], [bx, bz] = L[(i + 1) % L.length], len = Math.hypot(bx - ax, bz - az); if (len < 1.5) continue;
       const dx = (bx - ax) / len, dz = (bz - az) / len, ox = dz, oz = -dx, k = Math.abs(dx) >= Math.abs(dz) ? 0 : 1, al = t => (k ? az + dz * t : ax + dx * t);
+      { const mx = (ax + bx) / 2 - ox * 0.15, mz = (az + bz) / 2 - oz * 0.15; if (B.boxes.some(c => c[4] === 'c' && mx > c[0] && mx < c[2] && mz > c[1] && mz < c[3])) continue; }   // open corridor edge (slot back, corridor ends): its own parapets/beams, no unit ledges/fins (brown fin hung across the 32A slots, TY 2026-10-31)
       const q = (t0, t1, d0, d1) => [[ax + dx * t0 + ox * d0, az + dz * t0 + oz * d0], [ax + dx * t1 + ox * d0, az + dz * t1 + oz * d0], [ax + dx * t1 + ox * d1, az + dz * t1 + oz * d1], [ax + dx * t0 + ox * d1, az + dz * t0 + oz * d1]];
       const cuts = [-0.3]; if (!plain) { const g0 = Math.min(al(0), al(len)), g1 = Math.max(al(0), al(len)), sl = (k ? dz : dx) || 1; for (let j = Math.ceil(g0 / SW); j * SW < g1; j++) cuts.push((j * SW - (k ? az : ax)) / sl); } cuts.push(len + 0.3); cuts.sort((p, r) => p - r);
       for (let s = 0; s <= nS; s++) { const y = VOID_DECK_HEIGHT + s * FLOOR_HEIGHT, band = s > 0 && s % 5 === 0 && !plain;
@@ -4119,7 +4120,8 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
-  for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
+  for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new' && !P.nogl) {   // nogl = physics-only (32A raster boxes spanning the corridor/slots, corridor boxes): drawing them filled the slots (TY 2026-10-31)
+  const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
