@@ -1065,9 +1065,9 @@ function trpfRelief(B) {
   const out = [], SW = 7.5, TY = ['brown', 'greige', 'white'], off = B.name.charCodeAt(4) + B.name.charCodeAt(6), brown = al => (((Math.floor(al / SW) + off) % 3) + 3) % 3 === 0;
   const plain = B.name === 'Blk 31B', own32 = B.name === 'Blk 32A', WH = [240, 238, 232], BR = [64, 46, 40], FL = [196, 192, 184], top = B.h, nS = Math.round((BLK_TOP - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);
   const inOther = (bi, x, z) => B.boxes.some((b, j) => j !== bi && x > b[0] && x < b[2] && z > b[1] && z < b[3]);
-  const pr = (y0, y1, ring, alb) => { const w = ring.map(([a, b]) => blkToWorld(B, a, b)), P = makePrism(B.name + ' relief', 'trpf', y1, y0, w.flat(), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb;
+  const pr = (y0, y1, ring, alb, cv) => { const w = ring.map(([a, b]) => blkToWorld(B, a, b)), P = makePrism(B.name + ' relief', 'trpf', y1, y0, w.flat(), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb; if (cv) P.cov = 1;   // cov: corridor fill light (bounce + lamps at night, shader mode 0.3)
     if (own32) { const q = w.map(([x, z]) => P2W.inv(x, z)), X0 = Math.min(...q.map(v => v[0])), X1 = Math.max(...q.map(v => v[0])), Y0 = Math.min(...q.map(v => v[1])), Y1 = Math.max(...q.map(v => v[1])); P.rel32 = X1 > -1.5 && X0 < 61 && Y1 > -1.5 && Y0 < 22; }   // 32A around #134 / corridor / slots: hidden with the own-unit boxes (Room interior draws its own traced exterior there)
-    out.push(P); };
+    out.push(P); return P; }, pc = (y0, y1, ring, alb) => pr(y0, y1, ring, alb, 1);
   if (!B.boxes.some(b => b[4])) {   // 0.5 m raster blocks (32A/33A/31B): ledges/fins along the simplified outline (blkOutline, 0.3 m) — per-box edges gave ~20k prisms on the staircase wings
     for (const L of blkOutline(B, 0, 0.3)) for (let i = 0; i < L.length; i++) { const [ax, az] = L[i], [bx, bz] = L[(i + 1) % L.length], len = Math.hypot(bx - ax, bz - az); if (len < 1.5) continue;
       const dx = (bx - ax) / len, dz = (bz - az) / len, ox = dz, oz = -dx, k = Math.abs(dx) >= Math.abs(dz) ? 0 : 1, al = t => (k ? az + dz * t : ax + dx * t);
@@ -1082,16 +1082,27 @@ function trpfRelief(B) {
       const P = (t, d) => (ax === 'x' ? [t, c + nz * d] : [c + nx * d, t]), runs = []; let s = null;
       for (let t = a0 + 0.125; t < a1; t += 0.25) { const [px, pz] = P(t, 0.15), ex = !inOther(bi, px, pz); if (ex && s === null) s = t - 0.125; if (!ex && s !== null) { runs.push([s, t - 0.125]); s = null; } }
       if (s !== null) runs.push([s, a1]);
+      if (cor) { const lr = []; let s2 = 0, kd = null;   // corridor back wall (TY 2026-10-31 "the depth"): edges against a unit / lift / stair box get a shaded liner (hides the unit window grid) + per storey unit door + kitchen window, lift doors, stair door; lamp under each slab
+        for (let t = a0 + 0.125; t < a1 + 0.125; t += 0.25) { let k = null; if (t < a1) { const [px, pz] = P(t, 0.15), o = B.boxes.find((bb, j) => j !== bi && px > bb[0] && px < bb[2] && pz > bb[1] && pz < bb[3]); k = o && o[4] !== 'c' ? o[4] || 'u' : null; }
+          if (k !== kd) { if (kd) lr.push([s2, Math.min(a1, t - 0.125), kd]); s2 = t - 0.125; kd = k; } }
+        const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
+        for (const [r0, r1, k] of lr) { if (r1 - r0 < 0.3) continue; pc(VOID_DECK_HEIGHT, BLK_TOP, q(r0, r1, -0.08, -0.02), [178, 172, 160]);
+          for (let i = 0; i < nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT;
+            if (k === 'u') for (let u = r0 + 1.0; u + 1.7 < r1; u += 4.5) { pc(y, y + 2.1, q(u - 0.45, u + 0.45, -0.14, -0.06), [92, 66, 50]); pc(y + 1.05, y + 2.1, q(u + 0.85, u + 1.65, -0.12, -0.06), [70, 78, 88]); }
+            else if (k === 'l') for (let u = r0 + 1.3; u + 0.6 < r1; u += 2.6) pc(y, y + 2.1, q(u - 0.55, u + 0.55, -0.12, -0.06), [176, 180, 184]);
+            else if (r1 - r0 > 1.2) pc(y, y + 2.1, q((r0 + r1) / 2 - 0.5, (r0 + r1) / 2 + 0.5, -0.12, -0.06), [138, 140, 138]); } } }
       for (const [r0, r1] of runs) { if (r1 - r0 < (cor ? 0.3 : 1.0)) continue; const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
         if (cor) { const e0 = r0 - 0.15, e1 = r1 + 0.15;
-          for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y, y + 1.0, q(e0, e1, -0.15, 0.02), WH); if (i < nS) pr(y + 2.4, y + 2.6, q(e0, e1, -0.3, 0.02), WH); }
-          const np = Math.max(1, Math.ceil((r1 - r0) / 6)); for (let k = 0; k <= np; k++) { const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pr(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
+          for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pc(y, y + 1.0, q(e0, e1, -0.15, 0.02), WH); if (i < nS) pc(y + 2.4, y + 2.6, q(e0, e1, -0.3, 0.02), WH); }
+          const np = Math.max(1, Math.ceil((r1 - r0) / 6)); for (let k = 0; k <= np; k++) { const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pc(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
           continue; }
         const e0 = r0 - 0.3, e1 = r1 + 0.3, cuts = [e0]; for (let j = Math.ceil(e0 / SW); j * SW < e1; j++) cuts.push(j * SW); cuts.push(e1);
         for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT, band = i > 0 && i % 5 === 0;
           if (!band) pr(y - 0.05, y + 0.2, q(e0, e1, 0, 0.3), WH); else for (let k = 0; k < cuts.length - 1; k++) if (cuts[k + 1] - cuts[k] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[k], cuts[k + 1], 0, 0.3), !plain && brown((cuts[k] + cuts[k + 1]) / 2) ? BR : WH); }
-        for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (!plain && brown(j * SW - 0.1) || brown(j * SW + 0.1)) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
-  for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); });   // corridor floor slabs (roof slab at i = nS)
+        for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (!plain && (brown(j * SW - 0.1) || brown(j * SW + 0.1))) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
+  for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; const S = pc(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); S.botc = [150, 148, 144];   // corridor floor slabs (roof slab at i = nS), shaded soffit
+    const L = b[2] - b[0] >= b[3] - b[1], len = L ? b[2] - b[0] : b[3] - b[1], cx = (b[0] + b[2]) / 2, cz = (b[1] + b[3]) / 2;   // ceiling lamps (LED battens) every ≤6 m along the corridor
+    for (let n = Math.max(1, Math.round(len / 6)), k = 0; k < n; k++) { const t = (L ? b[0] : b[1]) + (len * (k + 0.5)) / n, a = L ? [t - 0.6, cz - 0.07, t + 0.6, cz + 0.07] : [cx - 0.07, t - 0.6, cx + 0.07, t + 0.6]; pr(y - 0.26, y - 0.2, [[a[0], a[1]], [a[2], a[1]], [a[2], a[3]], [a[0], a[3]]], [250, 250, 246]).lamp = 1; } });
   return out; }
 function rebuildTRPF() {
   const B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A');
