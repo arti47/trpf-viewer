@@ -742,7 +742,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <div class="panel"><div class="flex justify-between items-center text-[12px] mb-1.5"><span class="text-slate-300">Aim at</span><span class="text-[11px] text-slate-500">or drag the compass</span></div>
 <div id="aimChips" class="flex flex-wrap gap-1"></div></div>
 <div class="panel"><div class="flex justify-between text-[12px] mb-1"><span class="text-slate-300">Tilt</span><span id="pitchVal" class="mono text-sky-400 font-semibold"></span></div>
-<input type="range" id="pitchSlider" min="-85" max="30" step="0.5" value="-1.5" aria-label="Pitch" data-unit="°">
+<input type="range" id="pitchSlider" min="-85" max="85" step="0.5" value="-1.5" aria-label="Pitch" data-unit="°">
 <div class="flex gap-1 mt-1"><button id="aimRoofBtn" class="chip flex-1 text-amber-300" style="justify-content:center">Aim roofline</button><button id="levelBtn" class="chip flex-1" style="justify-content:center">Level</button></div></div>
 <div class="panel"><div class="flex justify-between text-[12px] mb-1"><span class="text-slate-300">Lens</span><span id="focalVal" class="mono text-sky-400 font-semibold"></span></div>
 <input type="range" id="focalSlider" min="13" max="85" step="1" value="26" aria-label="Focal length" data-unit=" mm">
@@ -2474,7 +2474,7 @@ function viewSave() { if (!initialized || LIFT.busy) return; const o = {}; VIEW_
 function viewLoad() { let o; try { o = JSON.parse(localStorage.getItem('trpf134.view') || 'null'); } catch (_) { return; } if (!o || typeof o !== 'object') return;
   const num = (k, a, b) => { const v = o[k]; if (typeof v === 'number' && isFinite(v) && v >= a && v <= b) state[k] = v; };
   if (o.spot === null || UNIT_SPOTS.some(q => q.id === o.spot)) state.spot = o.spot; num('vx', -6000, 6000); num('vz', -6000, 6000); if (state.spot) { const sp = curSpot(); state.vx = sp.x; state.vz = sp.z; }
-  num('obsFloor', 1, 30); state.obsFloor = Math.round(state.obsFloor); num('heading', 0, 360); num('pitchDeg', -85, 30); num('focalLength', 13, 300); num('standDist', 0, 10); num('eyeOffset', 0.3, 3); num('hour', 0, 24);
+  num('obsFloor', 1, 30); state.obsFloor = Math.round(state.obsFloor); num('heading', 0, 360); num('pitchDeg', -85, 85); num('focalLength', 13, 300); num('standDist', 0, 10); num('eyeOffset', 0.3, 3); num('hour', 0, 24);
   if (POSTURES[o.posture]) state.posture = o.posture; if (typeof o.showBalcony === 'boolean') state.showBalcony = o.showBalcony; if (typeof o.winOpen === 'boolean') state.winOpen = o.winOpen;
   if (typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) state.dateStr = o.date;
   const w = o.walk; if (w && state.spot && [w.X, w.Y, w.Z].every(v => typeof v === 'number' && isFinite(v))) { state.walk = { X: w.X, Y: w.Y, Z: clamp(w.Z, -1.4, 1.39) };
@@ -3978,7 +3978,7 @@ profileCanvas.addEventListener('pointermove', e => { if (profDrag) applyProf(e);
 ['pointerup', 'pointercancel'].forEach(t => profileCanvas.addEventListener(t, () => { profDrag = false; }));
 let drag3D = null;
 perspectiveCanvas.addEventListener('pointerdown', e => { drag3D = { x: e.clientX, y: e.clientY, hd: state.heading, p: state.pitchDeg, t: performance.now() }; perspectiveCanvas.setPointerCapture(e.pointerId); });
-perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 30) * 2) / 2; renderView(); });
+perspectiveCanvas.addEventListener('pointermove', e => { if (!drag3D) return; const dpp = (2 * Math.atan(SENSOR_W / 2 / state.focalLength) / DEG) / perspectiveCanvas._w; state.heading = Math.round(norm360(drag3D.hd - (e.clientX - drag3D.x) * dpp) * 2) / 2; state.pitchDeg = Math.round(clamp(drag3D.p + (e.clientY - drag3D.y) * dpp, -85, 85) * 2) / 2; renderView(); });
 perspectiveCanvas.addEventListener('pointerup', e => { const d = drag3D; if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8 && performance.now() - d.t < 500) { const { x, y } = localXY(perspectiveCanvas, e); if (state.walk) { if (doorTap(x, y)) { state.heading = d.hd; state.pitchDeg = d.p; } } else tapView(x, y); } });   // tap (not drag) → door
 ['pointerup', 'pointercancel'].forEach(t => perspectiveCanvas.addEventListener(t, () => { drag3D = null; }));
 const bind = (id, fn) => $(id).addEventListener('input', e => { fn(e.target.value); renderAll(); });
@@ -4016,7 +4016,7 @@ $('facadeToggle').addEventListener('change', e => { state.facadeLimit = e.target
 const setPlanMode = md => { state.planMode = md; resizeCanvases(); };
 $('planSiteBtn').addEventListener('click', () => setPlanMode('site')); $('planAreaBtn').addEventListener('click', () => setPlanMode('area'));
 $('levelBtn').addEventListener('click', () => { state.pitchDeg = 0; renderAll(); });
-$('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m.binding) { state.pitchDeg = clamp(Math.round(m.binding.angleDeg * 2) / 2, -85, 30); renderAll(); } });
+$('aimRoofBtn').addEventListener('click', () => { const m = lastMath; if (m && m.binding) { state.pitchDeg = clamp(Math.round(m.binding.angleDeg * 2) / 2, -85, 85); renderAll(); } });
 document.querySelectorAll('.time-btn').forEach(b => b.addEventListener('click', () => { const t = b.dataset.time; state.hour = t === 'day' ? 13 : t === 'night' ? 21 : Math.round((findSunsetHour() - 0.2) * 4) / 4; renderAll(); }));
 $('xrayToggle').addEventListener('change', e => { state.xray = e.target.checked; renderAll(); });
 $('balconyToggle').addEventListener('change', e => { state.showBalcony = e.target.checked; if (!state.showBalcony && state.walk) setWalk(false); renderAll(); });
