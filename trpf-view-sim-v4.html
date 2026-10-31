@@ -1014,6 +1014,23 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
 // OSM roads: at-grade ribbons + elevated decks (bridge/viaduct; height from layer, Sheares Bridge 16/28m) + piers. Tunnels omitted.
 const ROADS = (GEO.roads || []).map(([c, w, ...pts]) => { let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity; for (let i = 0; i < pts.length; i += 2) { minx = Math.min(minx, pts[i]); maxx = Math.max(maxx, pts[i]); minz = Math.min(minz, pts[i + 1]); maxz = Math.max(maxz, pts[i + 1]); } return { c, w, pts, minx: minx - w, maxx: maxx + w, minz: minz - w, maxz: maxz + w }; });
 const DECKS = (GEO.decks || []).map(([n, base, top, ...q]) => makePrism(n, 'road', top, base, q, 0)).concat((GEO.piers || []).map(([hb, ...q]) => makePrism('Pier', 'road', hb, 0, q, 0)));
+// Deck render profile (TY 2026-10-31 "render the bridge properly", ref. 3D map of Tanjong Rhu Bridge: low flat slab deck on rows of slim round columns): OSM deck quads [p0 p1 p2 p3]
+// chain end edge p1p2 → next start edge p0p3 (1149 of 1216 joins). Node top = mean of the touching segments' flat tops; a chain end with no other deck end within 12 m meets
+// an at-grade road → 0.2 m; grade ≤ DECK_G relaxed from those ends, then 3 smoothing passes → P.y0 / P.y1 (top at start / end), drawn by gpuBridges. Physics/sightlines keep the flat prisms.
+const DECK_G = 0.06, DECK_NET = (() => {
+  const D = DECKS.slice(0, (GEO.decks || []).length), N = [], cell = new Map(), node = (x, z) => { const cx = Math.round(x), cz = Math.round(z);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const i of cell.get((cx + a) + ',' + (cz + b)) || []) if (Math.hypot(N[i].x - x, N[i].z - z) < 0.6) return i;
+    const i = N.length, k = cx + ',' + cz; N.push({ x, z, s: 0, k: 0 }); (cell.get(k) || cell.set(k, []).get(k)).push(i); return i; };
+  for (const P of DECKS) P.nogl = true;
+  D.forEach((P, i) => { const q = GEO.decks[i].slice(3); P.q = q; P.a = node((q[0] + q[6]) / 2, (q[1] + q[7]) / 2); P.b = node((q[2] + q[4]) / 2, (q[3] + q[5]) / 2);
+    P.len = Math.hypot(N[P.b].x - N[P.a].x, N[P.b].z - N[P.a].z) || 0.1; P.w = (Math.hypot(q[6] - q[0], q[7] - q[1]) + Math.hypot(q[4] - q[2], q[5] - q[3])) / 2; for (const n of [P.a, P.b]) { N[n].s += P.h; N[n].k++; } });
+  const h = N.map(n => n.s / n.k); N.forEach((n, i) => { if (n.k === 1 && !N.some((m, j) => j !== i && Math.abs(m.x - n.x) < 12 && Math.abs(m.z - n.z) < 12 && Math.hypot(m.x - n.x, m.z - n.z) < 12)) { n.end = 1; h[i] = 0.2; } });
+  for (let it = 0, ch = 1; ch && it < 600; it++) { ch = 0; for (const P of D) { const g = DECK_G * P.len; if (h[P.a] > h[P.b] + g + 1e-6) { h[P.a] = h[P.b] + g; ch = 1; } if (h[P.b] > h[P.a] + g + 1e-6) { h[P.b] = h[P.a] + g; ch = 1; } } }
+  for (let it = 0; it < 3; it++) { const s = h.map(() => 0), c = h.map(() => 0); for (const P of D) { s[P.a] += h[P.b]; c[P.a]++; s[P.b] += h[P.a]; c[P.b]++; } N.forEach((n, i) => { if (n.k === 2) h[i] = (h[i] + s[i] / c[i]) / 2; }); }
+  const inc = new Map(); for (const P of D) if (!inc.has(P.b)) inc.set(P.b, P);
+  const cum = P => { if (P.c0 !== undefined) return P.c0; P.c0 = 0; const Q = inc.get(P.a); return (P.c0 = Q && Q !== P ? cum(Q) + Q.len : 0); };
+  for (const P of D) { P.y0 = h[P.a]; P.y1 = h[P.b]; cum(P); } return { N, D };
+})();
 const LU = GEO.lu.map(([c, ext, ...holes]) => {
   let cx = 0, cz = 0, minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
   for (let i = 0; i < ext.length; i += 2) { cx += ext[i]; cz += ext[i + 1]; minx = Math.min(minx, ext[i]); maxx = Math.max(maxx, ext[i]); minz = Math.min(minz, ext[i + 1]); maxz = Math.max(maxz, ext[i + 1]); }
@@ -1279,6 +1296,47 @@ function playKit() {
         if (k === 3) { post(0, 0, 0, 1.7, 0.12, F); for (const u of [-0.12, 0.12]) { const p = L(u, 0, 1.3); tube([p, L(u * 1.3, 0, 1.3)], 0.36, Y, 16, true); bar(L(u * 1.3, 0, 1.6), L(u * 2.4, 0, 1.6), 0.04, 0.04, F); } obs.push([1.5, fp(-0.2, -0.4, 0.2, 0.4)]); } } } }   // shoulder wheels
   return (PLAY_KIT = { T, obs });
 }
+// Bridges / viaducts (TY 2026-10-31): smooth deck along DECK_NET (top y0 → y1 per OSM quad), cross-section extruded per segment: flat soffit, chamfered fascia, 0.35 m concrete
+// parapets to 1.0 m, asphalt + white edge lines; where the soffit would be < 1.2 m above ground → solid approach (retaining walls to the ground). Piers along each chain:
+// deck < 12 m wide (river bridges) every 20 m = 2 round columns (r 0.4) + cap beam; ≥ 12 m (viaducts) every 32 m = one oval column + hammerhead. Lamp posts every 36 m ≤1.5 km.
+// Beyond 2 km from TRPF: box section + one column (LOD). Sizes estimates (typical SG road bridges); visual only.
+let BRIDGE_KIT = null;
+function bridgeKit() {
+  if (BRIDGE_KIT) return BRIDGE_KIT; const T = [], lamps = [], c = v => v.map(q => q / 255), nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
+  const ROAD = c([74, 76, 80]), PAR = c([206, 204, 196]), FAS = c([196, 194, 188]), SOF = c([178, 176, 170]), WALL = c([190, 186, 176]), COL = c([200, 198, 192]), LINE = c([232, 232, 226]), POLE = c([150, 154, 158]);
+  const tri = (a, b, d, n, col) => T.push([a, b, d, n, col]), quad = (a, b, d, e, n, col) => { tri(a, b, d, n, col); tri(a, d, e, n, col); };
+  const cyl = (x, z, y0, y1, ra, rb, ux, uz, N, col) => { const P = k => { const t = (k / N) * 2 * Math.PI, ca = Math.cos(t), sa = Math.sin(t); return [x + ux * ra * ca - uz * rb * sa, z + uz * ra * ca + ux * rb * sa, ca, sa]; };   // vertical (elliptic) column, ra along U, rb across
+    for (let k = 0; k < N; k++) { const [x0, z0, c0, s0] = P(k), [x1, z1, c1, s1] = P(k + 1), n = nz([ux * (c0 + c1) - uz * (s0 + s1), 0, uz * (c0 + c1) + ux * (s0 + s1)]); quad([x0, y0, z0], [x1, y0, z1], [x1, y1, z1], [x0, y1, z0], n, col); } };
+  const box = (cx, cz, y0, y1, ux, uz, hu, hv, col, hv1 = hv) => { const V = [-uz, ux], p = (su, sv, y, w) => [cx + ux * su * hu + V[0] * sv * w, y, cz + uz * su * hu + V[1] * sv * w];   // oriented box, half sizes hu (along) × hv (across; hv1 at the top)
+    const R = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2], n = nz([ux * m[0] + V[0] * m[1], 0, uz * m[0] + V[1] * m[1]]);
+      quad(p(a0, b0, y0, hv), p(a1, b1, y0, hv), p(a1, b1, y1, hv1), p(a0, b0, y1, hv1), n, col); }
+    quad(...R.map(([a, b]) => p(a, b, y1, hv1)), [0, 1, 0], col); quad(...R.map(([a, b]) => p(a, b, y0, hv)), [0, -1, 0], col); };
+  const { N, D } = DECK_NET, PT = 0.35, PH = 1.0, solid = P => Math.min(P.y0, P.y1) - (P.w < 12 ? 1.1 : 1.7) < 1.2;
+  const sec = (W, Dp, sol, far) => far ? [[0, -Dp, SOF], [W, -Dp, FAS], [W, 0, ROAD], [0, 0, FAS]]   // CCW in (across, up) from the left soffit corner; colour = edge to the next point
+    : sol ? [[0, 'g', WALL], [W, 'g', WALL], [W, PH, PAR], [W - PT, PH, PAR], [W - PT, 0, ROAD], [PT, 0, PAR], [PT, PH, PAR], [0, PH, WALL]]
+    : [[0.1 * W, -Dp, SOF], [0.9 * W, -Dp, FAS], [W, -0.5, FAS], [W, PH, PAR], [W - PT, PH, PAR], [W - PT, 0, ROAD], [PT, 0, PAR], [PT, PH, PAR], [0, PH, FAS], [0, -0.5, SOF]];
+  const capAt = new Set(), capT = new Set(), byA = new Map(); N.forEach((n, i) => { if (n.k !== 2) capAt.add(i); }); for (const Q of D) byA.set(Q.a, Q); for (const P of D) { const Q = byA.get(P.b); if (Q && solid(Q) !== solid(P)) capT.add(P.b); }   // solid ↔ girder: cap on the solid side only
+  for (const P of D) { const q = P.q, far = Math.hypot(P.cx, P.cz) > 2000, sol = !far && solid(P), Dp = P.w < 12 ? 1.1 : 1.7;
+    const Lf = [[q[0], q[1]], [q[2], q[3]]], Rt = [[q[6], q[7]], [q[4], q[5]]], Y = [P.y0, P.y1], Ws = [0, 1].map(e => Math.hypot(Rt[e][0] - Lf[e][0], Rt[e][1] - Lf[e][1]) || 1);
+    const ax = nz([(Rt[0][0] - Lf[0][0]) + (Rt[1][0] - Lf[1][0]), 0, (Rt[0][1] - Lf[0][1]) + (Rt[1][1] - Lf[1][1])]), S = [0, 1].map(e => sec(Ws[e], Dp, sol, far));
+    const W3 = (e, [a, y]) => { const f = a / Ws[e]; return [Lf[e][0] + (Rt[e][0] - Lf[e][0]) * f, y === 'g' ? -0.5 : Y[e] + y, Lf[e][1] + (Rt[e][1] - Lf[e][1]) * f]; };
+    const n = S[0].length; for (let k = 0; k < n; k++) { const k1 = (k + 1) % n, a = S[0][k], b = S[0][k1], ya = a[1] === 'g' ? -Y[0] : a[1], yb = b[1] === 'g' ? -Y[0] : b[1], da = b[0] - a[0], dy = yb - ya;
+      const sn = nz([dy, -da]), nn = nz([ax[0] * sn[0], sn[1], ax[2] * sn[0]]); quad(W3(0, a), W3(0, b), W3(1, S[1][k1]), W3(1, S[1][k]), nn, a[2]); }
+    if (!far) { const lt = (e, a) => W3(e, [a, 0.02]); for (const a0 of [PT + 0.25, Ws[0] - PT - 0.4]) { const a1 = a0 + 0.15; quad(lt(0, a0), lt(0, a1), lt(1, a1 * Ws[1] / Ws[0]), lt(1, a0 * Ws[1] / Ws[0]), [0, 1, 0], LINE); } }
+    for (const [e, nd] of [[0, P.a], [1, P.b]]) if (capAt.has(nd) || (sol && capT.has(nd))) { const pts = S[e].map(p => W3(e, p)), lu = Lf[1][0] - Lf[0][0], lv = Lf[1][1] - Lf[0][1], dn = nz([e ? lu : -lu, 0, e ? lv : -lv]);
+      const t2 = earClip(S[e].map(p => [p[0], p[1] === 'g' ? -Y[e] : p[1]])); for (let k = 0; k < t2.length; k += 3) tri(pts[t2[k]], pts[t2[k + 1]], pts[t2[k + 2]], dn, sol ? WALL : FAS); }
+    // piers / lamps along the chain
+    const ux = (N[P.b].x - N[P.a].x) / P.len, uz = (N[P.b].z - N[P.a].z) / P.len, at = f => [N[P.a].x + (N[P.b].x - N[P.a].x) * f, P.y0 + (P.y1 - P.y0) * f, N[P.a].z + (N[P.b].z - N[P.a].z) * f], SP = P.w < 12 ? 20 : 32;
+    for (let s = Math.ceil((P.c0 + 6) / SP) * SP - 6; s < P.c0 + P.len; s += SP) { const [x, y, z] = at((s - P.c0) / P.len), yb = y - Dp; if (yb < 1.2) continue;
+      if (far) { cyl(x, z, -0.5, yb, 0.9, 0.9, ux, uz, 6, COL); continue; }
+      if (P.w < 12) { const cb = yb - 0.7; for (const sv of [-1, 1]) { const o = sv * P.w * 0.27; cyl(x - uz * o, z + ux * o, -0.5, cb, 0.4, 0.4, ux, uz, 10, COL); } box(x, z, cb, yb, ux, uz, 0.45, P.w * 0.42, COL); }
+      else { const cb = yb - 1.6; cyl(x, z, -0.5, cb, 0.75, 1.15, ux, uz, 12, COL); box(x, z, cb, yb, ux, uz, 0.8, 1.2, COL, P.w * 0.38); } }
+    if (!far && Math.hypot(P.cx, P.cz) < 1500) for (let s = Math.ceil((P.c0 + 18) / 36) * 36 - 18; s < P.c0 + P.len; s += 36) { const f = (s - P.c0) / P.len, [x, y, z] = at(f), Wm = Ws[0] + (Ws[1] - Ws[0]) * f, vx = -uz, vz = ux;
+      const ox = x - ax[0] * (Wm / 2 - PT / 2), oz = z - ax[2] * (Wm / 2 - PT / 2), top = y + PH + 9, hx = ox + ax[0] * 1.8, hz = oz + ax[2] * 1.8;   // pole on the left parapet, arm over the road
+      box(ox, oz, y + PH, top, vx, vz, 0.09, 0.09, POLE); const am = [(ox + hx) / 2, (oz + hz) / 2]; box(am[0], am[1], top - 0.08, top, ax[0], ax[2], 0.95, 0.05, POLE); box(hx, hz, top - 0.2, top - 0.02, ax[0], ax[2], 0.35, 0.16, POLE); lamps.push([hx, top - 0.2, hz, y]); } }
+  return (BRIDGE_KIT = { T, lamps });
+}
+function gpuBridges(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of bridgeKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of playKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
 const VD_NLAWN = pxRing([[170, 230], [1110, 130], [1110, 318], [930, 335], [880, 342], [600, 362], [300, 418], [170, 425]]);   // N lawn between Tanjong Rhu Rd and the blocks (site px)
@@ -2408,10 +2466,11 @@ function deckCars(ctx, cam, env, P) {
   const day = trafDay(state.dateStr); if (day === 'off') return;
   const e01 = Math.hypot(P.xs[1] - P.xs[0], P.zs[1] - P.zs[0]), e12 = Math.hypot(P.xs[2] - P.xs[1], P.zs[2] - P.zs[1]), [i0, i1, Lg, W] = e01 >= e12 ? [0, 1, e01, e12] : [1, 2, e12, e01];
   if (Lg < 4 || W < 5) return; const hx = (P.xs[i1] - P.xs[i0]) / Lg, hz = (P.zs[i1] - P.zs[i0]) / Lg, t = simT(), dd = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), c = /Expressway|Parkway|Sheares/.test(P.name) ? 0 : 1;
+  const NA = P.q && DECK_NET.N[P.a], NB = P.q && DECK_NET.N[P.b], yAt = (x, z) => NA ? P.y0 + (P.y1 - P.y0) * clamp(((x - NA.x) * (NB.x - NA.x) + (z - NA.z) * (NB.z - NA.z)) / (P.len * P.len), 0, 1) : P.h;   // smooth render profile (DECK_NET)
   const L = Math.max(1, Math.round((W - 1.2) / LANE_W)), Lp = Math.max(1, Math.round(L / 2)), sc = 2 * Lp / L;
   for (const dir of [1, -1]) for (let j = 0; j < Lp; j++) { const [sp, v] = trafRow(t, day, c, dir * hx < 0, L, sc, j, Lp), off = W * 0.45 * (j + 0.5) / Lp;
     for (let s = ((hash01(P.cx + j * 7, P.cz, 9 + dir) * sp + dir * v * t) % sp + sp) % sp - Lg / 2, k = 0; s < Lg / 2; s += sp, k++) {
-      const x = P.cx + hx * s - dir * hz * off, z = P.cz + hz * s + dir * hx * off; carAt(ctx, cam, env, x, P.h, z, hx * dir, hz * dir, Math.floor(hash01(P.cx + k + j * 31, dir, 4) * 97), dd); } }
+      const x = P.cx + hx * s - dir * hz * off, z = P.cz + hz * s + dir * hx * off; carAt(ctx, cam, env, x, yAt(x, z), z, hx * dir, hz * dir, Math.floor(hash01(P.cx + k + j * 31, dir, 4) * 97), dd); } }
 }
 // ECP readout (3 lanes each way past Tanjong Rhu, estimate) for the Time panel.
 function trafText() {
@@ -3586,6 +3645,7 @@ function gpuInit() {
           for (; s < Lg; s += SP) for (const sd of sides) { const x = ax + ux * s - uz * hw * sd, z = az + uz * s + ux * hw * sd;
             L.push(x, 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, ph, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, ph, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6); }   // halo/core pulled 6 m toward the eye (canopies of roadside trees reach the lamp heads)
           s0 = s - Lg; } }
+      for (const [x, y, z, yr] of bridgeKit().lamps) L.push(x, yr + 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, y, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, y, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6);   // bridge / viaduct lamp heads (bridgeKit)
       GPU.lamps = gpuBuf(new Float32Array(L)); GPU.lampN = L.length / 13; }
     { const L = [], c = [240 / 255, 240 / 255, 235 / 255, 0.55];   // lane edge lines on cls ≤2 roads (2D: within 900 m)
       for (const R of ROADS) { if (R.c > 2) continue; const p = R.pts, hw = R.w / 2 * 0.9; for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], Lg = Math.hypot(bx - ax, bz - az) || 1, px = -(bz - az) / Lg * hw, pz = (bx - ax) / Lg * hw;
@@ -3629,6 +3689,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
   gpuPlay(A);
+  if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
