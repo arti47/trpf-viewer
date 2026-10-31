@@ -1063,17 +1063,17 @@ function rebuildTRPF() {
   if (B31.ox0 === undefined) { B31.ox0 = B31.ox; B31.oz0 = B31.oz; }
   B31.ox = B31.ox0 + GAP_DIR[0] * (gap3132 - GAP_FITTED); B31.oz = B31.oz0 + GAP_DIR[1] * (gap3132 - GAP_FITTED);
   TRPF = [];
-  SITE_BLOCKS.forEach(B => B.boxes.forEach(([x0, z0, x1, z1]) => {
+  SITE_BLOCKS.forEach(B => B.boxes.forEach(bx => { const [x0, z0, x1, z1] = bx;
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
     const res = B.h > BLK_TOP, [cx, cz] = blkToWorld(B, (x0 + x1) / 2, (z0 + z1) / 2), fac = res && VD.fac.some(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz));
-    const ms = B.name.startsWith('MSCP'), P = makePrism(B.name, 'trpf', B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // residential: on the void deck (white soffit)
+    const ms = B.name.startsWith('MSCP'), ck = bx[4], P = makePrism(B.name, 'trpf', ck === 'c' ? BLK_TOP + 1.0 : ck === 's' ? BLK_TOP + 3.0 : B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (ck) P.ck = ck; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // box kind ck (31A from the site plan): c common corridor (roof parapet 1 m), s stair (roof access +3 m), l lift core (to the crown);   // residential: on the void deck (white soffit)
     if (ms) TRPF.push(vdP('Blk 32 preschool (8) + utility centre, 1st storey', VOID_DECK_HEIGHT, 0, pts, [188, 168, 132]));   // MSCP 1st storey (owner Blk 32 1st-storey plan 2026-10-30: preschool (8) + UC rooms + stair cores; finish estimate); car decks above
     if (fac) { const F = VD.fac.find(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz)); TRPF.push(vdP(F[2], VOID_DECK_HEIGHT, 0, pts, F[3])); }   // 1st-storey facility under it: glazed shopfront / centre (colour per VD.fac)
   }));
   // Rooftop water tanks (estimate from model photo): 3 cylinders r 2.2m, 3m tall on the crown, in a row along the block axis at the plan centroid.
   SITE_BLOCKS.filter(B => B.h > BLK_TOP).forEach(B => {
-    const own = TRPF.filter(P => P.B === B); let lx = 0, lz = 0; B.boxes.forEach(([x0, z0, x1, z1]) => { lx += (x0 + x1) / 2; lz += (z0 + z1) / 2; }); lx /= B.boxes.length; lz /= B.boxes.length;
-    { let bd = Infinity, bx = lx, bz = lz; B.boxes.forEach(([x0, z0, x1, z1]) => { const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, d = Math.hypot(mx - lx, mz - lz); if (d < bd) { bd = d; bx = mx; bz = mz; } }); lx = bx; lz = bz; }   // snap to nearest roof cell
+    const own = TRPF.filter(P => P.B === B && !P.ck), ub = B.boxes.filter(b => !b[4]); let lx = 0, lz = 0; ub.forEach(([x0, z0, x1, z1]) => { lx += (x0 + x1) / 2; lz += (z0 + z1) / 2; }); lx /= ub.length; lz /= ub.length;   // tanks on unit roofs only (not corridors/cores)
+    { let bd = Infinity, bx = lx, bz = lz; ub.forEach(([x0, z0, x1, z1]) => { const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, d = Math.hypot(mx - lx, mz - lz); if (d < bd) { bd = d; bx = mx; bz = mz; } }); lx = bx; lz = bz; }   // snap to nearest roof cell
     const got = [], offs = [0, -1, 1, -2, 2, -3, 3].flatMap(k => [[k, 0], [0, k]]);
     for (const [i, j] of offs) { if (got.length >= 3) break; const [cx, cz] = blkToWorld(B, lx + i * 5.2, lz + j * 5.2); if (!own.some(P => pointIn(P, cx, cz)) || got.some(([x, z]) => Math.hypot(x - cx, z - cz) < 5)) continue; got.push([cx, cz]);
       const ring = []; for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; ring.push(cx + 2.2 * Math.cos(a), cz + 2.2 * Math.sin(a)); }
@@ -1085,7 +1085,8 @@ function rebuildTRPF() {
     const T = makePrism(`MSCP ${nm}`, 'trpf', M.h + dh, M.h, pts, 0); T.tank = true; T.alb = alb; TRPF.push(T); });
   { const T = makePrism('Shelter (below 32A)', 'trpf', 3, 2.6, [29.5, -4.9, 33.5, -4.9, 33.5, -0.9, 29.5, -0.9], 0); T.tank = true; T.alb = [226, 226, 222]; TRPF.push(T);   // roof on 4 posts (walk under)
     for (const [x, z] of [[29.9, -4.5], [33.1, -4.5], [33.1, -1.3], [29.9, -1.3]]) TRPF.push(vdP('Shelter post', 2.6, 0, [x - 0.08, z - 0.08, x + 0.08, z - 0.08, x + 0.08, z + 0.08, x - 0.08, z + 0.08], [92, 96, 100])); }
-  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3, 4)) { const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
+  for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3, B.name === 'Blk 31A' ? 0 : 4)) {   // 31A: clean site-plan boxes, no closing (it would roof over the courtyard, whose W opening is ≈2 m)
+    const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
@@ -1109,7 +1110,7 @@ const VD = {
   fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [96, 132, 140]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [112, 128, 138]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
   core32: [[12.86, 1.3, 13.12, 7.98], [15.45, 1.3, 15.76, 7.98], [13.12, 1.3, 15.45, 1.6], [13.12, 7.0, 14.32, 7.98], [15.23, 7.86, 15.45, 7.98], [16.96, 11.33, 19.96, 16.91], [23.07, 11.33, 26.06, 16.91],
     [24.3, 16.91, 26.37, 20.71], [52.0, 1.3, 55.3, 7.92]],   // 32A plan: E stair walls (door gap X 14.32–15.23), lift shafts, refuse chamber under the chutes, W stair (#142)
-  coresPx: [['Blk 33A', [232, 445, 284, 472]], ['Blk 31B', [1028, 350, 1060, 398]], ['Blk 31A', [897, 545, 940, 600]]],   // lift cores from the site plan lift symbols (estimate)
+  coresPx: [['Blk 33A', [232, 445, 284, 472]], ['Blk 31B', [1028, 350, 1060, 398]], ['Blk 31A', [911.7, 558.5, 936, 572.5]], ['Blk 31A', [911.7, 585.3, 936, 598.5]], ['Blk 31A', [956, 546.5, 977.5, 558]], ['Blk 31A', [878.3, 608.3, 891, 630]]],   // lift cores from the site plan lift symbols (estimate); 31A: 2 lift banks + 2 stairs (TY 2026-10-31)
   track: [[470, 232], [400, 236], [330, 240], [300, 245], [272, 268], [264, 300], [272, 335], [300, 360], [330, 368], [400, 375], [470, 372], [560, 355], [650, 334], [740, 312], [800, 300], [900, 298], [980, 300], [1040, 300],
     [1075, 282], [1088, 250], [1075, 215], [1040, 198], [980, 192], [900, 192], [800, 197], [700, 207], [600, 218]],
   play: [[402, 313, 40, 38], [843, 255, 34, 27]],   // children's playgrounds (1): centre + radii px (the one S of 32A is TRPF_GROUND)
@@ -3237,6 +3238,14 @@ void main() {
     float k = mix(wx * wy, m, det) * step(0.0, g.y), on = step(hash(floor(g) + vTex.w), mode > 2.5 ? 0.5 : 0.3);
     float cu = mode < 2.5 ? step(0.72, hash(floor(g) + vTex.w + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
     alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
+  } else if (mode > 5.5 && mode < 6.5 && vTex.w > 5.5) {   // TRPF common corridor (6) / lift core (7) / stair (8) (31A, TY 2026-10-31): greige walls + white slab edge per storey; corridor = 1.0 m parapet, open (shaded, lit at night) to the 2.4 m beam, posts every 6 m; stair = vent band
+    float wi = floor(vTex.w + 0.5), al = vTex.x, y = vTex.y, fa = fwidth(al), fy = fwidth(y), px = FH / max(fy, 1e-4);
+    alb = C_GREIGE;
+    if (y > VOID && y < BTOP) { float yy = fract((y - VOID) / FH) * FH, d = smoothstep(2.0, 3.0, px);
+      if (wi < 6.5) { float op = band(yy, 1.0, 2.4, fy) * d * (1.0 - band(abs(al - floor(al / 6.0 + 0.5) * 6.0), -1.0, 0.2, fa) * smoothstep(0.5, 1.5, 0.4 / max(fa, 1e-4)));
+        alb = mix(alb, vec3(0.30, 0.31, 0.33), op); lit = uNight * op * 0.35; }
+      else if (wi > 7.5) { float op = band(yy, 1.6, 2.4, fy) * band(fract(al / 1.2), 0.1, 0.9, fa / 1.2) * d; alb = mix(alb, vec3(0.26, 0.27, 0.29), op); }
+      alb = mix(alb, C_WHITE, band(yy, -0.01, 0.22, fy) * d); }
   } else if (mode > 5.5 && mode < 6.5) {   // TRPF: 7.5 m stacks brown-framed grey / greige / white-framed grey (31B plain), ledges, 2-pane windows, crown, void deck
     float wi = floor(vTex.w + 0.5), al = vTex.x, y = vTex.y, off = mod(wi, 3.0), plain = step(2.5, wi), fa = fwidth(al), fy = fwidth(y), px = FH / max(fy, 1e-4);
     float si = floor(al / SW), ty = mod(si + off, 3.0); bool brown = ty < 0.5 && plain < 0.5;
@@ -3407,7 +3416,7 @@ function glPrism(A, P) {
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
   const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
-  const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
+  const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = P.ck ? { c: 6, l: 7, s: 8 }[P.ck] : ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
   for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = X[j], z0 = Z[j], x1 = X[i], z1 = Z[i], ex = x1 - x0, ez = z1 - z0, L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], u1 = L / 3.6;
     let T; if (mscp) { const k = Math.max(1, Math.round(L / 8)), dh = (P.h - 1) / MSCP_DECKS; T = (s, y) => [s * k, y, 7, dh]; }   // facade styles evaluated in the fragment shader
     else if (trpf) { const inf = trpfFaceInfo(P, { pts: [[x0, b, z0], [x1, b, z1]] }), short = Math.abs(inf.a1 - inf.a0) < 0.3, am = (inf.a0 + inf.a1) / 2 + 0.06;   // faces across the stack axis: constant al nudged off a joint (else floor()/joint tests flicker per pixel)
