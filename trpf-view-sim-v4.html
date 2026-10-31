@@ -2728,6 +2728,10 @@ function generateTrees() {
       const jx = x + (hash01(x, z, 3) - 0.5) * 14, jz = z + (hash01(z, x, 5) - 0.5) * 14;
       if (hash01(jx, jz, 9) < 0.25 || ringIn(SH_PAVE, jx, jz)) continue;   // Sports Hub plaza: paved, promenade trees below
       if (ringIn(L.rings[0], jx, jz) && !holeIn(L.rings, jx, jz)) add(jx, jz, 1); } }
+  for (const L of LU) { if (L.c !== 3 || L.maxx < UNIT134[0] - 1200 || L.minx > UNIT134[0] + 1200 || L.maxz < UNIT134[1] - 1200 || L.minz > UNIT134[1] + 1200) continue;   // residential grounds ≤1.2 km: estate/condo trees (stage 3, 2026-10-31; 16 m grid, 50%, ≥4 m from buildings)
+    for (let x = Math.floor(L.minx / 16) * 16; x <= L.maxx; x += 16) for (let z = Math.floor(L.minz / 16) * 16; z <= L.maxz; z += 16) { const jx = x + (hash01(x, z, 31) - 0.5) * 10, jz = z + (hash01(z, x, 37) - 0.5) * 10;
+      if (hash01(jx, jz, 39) < 0.5 || Math.hypot(jx - UNIT134[0], jz - UNIT134[1]) > 1200 || ringIn(GEO.trpf, jx, jz) || ringIn(SITE_IMG, jx, jz) || !ringIn(L.rings[0], jx, jz) || holeIn(L.rings, jx, jz)) continue;
+      if ([[4, 0], [-4, 0], [0, 4], [0, -4]].some(([a, b]) => blocked(jx + a, jz + b))) continue; add(jx, jz, 5); } }
   for (let x = -760; x <= -186; x += 12) for (let z = 320; z < 1040; z += 12) { const jx = x + (hash01(x, z, 23) - 0.5) * 3, jz = z + (hash01(z, x, 29) - 0.5) * 3;
     if (ringIn(SH_PAVE, jx, jz) && groundName(jx, jz) === 'Park / open space' && nearWaterSH(jx, jz, 14)) add(jx, jz, 4); }
   for (const Rd of ROADS) { if (Rd.c > 3 || Rd.maxx < -R2 || Rd.minx > R2 || Rd.maxz < -R2 || Rd.minz > R2) continue; const p = Rd.pts; let carry = 0;
@@ -3833,6 +3837,7 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
   vec3 c = uColor.rgb; float a = uCls > 1.5 && uCls < 2.5 ? 0.5 : uCls < 1.5 ? 0.2 : 0.16; c *= 1.0 + a * n;
   if (uCls > 1.5 && uCls < 2.5 && px < 60.0) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
   float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
+  if (uCls > 2.5 && uCls < 3.5) { float g = smoothstep(0.44, 0.6, 0.7 * vn2(w / 38.0 + 11.0) + 0.3 * vn2(w / 11.0 + 5.0)); c = mix(c, vec3(88.0, 120.0, 66.0) / 255.0 * (1.0 + 0.35 * n), g * 0.85); }   // residential grounds: landscaped lawn patches between paving (stage 3, 2026-10-31)
   if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
   vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), L = toLin(c) * (uAmb * 0.3 * (0.82 + 0.34 * uSkyMid) + uDirect * 0.85 * max(uSun.y, 0.0) * cloudSh(vec3(w.x, 0.0, w.y), uSun) * tint) * SUNK;   // albedo lit as a level GL_FS face (linear)
   o = vec4(grade(mix(fc, tone(L), exp(-uBeta * t))), 1.0); }`;
@@ -4067,6 +4072,26 @@ function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.n
         if (sg < 0) { xs.reverse(); zs.reverse(); } glPrism(A, { n: 4, xs, zs, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, base: y0, h: y1, kind: 'existing', name: 'near kit', plain: true, alb: al, topc: tp }); };
       pr(0.02, -0.25, 0, 0, P.h - 0.05, P.h + 1.0, pa, cp);   // parapet (outer face ≈ flush with the wall)
       if (ledge && l >= 3) for (let y = P.base + 3.5 + 3.2; y < P.h - 2; y += 3.2) pr(0.3, -0.02, 0.15, 0.15, y - 0.15, y, wl, wl); } } }
+// condo kit (TY 2026-10-31 stage 3; visual only, sizes estimates): private-condo towers ≤1 km of #134 (P.style 'condo' = Tanjong Rhu condos, + other residential towers ≥30 m not
+// named Blk/Riverfront) get stacked projecting balconies per storey (slab 0.2 m, 1.4 m deep, white edge; frameless glass balustrade 1.05 m ≤600 m) on 1–2 bays per face ≥4 m,
+// and a roof crown frame (posts + 0.5 m beam 2.5–3.0 m above the roof on edges ≥4 m) + lift motor room. Storeys follow the facade shader (condo: lobby CL + k·CF; else 3.5 + k·3.2).
+function gpuCondoKit(A) { const c = v => v.map(q => q / 255), z4 = [0, 0, 0, 0], wl = c([238, 236, 230]), sf = c([214, 212, 206]), gs = c([168, 196, 194]), fr = c([226, 224, 218]);
+  const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.n >= 3 && P.n <= 64 && P.h >= 30 && (P.style === 'condo' || P.res === true && !/Blk|Riverfront|HDB/.test(P.name)) && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000)
+    .sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1])), n0 = A.n;
+  const quad = (a, b, cc, d, n, col) => { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(cc, n, col, z4); A.v(a, n, col, z4); A.v(cc, n, col, z4); A.v(d, n, col, z4); };
+  for (const P of L) { if (A.n - n0 > 1.6e5) break; const dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), cnd = P.style === 'condo', y0 = cnd ? CONDO.lobby : 3.5, fh = cnd ? CONDO.f2f : 3.2, top = cnd ? P.h - CONDO.roof - 0.5 : P.h - 2;
+    let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; const sg = ar > 0 ? 1 : -1;
+    for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const x0 = P.xs[j], z0 = P.zs[j], x1 = P.xs[i], z1 = P.zs[i], ex = x1 - x0, ez = z1 - z0, l = Math.hypot(ex, ez); if (l < 4) continue;
+      const nx = sg * ez / l, nz = -sg * ex / l, ux = ex / l, uz = ez / l, n = [nx, 0, nz], up = [0, 1, 0], dn = [0, -1, 0], P3 = (t, o, y) => [x0 + ux * t + nx * o, y, z0 + uz * t + nz * o];
+      { const b0 = P.h + 2.5, b1 = P.h + 3.0; quad(P3(0.3, 0.1, b0), P3(l - 0.3, 0.1, b0), P3(l - 0.3, 0.1, b1), P3(0.3, 0.1, b1), n, fr); quad(P3(0.3, 0.1, b1), P3(l - 0.3, 0.1, b1), P3(l - 0.3, -0.5, b1), P3(0.3, -0.5, b1), up, fr);   // crown frame beam + posts
+        quad(P3(0.3, 0.1, b0), P3(0.3, -0.5, b0), P3(l - 0.3, -0.5, b0), P3(l - 0.3, 0.1, b0), dn, sf);
+        for (const t of [0.3, l - 0.7]) { quad(P3(t, 0.1, P.h), P3(t + 0.4, 0.1, P.h), P3(t + 0.4, 0.1, b0), P3(t, 0.1, b0), n, fr); quad(P3(t + 0.4, 0.1, P.h), P3(t + 0.4, -0.3, P.h), P3(t + 0.4, -0.3, b0), P3(t + 0.4, 0.1, b0), [ux, 0, uz], fr); quad(P3(t, -0.3, P.h), P3(t, 0.1, P.h), P3(t, 0.1, b0), P3(t, -0.3, b0), [-ux, 0, -uz], fr); } }
+      const bays = l > 16 ? [[l * 0.12, l * 0.42], [l * 0.58, l * 0.88]] : l > 8 ? [[l * 0.2, l * 0.8]] : [[l * 0.1, l * 0.9]], D = 1.4, glass = dd < 600;
+      for (let y = y0 + fh; y < top - 0.5; y += fh) for (const [t0, t1] of bays) { const ys = y - 0.2;
+        quad(P3(t0, 0, y), P3(t1, 0, y), P3(t1, D, y), P3(t0, D, y), up, sf); quad(P3(t0, D, ys), P3(t1, D, ys), P3(t1, 0, ys), P3(t0, 0, ys), dn, sf);   // slab top / soffit
+        quad(P3(t0, D, ys), P3(t1, D, ys), P3(t1, D, y), P3(t0, D, y), n, wl); quad(P3(t1, D, ys), P3(t1, 0, ys), P3(t1, 0, y), P3(t1, D, y), [ux, 0, uz], wl); quad(P3(t0, 0, ys), P3(t0, D, ys), P3(t0, D, y), P3(t0, 0, y), [-ux, 0, -uz], wl);   // white edge
+        if (glass) { quad(P3(t0, D - 0.05, y), P3(t1, D - 0.05, y), P3(t1, D - 0.05, y + 1.05), P3(t0, D - 0.05, y + 1.05), n, gs); quad(P3(t1, D - 0.07, y), P3(t0, D - 0.07, y), P3(t0, D - 0.07, y + 1.05), P3(t1, D - 0.07, y + 1.05), n.map(v => -v), gs); } } }
+    let r2 = 0; for (let i = 0; i < P.n; i++) r2 = Math.max(r2, Math.hypot(P.xs[i] - P.cx, P.zs[i] - P.cz)); if (r2 > 8 && pointIn(P, P.cx, P.cz)) glPrism(A, { n: 4, xs: [P.cx - 3, P.cx + 3, P.cx + 3, P.cx - 3], zs: [P.cz - 3, P.cz - 3, P.cz + 3, P.cz + 3], cx: P.cx, cz: P.cz, base: P.h, h: P.h + 3.5, kind: 'existing', name: 'lift motor room', plain: true, alb: [222, 220, 214], topc: [150, 152, 150] }); } }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
   if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
@@ -4074,7 +4099,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
