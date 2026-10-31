@@ -1057,7 +1057,31 @@ function blkOutline(B, dil, tol, cl = 0) { const c = 0.5, xs = B.boxes.flatMap(b
 const blkToWorld = (B, lx, lz) => [B.ox + B.c * lx - B.s * lz, B.oz + B.s * lx + B.c * lz];
 const GAP_FITTED = GEO.gapFitted, GAP_DIR = [Math.sin(GEO.normal32 * DEG), Math.cos(GEO.normal32 * DEG)];
 let gap3132 = GAP_FITTED;
-let TRPF = [];
+let TRPF = [], TRPF_RELIEF = [];
+// Facade relief, render only (TY 2026-10-31 "look more realistic from the outside", after the 32A model photo; physics keeps the solid prisms): on every exterior edge of a block's boxes
+// (sampled every 0.25 m, 0.15 m outside: not inside another box) — units: white slab ledge per storey (0.3 m proud, brown every 5th floor on brown stacks) + brown frame fins (0.6 × 0.35 m)
+// at stack joints next to a brown stack; common corridors (ck c, solid prism hidden): floor slab per storey, 1.0 m parapet + beam (2.4–2.6 m) on the open edges, posts at run ends / ≤6 m. Sizes estimates.
+function trpfRelief(B) {
+  const out = [], SW = 7.5, TY = ['brown', 'greige', 'white'], off = B.name.charCodeAt(4) + B.name.charCodeAt(6), brown = al => (((Math.floor(al / SW) + off) % 3) + 3) % 3 === 0;
+  const WH = [240, 238, 232], BR = [64, 46, 40], FL = [196, 192, 184], top = B.h, nS = Math.round((BLK_TOP - VOID_DECK_HEIGHT) / FLOOR_HEIGHT);
+  const inOther = (bi, x, z) => B.boxes.some((b, j) => j !== bi && x > b[0] && x < b[2] && z > b[1] && z < b[3]);
+  const pr = (y0, y1, ring, alb) => { const P = makePrism(B.name + ' relief', 'trpf', y1, y0, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), 0); P.tank = true; P.alb = alb; P.topc = P.botc = alb; out.push(P); };
+  B.boxes.forEach((b, bi) => { const [x0, z0, x1, z1] = b, cor = b[4] === 'c'; if (b[4] && !cor) return;
+    for (const [ax, c, a0, a1, nx, nz] of [['x', z0, x0, x1, 0, -1], ['z', x1, z0, z1, 1, 0], ['x', z1, x0, x1, 0, 1], ['z', x0, z0, z1, -1, 0]]) {
+      const P = (t, d) => (ax === 'x' ? [t, c + nz * d] : [c + nx * d, t]), runs = []; let s = null;
+      for (let t = a0 + 0.125; t < a1; t += 0.25) { const [px, pz] = P(t, 0.15), ex = !inOther(bi, px, pz); if (ex && s === null) s = t - 0.125; if (!ex && s !== null) { runs.push([s, t - 0.125]); s = null; } }
+      if (s !== null) runs.push([s, a1]);
+      for (const [r0, r1] of runs) { if (r1 - r0 < 0.3) continue; const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
+        if (cor) { const e0 = r0 - 0.15, e1 = r1 + 0.15;
+          for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y, y + 1.0, q(e0, e1, -0.15, 0.02), WH); if (i < nS) pr(y + 2.4, y + 2.6, q(e0, e1, -0.3, 0.02), WH); }
+          const np = Math.max(1, Math.ceil((r1 - r0) / 6)); for (let k = 0; k <= np; k++) { const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pr(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
+          continue; }
+        const e0 = r0 - 0.3, e1 = r1 + 0.3, cuts = [e0]; for (let j = Math.ceil(e0 / SW); j * SW < e1; j++) cuts.push(j * SW); cuts.push(e1);
+        for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT, band = i > 0 && i % 5 === 0;
+          if (!band) pr(y - 0.05, y + 0.2, q(e0, e1, 0, 0.3), WH); else for (let k = 0; k < cuts.length - 1; k++) if (cuts[k + 1] - cuts[k] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[k], cuts[k + 1], 0, 0.3), brown((cuts[k] + cuts[k + 1]) / 2) ? BR : WH); }
+        for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (brown(j * SW - 0.1) || brown(j * SW + 0.1)) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
+  for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pr(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); });   // corridor floor slabs (roof slab at i = nS)
+  return out; }
 function rebuildTRPF() {
   const B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A');
   if (B31.ox0 === undefined) { B31.ox0 = B31.ox; B31.oz0 = B31.oz; }
@@ -1066,7 +1090,7 @@ function rebuildTRPF() {
   SITE_BLOCKS.forEach(B => B.boxes.forEach(bx => { const [x0, z0, x1, z1] = bx;
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
     const res = B.h > BLK_TOP, [cx, cz] = blkToWorld(B, (x0 + x1) / 2, (z0 + z1) / 2), fac = res && VD.fac.some(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz));
-    const ms = B.name.startsWith('MSCP'), ck = bx[4], P = makePrism(B.name, 'trpf', ck === 'c' ? BLK_TOP + 1.0 : ck === 's' ? BLK_TOP + 3.0 : B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (ck) P.ck = ck; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // box kind ck (31A from the site plan): c common corridor (roof parapet 1 m), s stair (roof access +3 m), l lift core (to the crown);   // residential: on the void deck (white soffit)
+    const ms = B.name.startsWith('MSCP'), ck = bx[4], P = makePrism(B.name, 'trpf', ck === 'c' ? BLK_TOP + 1.0 : ck === 's' ? BLK_TOP + 3.0 : B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (ck) P.ck = ck; if (ck === 'c') P.nogl = true; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // box kind ck (31A from the site plan): c common corridor (roof parapet 1 m), s stair (roof access +3 m), l lift core (to the crown);   // residential: on the void deck (white soffit)
     if (ms) TRPF.push(vdP('Blk 32 preschool (8) + utility centre, 1st storey', VOID_DECK_HEIGHT, 0, pts, [188, 168, 132]));   // MSCP 1st storey (owner Blk 32 1st-storey plan 2026-10-30: preschool (8) + UC rooms + stair cores; finish estimate); car decks above
     if (fac) { const F = VD.fac.find(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz)); TRPF.push(vdP(F[2], VOID_DECK_HEIGHT, 0, pts, F[3])); }   // 1st-storey facility under it: glazed shopfront / centre (colour per VD.fac)
   }));
@@ -1088,6 +1112,7 @@ function rebuildTRPF() {
   for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const ring of blkOutline(B, 0, 0.3, B.name === 'Blk 31A' ? 0 : 4)) {   // 31A: clean site-plan boxes, no closing (it would roof over the courtyard, whose W opening is ≈2 m)
     const P = vdP(B.name + ' void-deck ceiling', VOID_DECK_HEIGHT, VOID_DECK_HEIGHT - 0.2, ring.flatMap(([a, b]) => blkToWorld(B, a, b)), [236, 234, 228]); P.botc = [330, 338, 346]; P.topc = [226, 224, 218]; P.soffit = 1; TRPF.push(P); }   // smooth white 1F ceiling under each residential block (TY 2026-10-30: raster box undersides showed 0.5 m staircase edges)
   TRPF.push(...voidDeckPrisms());
+  TRPF_RELIEF = SITE_BLOCKS.filter(B => B.name === 'Blk 31A').flatMap(trpfRelief);
 }
 // Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
 const TRPF_GROUND = [[23.6, -2.9, 8, 3.5, [80, 140, 205]], [41.6, -6.1, 3, 3, [190, 190, 184]]];
@@ -3486,6 +3511,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
+  for (const P of TRPF_RELIEF) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
