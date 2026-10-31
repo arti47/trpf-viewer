@@ -1136,8 +1136,6 @@ function rebuildTRPF() {
   TRPF.push(...voidDeckPrisms());
   TRPF_RELIEF = SITE_BLOCKS.filter(B => B.h > BLK_TOP).flatMap(trpfRelief);   // all residential blocks (TY 2026-10-31 "do for all blocks")
 }
-// Ground features below Blk 32A (site plan + model photo, visual only): children's playground (blue, ~16×7 m blob), elderly fitness pad (grey, r 3 m).
-const TRPF_GROUND = [[23.6, -2.9, 8, 3.5, [80, 140, 205]], [41.6, -6.1, 3, 3, [190, 190, 184]]];
 const MSCP_ROOF = [['W core', -32.6, 1.5, -27.6, 15.5, 4.5, [232, 232, 228]], ['E core (Blk 32)', 27.6, -14.5, 32.6, 0.5, 4.5, [232, 232, 228]],
   ['shelter', 0, 12, 4, 16, 3, [226, 226, 222]], ['shelter', -26, -8, -22, -4, 3, [226, 226, 222]], ['shelter', 21.5, -15, 25.5, -11, 3, [226, 226, 222]]];
 // Roof garden surface (visual only): paved perimeter path, lawn + planting clumps, central light well, elderly fitness pad, community-use lawn.
@@ -1160,8 +1158,10 @@ const VD = {
   coresPx: [['Blk 33A', [232, 445, 284, 472]], ['Blk 31B', [1028, 350, 1060, 398]], ['Blk 31A', [911.7, 558.5, 936, 572.5]], ['Blk 31A', [911.7, 585.3, 936, 598.5]], ['Blk 31A', [956, 546.5, 977.5, 558]], ['Blk 31A', [878.3, 608.3, 891, 630]]],   // lift cores from the site plan lift symbols (estimate); 31A: 2 lift banks + 2 stairs (TY 2026-10-31)
   track: [[470, 232], [400, 236], [330, 240], [300, 245], [272, 268], [264, 300], [272, 335], [300, 360], [330, 368], [400, 375], [470, 372], [560, 355], [650, 334], [740, 312], [800, 300], [900, 298], [980, 300], [1040, 300],
     [1075, 282], [1088, 250], [1075, 215], [1040, 198], [980, 192], [900, 192], [800, 197], [700, 207], [600, 218]],
-  play: [[402, 313, 40, 38], [843, 255, 34, 27]],   // children's playgrounds (1): centre + radii px (the one S of 32A is TRPF_GROUND)
-  pads: [[910, 247, 20, 22, [150, 178, 200]], [330, 293, 26, 28, [214, 178, 130]], [633, 225, 13, 11, [214, 178, 130]], [1043, 255, 12, 20, [214, 178, 130]], [480, 545, 32, 17, [214, 178, 130]]],   // (3) elderly blue-grey, (2) adult sand
+  play: [[[407, 272], [434.5, 275], [443, 292], [438, 323], [419.5, 354], [372, 349], [361, 325.5], [364.5, 297], [379.5, 284]],
+    [[808, 249], [814, 236], [833, 227.5], [845.5, 234.5], [855.5, 223], [882, 225.5], [882, 255], [865.5, 267.5], [863, 277.5], [848, 284], [813, 276], [810.5, 262.5]],
+    [[735, 485], [743.75, 475], [775, 468], [810, 469.5], [800, 487.5], [802.5, 498.75], [797.5, 508.75], [780, 515], [760, 513.75], [752.5, 500], [740, 496]]],   // children's playgrounds (1): outlines traced from the site plan (±1 m; W lawn, N lawn E, S of 32A)
+  pads: [[910, 247, 20, 22, [150, 178, 200]], [853, 494, 19, 18, [150, 178, 200]], [330, 293, 26, 28, [214, 178, 130]], [633, 225, 13, 11, [214, 178, 130]], [1043, 255, 12, 20, [214, 178, 130]], [480, 545, 32, 17, [214, 178, 130]]],   // (3) elderly blue-grey, (2) adult sand
   shelters: [[447, 313], [797, 272]],
   court: [[177, 337], [210, 331], [223, 403], [191, 409]],
   plazas: [[775, 318, 850, 348], [222, 402, 290, 440], [688, 470, 742, 515]],
@@ -1186,14 +1186,82 @@ const blobRing = (cx, cz, rx, rz, seed, n = 20) => { const o = []; for (let i = 
 const segD = (x, z, ax, az, bx, bz) => { const ex = bx - ax, ez = bz - az, L = ex * ex + ez * ez || 1, t = clamp(((x - ax) * ex + (z - az) * ez) / L, 0, 1); return Math.hypot(x - ax - ex * t, z - az - ez * t); };
 const polyD = (flat, x, z) => { let d = Infinity; const n = flat.length / 2; for (let i = 0, j = n - 1; i < n; j = i++) d = Math.min(d, segD(x, z, flat[2 * j], flat[2 * j + 1], flat[2 * i], flat[2 * i + 1])); return d; };
 const VD_LINKS = VD.links.map(l => l.map(([a, b]) => SITE_PX(a, b)));
+const PLAY_SCH = [{ floor: [70, 128, 196], ring: [236, 150, 60], dot: [246, 214, 70], post: [40, 96, 176], pan: [[250, 200, 50], [236, 110, 50]], slide: [244, 196, 40], tube: [220, 60, 50], roof: [226, 70, 50], sail: [240, 238, 230] },   // typical BTO playground colour schemes (estimates): EPDM floor, inlays, steel posts, HDPE panels, slides, roofs
+  { floor: [74, 150, 96], ring: [70, 128, 196], dot: [246, 214, 70], post: [64, 150, 80], pan: [[60, 130, 210], [244, 150, 40]], slide: [60, 140, 220], tube: [250, 190, 40], roof: [40, 110, 190], sail: [244, 160, 60] },
+  { floor: [190, 82, 62], ring: [246, 196, 60], dot: [80, 170, 200], post: [120, 70, 170], pan: [[60, 190, 170], [250, 210, 60]], slide: [80, 190, 160], tube: [130, 80, 200], roof: [250, 196, 50], sail: [236, 236, 232] }];
 const VD_FLAT = { pads: [], plazas: [], drives: [], court: pxRing(VD.court), porches: VD.porches.map(pxRing) };   // ground polygons (world flat rings) for drawing, trees, walk map
-VD.play.forEach(([a, b, rx, ry], i) => { const [x, z] = SITE_PX(a, b); VD_FLAT.pads.push({ r: blobRing(x, z, rx * 0.225, ry * 0.225, 31 + i), c: [86, 150, 206], play: [x, z] }); });
+VD.play.forEach((q, i) => { const r = pxRing(q), n = r.length / 2; let x = 0, z = 0; for (let k = 0; k < n; k++) { x += r[2 * k] / n; z += r[2 * k + 1] / n; } VD_FLAT.pads.push({ r, c: PLAY_SCH[i % 3].floor, play: [x, z], sch: i % 3 }); });
 VD.pads.forEach(([a, b, rx, ry, c], i) => { const [x, z] = SITE_PX(a, b); VD_FLAT.pads.push({ r: blobRing(x, z, rx * 0.225, ry * 0.225, 41 + i), c, fit: [x, z, Math.min(rx, ry) * 0.225] }); });
 VD_FLAT.plazas = VD.plazas.map(r => pxRing(pxBox(r))).concat(VD.bins.map(pxRing));   // + pavilion floors
 VD_FLAT.drives = VD.drives.map(pxRing);   // (was swallowed by the comment above: drives never reached trees / walk map)
 // Site-plan roads (GEO.siteRoads trapezoids, site px → world rings): public roads (Tanjong Rhu Rd / Close, ECP slips) + internal drives / drop-off loops; replace the OSM ribbons inside the plan image
 const SITE_ROADS = (GEO.siteRoads || []).map(([ya, yb, a0, a1, b0, b1]) => pxRing([[a0, ya], [a1, ya], [b1, yb], [b0, yb]]));
 const SITE_IMG = pxRing([[0, 0], [1284, 0], [1284, 1009], [0, 1009]]);
+// Playgrounds (1) + fitness corners (2)/(3) (TY 2026-10-31 "render the playground… typical HDB BTO playgrounds"; sizes/colours estimates): world-space triangle mesh, built once
+let PLAY_KIT = null;
+function playKit() {
+  if (PLAY_KIT) return PLAY_KIT; const T = [], obs = [], c = v => v.map(q => q / 255), sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
+  const tri = (a, b, d, col) => { const n = nz(cr(sub(b, a), sub(d, a))); T.push([a, b, d, n, c(col)]); }, quad = (a, b, d, e, col) => { tri(a, b, d, col); tri(a, d, e, col); };
+  const bar = (a, b, w, h, col, up = [0, 1, 0]) => { const d = nz(sub(b, a)); let s = cr(d, up); if (Math.hypot(...s) < 1e-3) s = cr(d, [1, 0, 0]); s = nz(s); const t = cr(s, d);   // oriented box a→b, cross-section w × h
+    const P = (p, i, j) => add(add(p, s, i * w / 2), t, j * h / 2), R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (let k = 0; k < 4; k++) { const [i0, j0] = R[k], [i1, j1] = R[(k + 1) % 4]; quad(P(a, i0, j0), P(b, i0, j0), P(b, i1, j1), P(a, i1, j1), col); }
+    quad(...R.map(([i, j]) => P(a, i, j)), col); quad(...R.map(([i, j]) => P(b, i, j)), col); };
+  const tube = (path, r, col, N = 10, cap) => { const F = path.map((p, i) => { const d = nz(sub(path[Math.min(i + 1, path.length - 1)], path[Math.max(i - 1, 0)])); let s = cr(d, [0, 1, 0]); if (Math.hypot(...s) < 1e-3) s = cr(d, [1, 0, 0]); s = nz(s); return [s, cr(s, d)]; });
+    const ring = i => Array.from({ length: N }, (_, k) => { const a = (k / N) * 2 * Math.PI; return add(add(path[i], F[i][0], r * Math.cos(a)), F[i][1], r * Math.sin(a)); });
+    let A = ring(0); if (cap) for (let k = 1; k + 1 < N; k++) tri(A[0], A[k], A[k + 1], col);
+    for (let i = 1; i < path.length; i++) { const B = ring(i); for (let k = 0; k < N; k++) quad(A[k], B[k], B[(k + 1) % N], A[(k + 1) % N], col); A = B; }
+    if (cap) for (let k = 1; k + 1 < N; k++) tri(A[0], A[k], A[k + 1], col); };
+  const frame = (x, z, U) => { const V = [-U[1], U[0]], L = (u, v, y) => [x + u * U[0] + v * V[0], y, z + u * U[1] + v * V[1]], fp = (u0, v0, u1, v1) => [L(u0, v0, 0), L(u1, v0, 0), L(u1, v1, 0), L(u0, v1, 0)].flatMap(p => [p[0], p[2]]);
+    const box = (u0, v0, u1, v1, y0, y1, col) => bar(L(u0, (v0 + v1) / 2, (y0 + y1) / 2), L(u1, (v0 + v1) / 2, (y0 + y1) / 2), v1 - v0, y1 - y0, col);
+    const post = (u, v, y0, y1, w, col) => bar(L(u, v, y0), L(u, v, y1), w, w, col, [U[0], 0, U[1]]); return { L, fp, box, post }; };
+  for (const q of VD_FLAT.pads) {
+    if (q.play) { const S = PLAY_SCH[q.sch], [cx, cz] = q.play, r = q.r, n = r.length / 2; let xx = 0, zz = 0, xz = 0;   // principal axis of the outline → structure runs along it
+      for (let k = 0; k < n; k++) { const dx = r[2 * k] - cx, dz = r[2 * k + 1] - cz; xx += dx * dx; zz += dz * dz; xz += dx * dz; }
+      const th = 0.5 * Math.atan2(2 * xz, xx - zz), U = [Math.cos(th), Math.sin(th)], { L, fp, box, post } = frame(cx, cz, U), inside = (u, v, m = 0.6) => [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => { const p = L(u + a, v + b, 0); return ringIn(r, p[0], p[2]); });
+      let ext = 0; for (let k = 0; k < n; k++) ext = Math.max(ext, Math.abs((r[2 * k] - cx) * -U[1] + (r[2 * k + 1] - cz) * U[0]));
+      for (let k = 0, j = n - 1; k < n; j = k++) bar([r[2 * j], 0.07, r[2 * j + 1]], [r[2 * k], 0.07, r[2 * k + 1]], 0.12, 0.12, [196, 196, 190]);   // concrete kerb round the rubber
+      const P = S.post, pan = S.pan, deckC = [128, 134, 146], A = { u0: -2.2, u1: -0.8, y: 1.8 }, B = { u0: 0.8, u1: 2.2, y: 1.2 };
+      for (const t of [A, B]) { const top = t === A ? 3.0 : 2.3; for (const u of [t.u0, t.u1]) for (const v of [-0.7, 0.7]) post(u, v, 0, top, 0.11, P);   // towers: 4 steel posts, perforated deck
+        box(t.u0, -0.7, t.u1, 0.7, t.y - 0.08, t.y, deckC); box(t.u0 + 0.05, -0.66, t.u1 - 0.05, 0.66, t.y - 0.25, t.y - 0.08, P); obs.push([t.y, fp(t.u0 - 0.1, -0.8, t.u1 + 0.1, 0.8)]); }
+      box(-2.15, 0.66, -0.85, 0.72, A.y + 0.1, A.y + 0.95, pan[0]); box(-2.15, 0.6, -0.85, 0.66, A.y + 0.75, A.y + 0.9, pan[1]); box(1.25, -0.72, 2.15, -0.66, B.y + 0.1, B.y + 0.9, pan[1]);   // HDPE panels
+      { const e = 0.2, Y0 = 3.0, Y1 = 3.75, a = L(A.u0 - e, -0.7 - e, Y0), b = L(A.u1 + e, -0.7 - e, Y0), d = L(A.u1 + e, 0.7 + e, Y0), f = L(A.u0 - e, 0.7 + e, Y0), ap = L((A.u0 + A.u1) / 2, 0, Y1);   // pyramid roof on the tall tower
+        tri(a, b, ap, S.roof); tri(b, d, ap, S.roof); tri(d, f, ap, S.roof); tri(f, a, ap, S.roof); quad(a, f, d, b, [200, 200, 200]); }
+      for (let k = 0; k < 8; k++) { const u0 = -0.8 + 1.6 * k / 8, u1 = u0 + 0.17, y = A.y + (B.y - A.y) * (k + 0.5) / 8; box(u0, -0.42, u1, 0.42, y - 0.05, y, [176, 128, 80]); }   // plank bridge A → B + rope rails
+      for (const v of [-0.48, 0.48]) { bar(L(-0.8, v, A.y + 0.85), L(0.8, v, B.y + 0.85), 0.04, 0.04, P); for (let k = 0; k <= 4; k++) { const u = -0.8 + 0.4 * k, y = A.y + (B.y - A.y) * k / 4; bar(L(u, v, y), L(u, v, y + 0.85), 0.015, 0.015, [60, 60, 64]); } }
+      { const C = [-3.75, 0.25], R = 1.1, tr = 0.38, pts = [], N = 30, turns = 1.15;   // closed spiral tube slide from the tall tower
+        for (let i = 0; i <= N; i++) { const t = i / N, a = t * turns * 2 * Math.PI; pts.push(L(C[0] + R * Math.cos(a), C[1] + R * Math.sin(a), A.y + 0.4 - (A.y - 0.05) * t)); }
+        const ae = turns * 2 * Math.PI, dir = [-Math.sin(ae), Math.cos(ae)], last = [C[0] + R * Math.cos(ae), C[1] + R * Math.sin(ae)]; pts.push(L(last[0] + dir[0] * 0.7, last[1] + dir[1] * 0.7, 0.42));
+        tube(pts, tr, S.tube, 12); box(-2.6, -0.4, -2.2, 0.4, A.y - 0.05, A.y + 0.85, S.tube); post(C[0], C[1], 0, A.y + 0.2, 0.1, P); obs.push([A.y, fp(C[0] - R - tr, C[1] - R - tr, C[0] + R + tr, C[1] + R + tr)]); }
+      { const sl = []; for (let i = 0; i <= 12; i++) { const t = i / 12, u = B.u1 + 3.2 * t, y = B.y + 0.03 - (B.y - 0.32) * (t < 0.85 ? (t / 0.85) - Math.sin(2 * Math.PI * t / 0.85) * 0.09 : 1); sl.push([u, y]); }   // wavy open slide + run-out
+        for (let i = 0; i + 1 < sl.length; i++) { const [u0, y0] = sl[i], [u1, y1] = sl[i + 1]; bar(L(u0, 0, y0), L(u1, 0, y1), 0.56, 0.04, S.slide); for (const v of [-0.3, 0.3]) bar(L(u0, v, y0 + 0.1), L(u1, v, y1 + 0.1), 0.04, 0.24, S.slide); }
+        post(B.u1 + 3.0, -0.2, 0, 0.3, 0.06, P); post(B.u1 + 3.0, 0.2, 0, 0.3, 0.06, P); post(B.u1 + 1.2, 0, 0, 0.75, 0.08, P); for (const v of [-0.33, 0.33]) bar(L(B.u1, v, B.y), L(B.u1, v, B.y + 0.9), 0.04, 0.04, P);
+        obs.push([0.6, fp(B.u1, -0.35, B.u1 + 3.2, 0.35)]); }
+      { const top = [A.y, -0.7], bot = [0, -2.3], uu = [A.u0 + 0.1, A.u1 - 0.1], at = (u, t) => L(u, top[1] + (bot[1] - top[1]) * t, top[0] + (bot[0] - top[0]) * t);   // rope climbing net on the tall tower
+        for (const u of uu) bar(at(u, 0), at(u, 1), 0.06, 0.06, P); for (let k = 0; k <= 5; k++) bar(at(uu[0], k / 5), at(uu[1], k / 5), 0.03, 0.03, [150, 40, 40]); for (let j = 1; j < 4; j++) { const u = uu[0] + (uu[1] - uu[0]) * j / 4; bar(at(u, 0), at(u, 1), 0.03, 0.03, [150, 40, 40]); } }
+      { const a = L(0.9, 0.7, B.y), b = L(2.1, 0.7, B.y), d = L(2.1, 1.75, 0), e = L(0.9, 1.75, 0);   // climbing wall panel + coloured holds
+        quad(a, b, d, e, pan[0]); quad(add(a, [0, -0.04, 0]), add(b, [0, -0.04, 0]), add(d, [0, -0.04, 0]), add(e, [0, -0.04, 0]), pan[0]); const nn = nz(cr(sub(b, a), sub(e, a))), nw = nn[1] < 0 ? nn.map(v => -v) : nn;
+        for (let k = 0; k < 7; k++) { const s = 0.15 + 0.7 * hash01(k, q.sch, 5), t = 0.15 + 0.75 * (k / 6), p = add(add(a, sub(b, a), s), sub(e, a), t); bar(p, add(p, nw, 0.07), 0.1, 0.08, [[230, 60, 60], [250, 210, 50], [60, 160, 90], [60, 120, 220]][k % 4]); } obs.push([0.6, fp(0.9, 0.7, 2.1, 1.75)]); }
+      for (let k = 0; k < 4; k++) box(1.1, -1.0 - 0.3 * k, 1.9, -0.7 - 0.3 * k, 0, B.y - 0.3 * k, k % 2 ? pan[1] : pan[0]); for (const u of [1.08, 1.92]) bar(L(u, -1.9, 0.9), L(u, -0.7, B.y + 0.85), 0.04, 0.04, P); obs.push([0.6, fp(1.1, -1.9, 1.9, -0.7)]);   // steps up to the low deck
+      { const M = [[-0.35, -1.95, 3.85], [3.45, -1.95, 2.85], [3.45, 1.95, 3.85], [-0.35, 1.95, 2.85]], K = 8;   // tensile shade sail (hypar) on 4 masts over the low tower and bridge
+        for (const [u, v, h] of M) { post(u, v, 0, h + 0.15, 0.1, [150, 156, 162]); obs.push([2, fp(u - 0.12, v - 0.12, u + 0.12, v + 0.12)]); }
+        const sp = (s, t) => { const p = M.map(([u, v, h]) => [u * 0.94 + 1.55 * 0.06, v * 0.92, h - 0.05]), b = (i, k) => p[0][k] * (1 - s) * (1 - t) + p[1][k] * s * (1 - t) + p[2][k] * s * t + p[3][k] * (1 - s) * t, sag = 0.12 * Math.sin(Math.PI * s) * Math.sin(Math.PI * t); return L(b(0, 0), b(0, 1), b(0, 2) - sag); };
+        for (let i = 0; i < K; i++) for (let j = 0; j < K; j++) quad(sp(i / K, j / K), sp((i + 1) / K, j / K), sp((i + 1) / K, (j + 1) / K), sp(i / K, (j + 1) / K), S.sail); }
+      for (const v of [-1.9, 1.9]) { const u = 5.5; if (!inside(u, v, 0.5)) continue; post(u, v, 0, 0.45, 0.12, [70, 72, 76]); box(u - 0.38, v - 0.13, u + 0.38, v + 0.13, 0.45, 0.78, v < 0 ? S.tube : S.slide); box(u + 0.22, v - 0.12, u + 0.42, v + 0.12, 0.78, 1.05, v < 0 ? S.tube : S.slide); bar(L(u + 0.2, v - 0.22, 1.0), L(u + 0.2, v + 0.22, 1.0), 0.04, 0.04, [60, 60, 64]); obs.push([1, fp(u - 0.4, v - 0.2, u + 0.45, v + 0.2)]); }   // spring riders
+      if (ext > 6.5) { const vs = 4.4, ok = inside(-1.7, vs, 0.8) && inside(1.7, vs, 0.8); if (ok) { for (const u of [-1.6, 1.6]) for (const dv of [-0.7, 0.7]) bar(L(u, vs + dv, 0), L(u * 0.97, vs, 2.4), 0.09, 0.09, P);   // bird's-nest basket swing
+        bar(L(-1.65, vs, 2.42), L(1.65, vs, 2.42), 0.1, 0.1, P); const bc = L(0, vs, 0.55); tube([add(bc, [0, -0.04, 0]), add(bc, [0, 0.04, 0])], 0.5, [60, 60, 64], 14, true);
+        for (const k of [0, 1, 2, 3]) { const a = k * Math.PI / 2 + 0.4, p = add(bc, [0.45 * Math.cos(a), 0, 0.45 * Math.sin(a)]); bar(p, L(k < 2 ? -0.3 : 0.3, vs, 2.38), 0.015, 0.015, [80, 80, 84]); }
+        obs.push([2, fp(-1.8, vs - 0.85, -1.4, vs + 0.85)], [2, fp(1.4, vs - 0.85, 1.8, vs + 0.85)]); } } }
+    if (q.fit) { const [x, z, rr] = q.fit, eld = q.c[2] > q.c[0], F = eld ? [50, 110, 170] : [56, 132, 80], Y = eld ? [244, 150, 50] : [240, 196, 50], d = Math.max(1.2, rr * 0.55);   // fitness corner: 4 stations facing the centre (adult green/yellow, elderly blue/orange)
+      for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.6 * hash01(x, z, 9), R = [Math.cos(a), Math.sin(a)], { L, fp, box, post } = frame(x + d * R[0], z + d * R[1], [-R[1], R[0]]);
+        if (k === 0) { for (const u of [-0.8, 0.8]) post(u, 0, 0, 2.1, 0.08, F); bar(L(-0.8, 0, 2.0), L(0.8, 0, 2.0), 0.04, 0.04, Y); bar(L(-0.8, 0, 1.5), L(0, 0, 1.5), 0.04, 0.04, Y); obs.push([2, fp(-0.9, -0.1, 0.9, 0.1)]); }   // pull-up bars
+        if (k === 1) { const a0 = L(0, -0.55, 0.35), a1 = L(0, 0.55, 0.68); bar(a0, a1, 0.45, 0.05, Y); for (const v of [-0.5, 0.5]) post(0, v, 0, v < 0 ? 0.33 : 0.66, 0.07, F); bar(L(-0.25, 0.7, 0.75), L(0.25, 0.7, 0.75), 0.04, 0.04, F); post(0, 0.7, 0, 0.75, 0.06, F); obs.push([0.7, fp(-0.3, -0.6, 0.3, 0.75)]); }   // sit-up bench
+        if (k === 2) { for (const u of [-0.55, 0.55]) post(u, 0, 0, 1.5, 0.09, F); bar(L(-0.55, 0, 1.45), L(0.55, 0, 1.45), 0.08, 0.08, F); for (const u of [-0.2, 0.2]) { bar(L(u, 0, 1.4), L(u, 0.05, 0.3), 0.05, 0.05, Y); box(u - 0.1, -0.12, u + 0.1, 0.22, 0.26, 0.3, Y); }   // air walker
+          bar(L(-0.55, -0.25, 1.15), L(0.55, -0.25, 1.15), 0.04, 0.04, F); obs.push([1.5, fp(-0.6, -0.3, 0.6, 0.3)]); }
+        if (k === 3) { post(0, 0, 0, 1.7, 0.12, F); for (const u of [-0.12, 0.12]) { const p = L(u, 0, 1.3); tube([p, L(u * 1.3, 0, 1.3)], 0.36, Y, 16, true); bar(L(u * 1.3, 0, 1.6), L(u * 2.4, 0, 1.6), 0.04, 0.04, F); } obs.push([1.5, fp(-0.2, -0.4, 0.2, 0.4)]); } } } }   // shoulder wheels
+  return (PLAY_KIT = { T, obs });
+}
+function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of playKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 // trees / walk map: is the ground at (x, z) taken by a ground feature (track ±2.5 m, pads, plazas, drives, porches, linkways ±2.5 m, court)
 const VD_NLAWN = pxRing([[170, 230], [1110, 130], [1110, 318], [930, 335], [880, 342], [600, 362], [300, 418], [170, 425]]);   // N lawn between Tanjong Rhu Rd and the blocks (site px)
 const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.length - (T.open ? 1 : 0); i++) { const a = T[i], b = T[(i + 1) % T.length]; if (segD(x, z, a[0], a[1], b[0], b[1]) < 2.8) return true; }
@@ -1238,8 +1306,7 @@ function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A mo
     out.push(vdP('Drop-off porch', 4.4, 4.0, r, roofs, { botc: UNDER })); for (const k of [0, 2, 4, 6].map(k => k % n)) { const x = cx + (r[2 * k] - cx) * 0.7, z = cz + (r[2 * k + 1] - cz) * 0.7; out.push(vdP('Porch column', 4.0, 0, sq(x, z, 0.25), col)); } }
   VD.bins.forEach(q => { const r = pxRing(q), n = r.length / 2; let cx = 0, cz = 0; for (let i = 0; i < n; i++) { cx += r[2 * i] / n; cz += r[2 * i + 1] / n; }   // precinct pavilion (5): roof 3.4–3.8 m on 4 columns, open sides (legend; was read as bin centres)
     out.push(vdP('Precinct pavilion', 3.8, 3.4, r, [150, 112, 82], { botc: [380, 300, 230] })); for (let k = 0; k < 4; k++) { const x = cx + (r[2 * k] - cx) * 0.8, z = cz + (r[2 * k + 1] - cz) * 0.8; out.push(vdP('Pavilion column', 3.4, 0, sq(x, z, 0.2), col)); } });
-  for (const q of VD_FLAT.pads) { if (q.play) { const [x, z] = q.play; out.push(vdP('Playground tower', 3.2, 0, sq(x - 1.6, z + 0.6, 1.0), [236, 150, 60]), vdP('Playground dome', 3.6, 0, blobRing(x + 1.8, z - 0.8, 1.5, 1.5, 7, 10), [70, 120, 200]), vdP('Playground deck', 1.4, 1.1, sq(x, z, 0.9).map((v, i) => v + (i % 2 ? 0 : 0.2)), [240, 200, 70])); }
-    if (q.fit) { const [x, z, r] = q.fit; for (let k = 0; k < 3; k++) { const a = k * 2.1, d = r * 0.5; out.push(vdP('Fitness station', 1.5, 0, sq(x + d * Math.cos(a), z + d * Math.sin(a), 0.2), k % 2 ? [60, 110, 70] : [226, 186, 60])); } } }
+  for (const [h, r] of playKit().obs) out.push(vdP('Playground equipment', h, 0, r, [200, 200, 200], { nogl: 1 }));   // playground / fitness meshes are drawn by gpuPlay; these footprints only block walking
   out.forEach(P => { if (P.name === 'Void deck light') P.lamp = 1; else if (/void deck|Void deck|letterboxes|lift door|stair/.test(P.name)) P.cov = 1; });   // covered fill / lamp shading modes (glPrism)
   return out;
 }
@@ -3540,6 +3607,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P);
   if (state.showExisting) gpuLandmarks(A);
+  gpuPlay(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); GPU.opN = A.n;
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new') { const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
@@ -3548,7 +3616,6 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
-  TRPF_GROUND.forEach(([x, z, rx, rz, col]) => { for (let i = 0; i < 16; i++) { const a = (i * Math.PI) / 8, b = ((i + 1) * Math.PI) / 8; X.v([x, 0.25, z], up, c(col), z4); X.v([x + rx * Math.cos(a), 0.25, z + rz * Math.sin(a)], up, c(col), z4); X.v([x + rx * Math.cos(b), 0.25, z + rz * Math.sin(b)], up, c(col), z4); } });
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
@@ -3564,7 +3631,8 @@ function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck 
   VD.plazas.forEach(([a, b, cc, d]) => { const r = pxRing(pxBox([a, b, cc, d])); poly(r, 0.16, [176, 178, 180]);   // wavy white bands (model photos)
     for (let k = 1; k < 5; k++) { const P = []; for (let j = 0; j <= 24; j++) { const t = j / 24, px = a + (cc - a) * t, py = b + (d - b) * (k / 5) + Math.sin(t * Math.PI * 3 + k) * (d - b) * 0.07; P.push(SITE_PX(px, py)); } rib(P, 0.9, 0.17, [236, 236, 232]); } });
   poly(VD_FLAT.court, 0.16, [236, 236, 230]); { const r = VD_FLAT.court, m = [0, 0]; for (let i = 0; i < r.length; i += 2) { m[0] += r[i] / (r.length / 2); m[1] += r[i + 1] / (r.length / 2); } poly(r.map((v, i) => m[i % 2] + (v - m[i % 2]) * 0.94), 0.17, [92, 128, 108]); }   // hard court: white line + green surface
-  for (const q of VD_FLAT.pads) { poly(q.r, 0.18, q.c); if (q.play) { const [x, z] = q.play; poly(blobRing(x + 0.8, z + 0.6, 3.4, 2.6, 3, 14), 0.19, [232, 140, 70]); } }   // playgrounds: blue rubber + orange zone
+  for (const q of VD_FLAT.pads) { poly(q.r, 0.18, q.c); if (q.play) { const [x, z] = q.play, S = PLAY_SCH[q.sch], sh = (r, k) => r.map((v, i) => (i % 2 ? z : x) + (v - (i % 2 ? z : x)) * k);   // playgrounds: EPDM wet-pour rubber, band + inner field + dots in a second/third colour
+      poly(sh(q.r, 0.82), 0.185, S.ring); poly(sh(q.r, 0.74), 0.19, q.c); for (let k = 0; k < 9; k++) { const a = k * 2.4 + q.sch, d = 2.5 + 2.2 * hash01(k, q.sch, 17); const dx = x + d * Math.cos(a), dz = z + 0.8 * d * Math.sin(a); if (ringIn(sh(q.r, 0.7), dx, dz)) poly(blobRing(dx, dz, 0.45, 0.45, k, 10), 0.195, k % 3 ? S.dot : S.ring); } } }
   for (const T of VD_TRACKS) rib(T, 2.5, 0.2, [240, 240, 236], !T.open); for (const T of VD_TRACKS) rib(T, 2.2, 0.21, [64, 124, 188], !T.open); for (const T of VD_TRACKS) rib(T, 0.07, 0.22, [236, 240, 244], !T.open);
 }
 function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof, GBTB domes + Supertree canopies; plain shading (mode 0)
