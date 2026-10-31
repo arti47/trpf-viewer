@@ -1941,8 +1941,8 @@ const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), p
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const rgbStr = (c, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
 const SKY_KEYS = [
-  { el: -18, top: '#01030b', mid: '#050a18', hor: '#0b1222', sea: '#03070f' },
-  { el: -8, top: '#060b24', mid: '#141a46', hor: '#2a2350', sea: '#070d1e' },
+  { el: -18, top: '#070a16', mid: '#11141f', hor: '#3a302c', sea: '#05080f' },   // night: Singapore light-pollution dome (orange-brown horizon, no black sky; realism N1)
+  { el: -8, top: '#0a0f2a', mid: '#1b1d3e', hor: '#4a3644', sea: '#070d1e' },
   { el: -2, top: '#1e1b4b', mid: '#5b2a86', hor: '#e0692e', sea: '#2a2140' },
   { el: 3, top: '#1e3a8a', mid: '#6a7fd0', hor: '#fbb36a', sea: '#3a4a6a' },
   { el: 12, top: '#2a68a8', mid: '#6ea9dc', hor: '#d3e3ee', sea: '#1f6f8f' },   // day keys desaturated toward Singapore's humid sky (realism 2026-10-31)
@@ -2646,7 +2646,7 @@ function drawClouds(ctx, cam, env) {
 function drawSkyAndSea(ctx, cam, env, m) {
   const { w, h } = cam, dh = m.dh, center = cam.projectPoint(cam.ex + dh * Math.sin(cam.yaw), 0, cam.ez + dh * Math.cos(cam.yaw)), hy = center ? center.y : h / 2 + Math.tan(cam.pitch) * cam.fPx;
   const sky = ctx.createLinearGradient(0, Math.min(0, hy - h), 0, Math.max(hy, 1)); sky.addColorStop(0, rgbStr(env.sky.top)); sky.addColorStop(0.65, rgbStr(env.sky.mid)); sky.addColorStop(1, rgbStr(env.sky.hor)); const gs = GPU.ok !== false && gpuSky(cam, env, ctx.canvas.width, ctx.canvas.height); if (gs) ctx.drawImage(GPU.cv, 0, 0, w, h); else { ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h); }   // GL sky + cloud layer (realism 2026-10-31), 2D gradient fallback
-  if (env.sun.elDeg < -6) { const a = clamp((-6 - env.sun.elDeg) / 8, 0, 1); STARS.forEach(s => { const v = compassToWorld(s.az, s.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (p && p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h) { ctx.fillStyle = `rgba(255,255,255,${a * (0.3 + 0.7 * s.mag)})`; ctx.fillRect(p[0], p[1], s.mag > 0.85 ? 2 : 1, s.mag > 0.85 ? 2 : 1); } }); }
+  if (env.sun.elDeg < -6) { const a = clamp((-6 - env.sun.elDeg) / 8, 0, 1); STARS.forEach(s => { const v = compassToWorld(s.az, s.el), p = cam.dirToScreen(v[0], v[1], v[2]); if (p && p[0] >= 0 && p[0] <= w && p[1] >= 0 && p[1] <= h) { if (s.mag < 0.7) return; ctx.fillStyle = `rgba(255,255,255,${a * 0.5 * (0.3 + 0.7 * s.mag)})`; ctx.fillRect(p[0], p[1], s.mag > 0.85 ? 2 : 1, s.mag > 0.85 ? 2 : 1); } }); }
   if (!gs) drawClouds(ctx, cam, env);
   if (env.sun.elDeg > -1.5 && env.W.sun > 0) { const p = cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); if (p) { const r = Math.max(2, Math.tan(0.2665 * DEG) * cam.fPx), RW = Math.tan(35 * DEG) * cam.fPx, gw = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], RW), wc = mix([255, 236, 200], [255, 190, 130], env.warm).map(Math.round).join(',');   // wide haze glow (matches GPU fogCol in-scatter)
     gw.addColorStop(0, `rgba(${wc},${0.3 * env.direct})`); gw.addColorStop(0.4, `rgba(${wc},${0.07 * env.direct})`); gw.addColorStop(1, `rgba(${wc},0)`); if (!gs) { ctx.fillStyle = gw; ctx.fillRect(p[0] - RW, p[1] - RW, RW * 2, RW * 2); }
@@ -2691,6 +2691,8 @@ function generateTrees() {
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
   for (let x = mnx; x <= mxx; x += 6) for (let z = mnz; z <= mxz; z += 6) { const jx = x + (hash01(x, z, 41) - 0.5) * 4, jz = z + (hash01(z, x, 43) - 0.5) * 4; if (hash01(jx, jz, 47) < 0.12 || !ringIn(VD_NLAWN, jx, jz) || !ringIn(tr, jx, jz) || groundBusy(jx, jz)) continue;   // N lawn densely wooded like the developer model (TY 2026-10-30)
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
+  for (let i = 0, n = tr.length / 2; i < n; i++) { const ax = tr[2 * i], az = tr[2 * i + 1], bx = tr[(2 * i + 2) % tr.length], bz = tr[(2 * i + 3) % tr.length], L2 = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L2, uz = (bz - az) / L2;   // shrub hedge 1.2 m inside the boundary (realism G2, estimate)
+    for (let t = 1; t < L2; t += 2.2) for (const sg of [1, -1]) { const x = ax + ux * t - uz * 1.2 * sg, z = az + uz * t + ux * 1.2 * sg; if (ringIn(tr, x, z) && free(x, z)) { X.push(x); Z.push(z); H.push(1.4 + hash01(x, z, 61) * 0.9); G.push(hash01(z, x, 63)); } } }
   TREES.n = X.length; TREES.x = Float64Array.from(X); TREES.z = Float64Array.from(Z); TREES.h = Float64Array.from(H); TREES.g = Float64Array.from(G);
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
@@ -3537,7 +3539,7 @@ vec3 roomIM(vec2 f, vec2 sz, vec3 v, vec3 n, float sd, float on) {
   if (cs > 0.45 && (cs > 0.72 ? f.x < cw : f.x > 1.0 - cw)) { col = mix(vec3(0.82, 0.78, 0.7), vec3(0.62, 0.66, 0.7), fract(sd * 17.3)) * (0.9 + 0.1 * sin(f.x * sz.x * 18.0)); dep = 0.0; }   // drawn curtain at the glass (pleats)
   else if (d.y > 0.0 && t == tt.y && length(h.xz - vec2(sz.x * 0.5, D * 0.45)) < 0.35) col = vec3(1.6, 1.45, 1.2) * (0.3 + 0.7 * on);   // ceiling lamp
   vec3 al = toLin(col);
-  return al * (uAmb * 0.3 * SUNK * 0.3 * (1.0 - 0.6 * dep) + uNight * on * vec3(1.0, 0.76, 0.48) * (0.5 + 0.35 * (1.0 - dep))); }
+  return al * (uAmb * 0.3 * SUNK * 0.3 * (1.0 - 0.6 * dep) + uNight * on * mix(vec3(1.0, 0.76, 0.48), vec3(0.82, 0.9, 1.0), step(0.7, fract(sd * 23.7))) * (0.5 + 0.35 * (1.0 - dep))); }   // 2700 K / 6500 K mix (N2)
 vec3 fogCol(vec3 v) { float m = max(0.0, dot(v, uSun));   // haze colour + forward (Mie) in-scatter toward the sun; matches the 2D sky's wide sun glow
   return uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y); }
 float pcfK(sampler2DShadow sm, vec3 q, float t) {   // 4 taps; photo mode (uHQ): 16 rotated-grid taps over ±3 texels (softer penumbra)
@@ -3591,6 +3593,8 @@ void main() {
     float wx = mode > 2.5 ? 0.92 : 0.6, wy = mode > 2.5 ? 0.86 : 0.5, x0 = 0.5 - wx * 0.5, x1 = 0.5 + wx * 0.5, y0 = 0.28, y1 = 0.28 + wy;
     float m = smoothstep(x0 - aa.x, x0 + aa.x, f.x) * (1.0 - smoothstep(x1 - aa.x, x1 + aa.x, f.x)) * smoothstep(y0 - aa.y, y0 + aa.y, f.y) * (1.0 - smoothstep(y1 - aa.y, y1 + aa.y, f.y));
     float k = mix(wx * wy, m, det) * step(0.0, g.y), on = step(hash(floor(g) + vTex.w), mode > 2.5 ? 0.5 : 0.3);
+    if (mode < 2.5 && vTex.w > 199.0 && g.y > 0.0) { float sl = band(f.y, -0.01, 0.07, aa.y) * smoothstep(0.15, 0.06, fw.y), ac = step(0.62, hash(floor(g) + 11.0)) * band(f.x, 0.62, 0.92, aa.x) * band(f.y, 0.08, 0.27, aa.y) * det;   // residential (realism G4): white slab edge per storey + A/C condenser ledges under some windows
+      alb = mix(alb, vec3(0.93, 0.92, 0.89), sl); alb = mix(alb, vec3(0.55, 0.56, 0.56), ac); alb = mix(alb, vec3(0.3), ac * (1.0 - smoothstep(0.06, 0.09, length((f - vec2(0.77, 0.175)) * vec2(1.0, 1.6))))); }
     float cu = mode < 2.5 ? step(0.72, hash(floor(g) + vTex.w + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
     alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
     if (mode < 2.5 && det > 0.01) { float im = det * smoothstep(0.35, 0.15, max(fw.x, fw.y)); wroom = k * im * (1.0 - 0.85 * cu) * roomIM(f, vec2(3.6, 3.2), vv, nrm, hash(floor(g) + vTex.w + 3.0), on); lit *= 1.0 - 0.8 * im; }
@@ -3669,6 +3673,7 @@ void main() {
       vec2 f = abs(fract(q / sz + 0.5) - 0.5) * sz / max(fwidth(vTex.xy), vec2(1e-5)); c = mix(c, wl ? c * 0.7 : vec3(90.0, 84.0, 76.0) / 255.0, (wl ? 0.5 : 0.25) * uLitK * (1.0 - smoothstep(0.35, 1.0, min(f.x, f.y)))); }
     else if (vTex.w > 0.5 && mode < 3.5) {   // interior wall faces (tex = face u,v 0..1): contact shading at floor/ceiling junctions + 1 px edge lines (as drawInterior)
       float h = vWorld.y - uSlab; c = mix(c, vec3(0.08, 0.06, 0.05), 0.1 * (1.0 - smoothstep(0.0, 0.3, h)) + 0.08 * smoothstep(uRoomH - 0.25, uRoomH, h));
+      if (h > -0.01 && h < 0.1 && vTex.w < 1.5) { float fy = fwidth(h); c = mix(c, vec3(0.93, 0.92, 0.89) * uLitK, 0.85); c *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.5 * fy, 0.1 - h)); }   // 100 mm skirting + shadow line (I3)
       vec2 u = vTex.xy, fw = max(fwidth(u), vec2(1e-5)); float px = min(min(u.x, 1.0 - u.x) / fw.x, min(u.y, 1.0 - u.y) / fw.y); c = mix(c, vec3(70.0, 62.0, 54.0) / 255.0, 0.16 * uLitK * (1.0 - smoothstep(0.5, 1.5, px))); }
     c = untone(c); vec3 al = toLin(alb);
     if (uInSun > 0.0) {   // sun through the openings: interior shadow map (walls, frames, furniture; ±12 m) × outdoor near cascade (city + rest of the block) × Lambert
@@ -3712,11 +3717,20 @@ void main() { float d; gl_Position = project(uMirror > 0.5 ? aPos * vec3(1.0, -1
 // canopy per instance: random yaw, width/height ±12%, lumpy outline (low-frequency sines over the unit sphere); same in the shadow pass
 const GL_TREE_POS = `vec3 treeLeaf(vec3 a, vec4 I) { float s = fract(sin(I.x * 0.371 + I.y * 0.713) * 437.585), s2 = fract(s * 17.13 + 0.31), ca = cos(s2 * 6.2832), sa = sin(s2 * 6.2832);
   a = vec3(ca * a.x - sa * a.z, a.y, sa * a.x + ca * a.z); return a * (1.0 + 0.17 * sin(a.x * 3.1 + s * 6.3) * sin(a.y * 2.9 + s2 * 5.1) * sin(a.z * 3.3 + s * 3.9) + 0.09 * sin(a.x * 6.0 + a.z * 5.0 + s2 * 9.0)) * vec3(0.88 + 0.24 * s, 1.12 - 0.24 * s2, 0.88 + 0.24 * s); }
-vec3 treePos(vec3 a, float part, vec4 I) { float h = I.z; if (part > 0.5) return vec3(I.x + a.x * max(0.15, h * 0.03), a.y * h * 0.62, I.y + a.z * max(0.15, h * 0.03)); a = treeLeaf(a, I); return vec3(I.x + a.x * h * 0.38, h * 0.62 + a.y * h * 0.33, I.y + a.z * h * 0.38); }
+// species (realism 2026-10-31, G1; by position hash): 0 round (angsana/tembusu), 1 umbrella (rain tree: wide flat crown), 2 palm (thin tall trunk + drooping star of fronds); h < 4 m = shrub
+float treeSp(vec4 I) { if (I.z < 4.0) return 3.0; float s = fract(sin(I.x * 0.123 + I.y * 0.457) * 9183.1); return s < 0.3 ? 1.0 : s > 0.9 ? 2.0 : 0.0; }
+vec3 treePos(vec3 a, float part, vec4 I) { float h = I.z, sp = treeSp(I);
+  if (part > 0.5) { float th = sp > 2.5 ? 0.0 : sp > 1.5 ? 0.93 : sp > 0.5 ? 0.6 : 0.62, tr = sp > 1.5 && sp < 2.5 ? max(0.12, h * 0.016) : max(0.15, h * 0.03); return vec3(I.x + a.x * tr, a.y * h * th, I.y + a.z * tr); }
+  a = treeLeaf(a, I);
+  if (sp > 2.5) return vec3(I.x + a.x * h * 0.6, h * 0.5 + a.y * h * 0.48, I.y + a.z * h * 0.6);
+  if (sp > 1.5) { float r = length(a.xz), an = atan(a.z, a.x), st = 0.3 + 0.7 * pow(abs(cos(an * 3.5)), 4.0); return vec3(I.x + a.x * h * 0.3 * st, h * 0.93 + a.y * h * 0.05 - r * r * st * h * 0.14, I.y + a.z * h * 0.3 * st); }
+  if (sp > 0.5) return vec3(I.x + a.x * h * 0.55, h * 0.7 + a.y * h * 0.2, I.y + a.z * h * 0.55);
+  return vec3(I.x + a.x * h * 0.38, h * 0.62 + a.y * h * 0.33, I.y + a.z * h * 0.38); }
 `;
 const GL_TREE_VS = GL_HDR + GL_TREE_POS + `in vec3 aPos; in float aPart; in vec4 aInst; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist;
 void main() { float g = aInst.w; vec3 p = treePos(aPos, aPart, aInst); if (aPart > 0.5) { vCol = vec3(0.3, 0.22, 0.15); vNor = vec3(aPos.x, 0.0, aPos.z); }
-  else { float g2 = fract(g * 7.31 + 0.17); vCol = vec3(50.0 + g * 34.0 + g2 * 14.0, 94.0 + g * 36.0, 42.0 + g * 16.0) / 255.0; vNor = normalize(treeLeaf(aPos, aInst) + vec3(0.0, 0.45, 0.0)); }
+  else { float g2 = fract(g * 7.31 + 0.17), sp = treeSp(aInst); vCol = vec3(50.0 + g * 34.0 + g2 * 14.0, 94.0 + g * 36.0, 42.0 + g * 16.0) / 255.0;
+    vCol *= sp > 2.5 ? vec3(0.9, 1.0, 0.9) : sp > 1.5 ? vec3(1.25, 1.12, 0.85) : sp > 0.5 ? vec3(1.12, 1.08, 0.9) : vec3(0.92, 0.96, 0.98); vNor = normalize(treeLeaf(aPos, aInst) + vec3(0.0, 0.45, 0.0)); }
   float d; gl_Position = project(p, d); vDist = d; vTex = vec4(aPos.y, aPart, 10.0, g); vWorld = p; }`;
 const GL_FLAT_VS = GL_HDR + `in vec3 aPos; uniform float uClip; void main() { float d; gl_Position = uClip > 0.5 ? vec4(aPos.xy, 0.0, 1.0) : project(aPos, d); }`;
 const GL_FLAT_FS = `#version 300 es
@@ -3814,7 +3828,7 @@ function glPrism(A, P) {
   for (let i = 0; i < P.n; i++) { const dx = P.xs[i] - P.cx, dz = P.zs[i] - P.cz, l = Math.hypot(dx, dz) || 1; X[i] = P.xs[i] + (dx / l) * e * 1.414; Z[i] = P.zs[i] + (dz / l) * e * 1.414; }
   const al = (P.style ? (P.style === 'club' ? [150, 175, 190] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
-  const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0);
+  const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0) + (P.kind === 'existing' && !P.glass && P.h >= 20 && P.h <= 160 && (P.res ?? (P.res = (luAt(P.cx, P.cz) || {}).c === 3)) ? 200 : 0);   // +200: residential (HDB/condo style in GL_FS mode 1)
   const b = P.base, t = P.h, vb = (b - b - y0) / fh, vt = (t - b - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
   const aoOn = !GPU.noAO && P.h >= 8 && !P.tank && P.kind !== 'road' && Math.hypot(P.cx, P.cz) < 3000;
   const off = trpf ? P.B.name.charCodeAt(4) + P.B.name.charCodeAt(6) : 0, w6 = P.ck ? { c: 6, l: 7, s: 8, h: 7 }[P.ck] : ((off % 3) + 3) % 3 + (trpf && P.B.name.startsWith('Blk 31B') ? 3 : 0);
@@ -3916,6 +3930,15 @@ function lightCull(L, k) { const c = L.c[k], s = L.s[k][0] + 2, r = L.r, u = L.u
 function cityDraw(test, T = GPU.tiles) { const gl = GPU.gl; if (!T) return gl.drawArrays(gl.TRIANGLES, 0, GPU.opN); let s = -1, e = -1;
   for (const t of T) { if (!test(t[2], t[3], t[4], t[5], t[6], t[7])) continue; if (t[0] === e) e += t[1]; else { if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); s = t[0]; e = t[0] + t[1]; } }
   if (e > s) gl.drawArrays(gl.TRIANGLES, s, e - s); }
+// Rooftop plant (realism 2026-10-31, G3; estimates): on existing buildings ≥ 10 m, ≥ 300 m² roof, within 2.5 km of #134: 1–3 boxes (AHU / water tank /
+// lift motor room, 3–9 m, 2–4.5 m tall) placed by hash inside the footprint (corners tested). Visual only (not in physics/sightlines).
+function gpuRoofKit(A) { const al = [150, 152, 150], tp = [128, 130, 130];
+  for (const P of ALL) { if (P.kind !== 'existing' || P.h < 10 || P.nogl || P.glass && P.h > 150 || Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) > 2500) continue;
+    let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; ar = Math.abs(ar) / 2; if (ar < 300) continue;
+    const k = 1 + Math.floor(hash01(P.cx, P.cz, 71) * Math.min(3, ar / 400));
+    for (let q = 0; q < k; q++) { const r = Math.sqrt(ar) * 0.28, x = P.cx + (hash01(P.cx, q, 73) - 0.5) * r, z = P.cz + (hash01(q, P.cz, 79) - 0.5) * r, w = 3 + hash01(x, z, 83) * Math.min(6, Math.sqrt(ar) * 0.12), d = 3 + hash01(z, x, 89) * Math.min(6, Math.sqrt(ar) * 0.12), hh = 2 + hash01(x, q, 97) * 2.5;
+      const xs = [x - w / 2, x + w / 2, x + w / 2, x - w / 2], zs = [z - d / 2, z - d / 2, z + d / 2, z + d / 2]; if (!xs.every((xx, i) => pointIn(P, xx, zs[i]))) continue;
+      glPrism(A, { n: 4, xs, zs, cx: x, cz: z, base: P.h, h: P.h + hh, kind: 'existing', name: 'roof plant', plain: true, alb: al, topc: tp }); } } }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
   if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
@@ -3923,7 +3946,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) glPrism(A, P);
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) gpuLandmarks(A);
+  if (state.showExisting) { gpuLandmarks(A); GPU.noAO = true; gpuRoofKit(A); GPU.noAO = false; }
   gpuPlay(A);
   if (state.showRoads) gpuBridges(A);
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
