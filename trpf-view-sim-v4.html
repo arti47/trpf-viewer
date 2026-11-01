@@ -1187,7 +1187,7 @@ function rebuildTRPF() {
   TRPF = [];
   SITE_BLOCKS.forEach(B => B.boxes.forEach(bx => { const [x0, z0, x1, z1] = bx;
     const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].flatMap(([a, b]) => blkToWorld(B, a, b));
-    const res = B.h > BLK_TOP, [cx, cz] = blkToWorld(B, (x0 + x1) / 2, (z0 + z1) / 2), fac = res && VD.fac.some(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz));
+    const res = B.h > BLK_TOP;
     const ms = B.name.startsWith('MSCP'), ck = bx[4], P = makePrism(B.name, 'trpf', ck === 'c' ? BLK_TOP + 1.0 : ck === 's' ? BLK_TOP + 3.0 : B.h, res || ms ? VOID_DECK_HEIGHT : 0, pts, 0); P.B = B; if (ck) P.ck = ck; if (ck === 'c' || ms) P.nogl = true; if (res) P.botc = [330, 338, 346]; TRPF.push(P);   // box kind ck (31A from the site plan): c common corridor (roof parapet 1 m), s stair (roof access +3 m), l lift core (to the crown);   // residential: on the void deck (white soffit)
     if (ms) TRPF.push(vdP('Blk 32 preschool (8) + utility centre, 1st storey', VOID_DECK_HEIGHT, 0, pts, [188, 168, 132]));   // MSCP 1st storey (owner Blk 32 1st-storey plan 2026-10-30: preschool (8) + UC rooms + stair cores; finish estimate); car decks above
     const cut = ck ? [] : B.boxes.filter(c => c[4]).concat(B.voids || []);
@@ -1196,7 +1196,6 @@ function rebuildTRPF() {
       for (const c of cut) parts = parts.flatMap(([a0, b0, a1, b1]) => { if (c[0] >= a1 || c[2] <= a0 || c[1] >= b1 || c[3] <= b0) return [[a0, b0, a1, b1]]; const o = [], m0 = Math.max(a0, c[0]), m1 = Math.min(a1, c[2]);
         if (c[0] > a0) o.push([a0, b0, c[0], b1]); if (c[2] < a1) o.push([c[2], b0, a1, b1]); if (c[1] > b0) o.push([m0, b0, m1, c[1]]); if (c[3] < b1) o.push([m0, c[3], m1, b1]); return o; });
       for (const [a0, b0, a1, b1] of parts) if (a1 - a0 > 0.05 && b1 - b0 > 0.05) { const Q = makePrism(B.name, 'trpf', B.h, P.base, [[a0, b0], [a1, b0], [a1, b1], [a0, b1]].flatMap(([a, b]) => blkToWorld(B, a, b)), 0); Q.B = B; Q.ownOf = P; Q.botc = P.botc; TRPF.push(Q); } }
-    if (fac) { const F = VD.fac.find(([n, r]) => n === B.name && ringIn(pxRing(pxBox(r)), cx, cz)); TRPF.push(vdP(F[2], VOID_DECK_HEIGHT, 0, pts, F[3])); }   // 1st-storey facility under it: glazed shopfront / centre (colour per VD.fac)
   }));
   // Rooftop water tanks (estimate from model photo): 3 cylinders r 2.2m, 3m tall on the crown, in a row along the block axis at the plan centroid.
   SITE_BLOCKS.filter(B => B.h > BLK_TOP).forEach(B => {
@@ -1294,7 +1293,7 @@ const P2W = (() => { const sp = GEO.spots.find(q => q.id === 'living'), nb = 170
     [[-16.6, 2.6, -13.8, 4.8], [-7.6, 1.7, 0, 2.9], [5.8, -2.0, 11.6, -0.6]]); }   // open: W corridor end (#120/#118), strip S of the corridor by the courtyard, notch N of the E stair
 const planRing = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].flatMap(([X, Y]) => P2W(X, Y));
 const VD = {
-  fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [96, 132, 140]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [112, 128, 138]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
+  fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [132, 156, 162]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [136, 154, 164]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
   core32: [[12.86, 1.3, 13.12, 7.98], [15.45, 1.3, 15.76, 7.98], [13.12, 1.3, 15.45, 1.6], [13.12, 7.0, 14.32, 7.98], [15.23, 7.86, 15.45, 7.98], [16.96, 11.33, 19.96, 16.91], [23.07, 11.33, 26.06, 16.91],
     [24.3, 16.91, 26.37, 20.71], [52.0, 1.3, 55.3, 7.92]],   // 32A plan: E stair walls (door gap X 14.32–15.23), lift shafts, refuse chamber under the chutes, W stair (#142)
   coresPx: [['Blk 33A', [232, 445, 284, 472]], ['Blk 31B', [1028, 350, 1060, 398]], ['Blk 31A', [911.7, 558.5, 936, 572.5]], ['Blk 31A', [911.7, 585.3, 936, 598.5]], ['Blk 31A', [956, 546.5, 977.5, 558]], ['Blk 31A', [878.3, 608.3, 891, 630]]],   // lift cores from the site plan lift symbols (estimate); 31A: 2 lift banks + 2 stairs (TY 2026-10-31)
@@ -1609,7 +1608,7 @@ const groundBusy = (x, z) => { for (const T of VD_TRACKS) for (let i = 0; i < T.
   for (const l of VD_LINKS) for (let i = 0; i + 1 < l.length; i++) if (segD(x, z, l[i][0], l[i][1], l[i + 1][0], l[i + 1][1]) < 3) return true;
   return [...VD_FLAT.pads.map(q => q.r), ...VD_FLAT.plazas, ...VD_FLAT.drives, ...VD_FLAT.porches, VD_FLAT.court].some(r => ringIn(r, x, z) || polyD(r, x, z) < 2); };
 function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A moves with the gap slider)
-  const out = [], col = [228, 226, 220], core = [232, 228, 220], B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A'), facW = VD.fac.map(([n, r, l]) => [n, pxRing(pxBox(r)), l]);
+  const out = [], col = [228, 226, 220], core = [232, 228, 220], B31 = SITE_BLOCKS.find(b => b.name === 'Blk 31A');
   const cores = VD.core32.map(r => planRing(r)).concat(VD.coresPx.map(([n, r]) => { const B = SITE_BLOCKS.find(b => b.name === n); return pxBox(r).flatMap(([a, b]) => VD_W(n === 'Blk 31A' ? B : null, SITE_PX(a, b))); }));
   VD.core32.forEach((r, i) => out.push(vdP('Blk 32A void deck core', i === 2 ? VOID_DECK_HEIGHT / 2 + 1.0 : VOID_DECK_HEIGHT, 0, cores[i], core, i >= 5 && i <= 7 ? { wlift: 1 } : {})));   // lift shafts + refuse chamber: hidden while walking in the lift lobby (interior copy has the car cavities)
   { const B32 = SITE_BLOCKS.find(b => b.name === 'Blk 32A'), top = B32 ? B32.h : VOID_DECK_HEIGHT + 80;   // lift shafts + chute stack run solid to the roof (the raster has a notch there: looking up from the void-deck lobby showed the upper storeys' faces, TY 2026-10-30)
@@ -1620,7 +1619,25 @@ function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A mo
   out.push(vdP('Blk 32A letterboxes', 1.9, 0, planRing([16.96, 10.98, 19.96, 11.33]), [150, 156, 162], { wlift: 1 }));
   for (const [g, s] of [[19.96, 1], [23.07, -1]]) for (const yc of [12.73, 15.52]) out.push(vdP('Blk 32A lift door', 2.23, 0, planRing([Math.min(g, g + s * 0.02), yc - 0.68, Math.max(g, g + s * 0.02), yc + 0.68]), [167, 171, 174], { wlift: 1 }),
     vdP('Blk 32A lift door', 2.1, 0, planRing([Math.min(g, g + s * 0.04), yc - 0.55, Math.max(g, g + s * 0.04), yc + 0.55]), [201, 204, 206], { wlift: 1 }));
-  const near = (x, z, m) => cores.some(r => ringIn(r, x, z) || polyD(r, x, z) < m) || facW.some(([, r]) => ringIn(r, x, z) || polyD(r, x, z) < m);
+  // 1st-storey facilities (VD.fac; TY 2026-11-01 "why is it like that under block 32A": each raster box under the plan rect was a solid teal prism to the soffit, flush with the facade → blank wall along the deck):
+  // enclosed room = union of the unit boxes under the rect, eroded 1.5 m (open covered walkway + edge pilasters in front, as HDB shops/RN centres), glazed shopfront: aluminium mullions ≤1.6 m, transom 2.3 m, glass doors on the longest side, white fascia 2.75–3.3 m, kerb (sizes estimates)
+  const facR = [];
+  VD.fac.forEach(([n, r, lab, gc]) => { const B = SITE_BLOCKS.find(b => b.name === n); if (!B) return; const R = pxRing(pxBox(r)), bx = B.boxes.filter(q => !q[4] && ringIn(R, ...blkToWorld(B, (q[0] + q[2]) / 2, (q[1] + q[3]) / 2))); if (!bx.length) return;
+    const c = 0.5, e = 3, x0 = Math.min(...bx.map(q => q[0])) - 2 * c, z0 = Math.min(...bx.map(q => q[1])) - 2 * c, W = Math.round((Math.max(...bx.map(q => q[2])) - x0) / c) + 2, H = Math.round((Math.max(...bx.map(q => q[3])) - z0) / c) + 2, g = new Uint8Array(W * H), G = new Uint8Array(W * H);
+    for (const [a0, b0, a1, b1] of bx) for (let j = Math.round((b0 - z0) / c); j < Math.round((b1 - z0) / c); j++) for (let i = Math.round((a0 - x0) / c); i < Math.round((a1 - x0) / c); i++) g[j * W + i] = 1;
+    for (let j = e; j < H - e; j++) for (let i = e; i < W - e; i++) { let k = 1; for (let dj = -e; dj <= e && k; dj++) for (let di = -e; di <= e; di++) if (!g[(j + dj) * W + i + di]) { k = 0; break; } G[j * W + i] = k; }   // erode 1.5 m
+    const w = (lx, lz) => blkToWorld(B, lx, lz), fl = L => L.flatMap(([a, b]) => w(a, b)), nm = `${lab} (${n} void deck)`, AL = [206, 210, 212];
+    for (const L of gridLoops(G, W, H, x0, z0, c, 0.3)) { const m = L.length; if (m < 3) continue; facR.push(fl(L));
+      const N = L.map((p, i) => { const q = L[(i + 1) % m], d = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1; return [(q[1] - p[1]) / d, -(q[0] - p[0]) / d]; });   // outward edge normals (filled cells on the left)
+      const off = d => L.map((p, i) => { const a = N[(i + m - 1) % m], b = N[i], k = d / Math.max(0.3, 1 + a[0] * b[0] + a[1] * b[1]); return [p[0] + (a[0] + b[0]) * k, p[1] + (a[1] + b[1]) * k]; });
+      out.push(vdP(nm, 2.75, 0, fl(L), gc), vdP(`${nm} fascia`, VOID_DECK_HEIGHT - 0.2, 2.75, fl(off(0.04)), [238, 236, 230]), vdP(`${nm} kerb`, 0.12, 0, fl(off(0.04)), [150, 150, 146]));
+      let lg = -1, li = 0; L.forEach((p, i) => { const q = L[(i + 1) % m], d = Math.hypot(q[0] - p[0], q[1] - p[1]); if (d > lg) { lg = d; li = i; } });
+      L.forEach((p, i) => { const q = L[(i + 1) % m], Le = Math.hypot(q[0] - p[0], q[1] - p[1]); if (Le < 0.3) return; const ux = (q[0] - p[0]) / Le, uz = (q[1] - p[1]) / Le, [nx, nz] = N[i];
+        const bar = (t0, t1, o0, o1, y0, y1, col, x) => out.push(vdP(`${nm} frame`, y1, y0, fl([[t0, o0], [t1, o0], [t1, o1], [t0, o1]].map(([t, o]) => [p[0] + ux * t + nx * o, p[1] + uz * t + nz * o])), col, x));
+        bar(0, Le, 0, 0.05, 2.3, 2.38, AL); bar(0, Le, 0, 0.05, 0.12, 0.2, AL);   // transom + bottom rail
+        const k = Math.max(1, Math.ceil(Le / 1.6)); for (let j = 0; j <= k; j++) { const t = Math.min(Math.max(j * Le / k, 0.05), Le - 0.05); bar(t - 0.05, t + 0.05, -0.02, 0.08, 0.12, 2.75, AL); }   // mullions (corners included)
+        if (i === li && Le > 3) { const t = Le / 2; bar(t - 0.95, t + 0.95, 0, 0.03, 0.12, 2.3, [70, 84, 90]); bar(t - 0.04, t + 0.04, -0.02, 0.09, 0.12, 2.3, AL); for (const s of [-0.18, 0.18]) bar(t + s - 0.02, t + s + 0.02, 0.03, 0.08, 0.9, 1.5, [190, 194, 196]); } }); } });   // glass doors (pair) + pull handles
+  const near = (x, z, m) => cores.some(r => ringIn(r, x, z) || polyD(r, x, z) < m) || facR.some(r => ringIn(r, x, z) || polyD(r, x, z) < m);
   const [sx, sz] = P2W(14.8, 9.0);   // keep the 32A stair door + approach clear
   // typical new BTO void deck (research + TY model photos 2026-10-30): the facade's stack walls come down as white pilasters on the 1F edge (columns flush with the ceiling edge, ≤4.5 m apart),
   // few interior columns (8 m grid ≥3 m inside the edge), light skirting, LED batten lights in rows on the white soffit, seating sets in the open bays
