@@ -1321,9 +1321,7 @@ const smoothRing = (P, k = 6) => { const n = P.length, out = []; for (let i = 0;
   for (let j = 0; j < k; j++) { const t = j / k, t2 = t * t, t3 = t2 * t; out.push([0, 1].map(c => 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3))); } } return out; };
 const VD_TRACK = smoothRing(VD.track.map(([a, b]) => SITE_PX(a, b)));
 // inner loop (TY model photo from Tanjong Rhu Rd 2026-10-30 + "merged with the outer track"): a connector arc across the lawn in front of 32A W wing / 33A E that leaves and rejoins the outer loop's N (road-side) straight; photo x → site px by the block edges, ±5 m
-const VD_TRACK2 = (() => { const P = [[815, 197], [815, 197], [795, 222], [700, 246], [600, 262], [515, 268], [474, 250], [470, 232], [470, 232]].map(([a, b]) => SITE_PX(a, b)), out = [];
-  for (let i = 1; i + 2 < P.length; i++) for (let j = 0; j < 6; j++) { const t = j / 6, t2 = t * t, t3 = t2 * t, [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]]; out.push([0, 1].map(c => 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3))); }
-  out.push(P[P.length - 1]); out.open = true; return out; })(), VD_TRACKS = [VD_TRACK, VD_TRACK2];
+const VD_TRACKS = [VD_TRACK];
 const blobRing = (cx, cz, rx, rz, seed, n = 20) => { const o = []; for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI, k = 0.88 + 0.24 * hash01(cx + i, cz, seed); o.push(cx + rx * k * Math.cos(a), cz + rz * k * Math.sin(a)); } return o; };
 const segD = (x, z, ax, az, bx, bz) => { const ex = bx - ax, ez = bz - az, L = ex * ex + ez * ez || 1, t = clamp(((x - ax) * ex + (z - az) * ez) / L, 0, 1); return Math.hypot(x - ax - ex * t, z - az - ez * t); };
 const polyD = (flat, x, z) => { let d = Infinity; const n = flat.length / 2; for (let i = 0, j = n - 1; i < n; j = i++) d = Math.min(d, segD(x, z, flat[2 * j], flat[2 * j + 1], flat[2 * i], flat[2 * i + 1])); return d; };
