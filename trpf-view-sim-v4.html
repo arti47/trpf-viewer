@@ -5005,10 +5005,15 @@ $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen
   const tick = t => { const dt = Math.min(0.1, (t - J0.t) / 1000), [x, y] = J0.v, m = Math.hypot(x, y); J0.t = t;
     if (m > 0.12 && dt > 0) walkVec(Math.atan2(x, -y) / DEG, (J0.out || walkRunning() ? RUN_V : WALK_V) * Math.min(1, (m - 0.12) / 0.8) * dt);
     J0.raf = J0.id !== null ? requestAnimationFrame(tick) : 0; };
-  const end = e => { if (e.pointerId !== J0.id) return; J0.id = null; J0.v = [0, 0]; J0.out = false; K.style.transform = ''; J.classList.remove('on', 'run'); };
-  J.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (J0.id !== null) return; J0.id = e.pointerId; J.setPointerCapture(e.pointerId); J.classList.add('on'); set(e); J0.t = performance.now(); if (!J0.raf) J0.raf = requestAnimationFrame(tick); });
+  const reset = () => { J0.id = null; J0.v = [0, 0]; J0.out = false; K.style.transform = ''; J.classList.remove('on', 'run'); };
+  const end = e => { if (e.pointerId === J0.id) reset(); };
+  J.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (J0.id !== null) { try { J.releasePointerCapture(J0.id); } catch (_) {} } J0.id = e.pointerId; J.setPointerCapture(e.pointerId); J.classList.add('on'); set(e); J0.t = performance.now(); if (!J0.raf) J0.raf = requestAnimationFrame(tick); });
   J.addEventListener('pointermove', e => { if (e.pointerId === J0.id) { e.stopPropagation(); set(e); } });
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => J.addEventListener(ev, end)); }
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => J.addEventListener(ev, end));
+  ['pointerup', 'pointercancel'].forEach(ev => window.addEventListener(ev, end, true));
+  ['touchend', 'touchcancel'].forEach(ev => window.addEventListener(ev, e => { if (J0.id === null) return; const r = J.getBoundingClientRect(), R = r.width * 1.6, cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (!e.touches.length || ![...e.touches].some(t => Math.hypot(t.clientX - cx, t.clientY - cy) < R + 120)) reset(); }, true));
+  window.addEventListener('blur', reset); document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); }); }
 $('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); const cv = $('walkMap'), T = WALK_MAP.T; if (!T) return; if (!WALK_MAP.big) { walkMapBig(true); return; }   // small map: tap expands
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (x > T.w - 48 && y < 44) { walkMapBig(false); return; }   // ✕
   const [X, Y] = walkMapInv(T, x, y); if (walkFree(X, Y)) { WALK_MAP.miss = false; walkSet(X, Y); walkMapBig(false); renderAll(); } else { WALK_MAP.miss = true; drawWalkMap(); clearTimeout(WALK_MAP.mt); WALK_MAP.mt = setTimeout(() => { WALK_MAP.miss = false; if (WALK_MAP.big) drawWalkMap(); }, 1500); } });
