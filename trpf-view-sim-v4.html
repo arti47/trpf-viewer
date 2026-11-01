@@ -3087,6 +3087,7 @@ function generateTrees() {
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
   for (let i = 0, n = tr.length / 2; i < n; i++) { const ax = tr[2 * i], az = tr[2 * i + 1], bx = tr[(2 * i + 2) % tr.length], bz = tr[(2 * i + 3) % tr.length], L2 = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L2, uz = (bz - az) / L2;   // shrub hedge 1.2 m inside the boundary (realism G2, estimate)
     for (let t = 1; t < L2; t += 2.2) for (const sg of [1, -1]) { const x = ax + ux * t - uz * 1.2 * sg, z = az + uz * t + ux * 1.2 * sg; if (ringIn(tr, x, z) && free(x, z)) { X.push(x); Z.push(z); H.push(1.4 + hash01(x, z, 61) * 0.9); G.push(hash01(z, x, 63)); } } }
+  for (const [x, z, h, b] of mscpRoofPlants()) { X.push(x); Z.push(z); H.push(h); G.push(Math.floor(b) + hash01(z, x, 71) * 0.999); }   // MSCP roof garden (base in the integer part)
   TREES.n = X.length; TREES.x = Float64Array.from(X); TREES.z = Float64Array.from(Z); TREES.h = Float64Array.from(H); TREES.g = Float64Array.from(G);
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
@@ -4164,20 +4165,22 @@ const GL_TREE_POS = `vec3 treeLeaf(vec3 a, vec4 I) { float s = fract(sin(I.x * 0
   a = vec3(ca * a.x - sa * a.z, a.y, sa * a.x + ca * a.z); return a * (1.0 + 0.17 * sin(a.x * 3.1 + s * 6.3) * sin(a.y * 2.9 + s2 * 5.1) * sin(a.z * 3.3 + s * 3.9) + 0.09 * sin(a.x * 6.0 + a.z * 5.0 + s2 * 9.0)) * vec3(0.88 + 0.24 * s, 1.12 - 0.24 * s2, 0.88 + 0.24 * s); }
 // species (realism 2026-10-31, G1; by position hash): 0 round (angsana/tembusu), 1 umbrella (rain tree: wide flat crown), 2 palm (thin tall trunk + drooping star of fronds); h < 4 m = shrub
 float treeSp(vec4 I) { if (I.z < 4.0) return 3.0; float s = fract(sin(I.x * 0.123 + I.y * 0.457) * 9183.1); return s < 0.3 ? 1.0 : s > 0.9 ? 2.0 : 0.0; }
-vec3 treePos(vec3 a, float part, vec4 I) { float h = I.z, sp = treeSp(I);
+vec3 treePos0(vec3 a, float part, vec4 I) { float h = I.z, sp = treeSp(I);
   if (part > 0.5) { float th = sp > 2.5 ? 0.0 : sp > 1.5 ? 0.93 : sp > 0.5 ? 0.6 : 0.62, tr = sp > 1.5 && sp < 2.5 ? max(0.12, h * 0.016) : max(0.15, h * 0.03); return vec3(I.x + a.x * tr, a.y * h * th, I.y + a.z * tr); }
   a = treeLeaf(a, I);
   if (sp > 2.5) return vec3(I.x + a.x * h * 0.6, h * 0.5 + a.y * h * 0.48, I.y + a.z * h * 0.6);
   if (sp > 1.5) { float r = length(a.xz), an = atan(a.z, a.x), st = 0.3 + 0.7 * pow(abs(cos(an * 3.5)), 4.0); return vec3(I.x + a.x * h * 0.3 * st, h * 0.93 + a.y * h * 0.05 - r * r * st * h * 0.14, I.y + a.z * h * 0.3 * st); }
   if (sp > 0.5) return vec3(I.x + a.x * h * 0.55, h * 0.7 + a.y * h * 0.2, I.y + a.z * h * 0.55);
   return vec3(I.x + a.x * h * 0.38, h * 0.62 + a.y * h * 0.33, I.y + a.z * h * 0.38); }
-`;
+
+// base height (2026-11-01, MSCP roof garden trees): aInst.w = floor(base m) + colour hash
+vec3 treePos(vec3 a, float part, vec4 I) { float by = floor(I.w); vec3 r = treePos0(a, part, vec4(I.xyz, I.w - by)); r.y += by; return r; }`;
 const GL_TREE_VS = GL_HDR + GL_TREE_POS + `invariant gl_Position; in vec3 aPos; in float aPart; in vec4 aInst; uniform float uTime; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist;
 // aPart ≥ 2: leaf card (less blocky 2026-10-31): camera-facing quad centred on the canopy surface, corner = aPart − 2 (u + 2v); sway on leaves/cards (uTime moves with ▶ Animate)
-void main() { float g = aInst.w; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
+void main() { float by = floor(aInst.w), g = aInst.w - by; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
   if (cd) { float sp = treeSp(aInst), an0 = fract(sin(dot(aPos, vec3(12.9898, 78.233, 37.719))) * 43758.55), an = an0 * 6.2832 + 0.12 * sin(uTime * 2.7 + an0 * 40.0), s = aInst.z * (sp > 1.5 && sp < 2.5 ? 0.06 : sp > 2.5 ? 0.16 : 0.1);
     vec2 q = vec2(cu * 2.0 - 1.0, cv * 2.0 - 1.0); q = vec2(q.x * cos(an) - q.y * sin(an), q.x * sin(an) + q.y * cos(an)); p += (uR * q.x + uU * q.y) * s; cid = floor(an0 * 50.0); }
-  if (aPart < 0.5 || cd) { float h = max(aInst.z, 1.0), sw = smoothstep(0.25, 1.0, p.y / h) * h * 0.01; p.xz += sw * vec2(sin(uTime * 1.6 + aInst.x * 0.05 + p.y * 0.3), cos(uTime * 1.25 + aInst.y * 0.05 + p.y * 0.2)); }
+  if (aPart < 0.5 || cd) { float h = max(aInst.z, 1.0), sw = smoothstep(0.25, 1.0, (p.y - by) / h) * h * 0.01; p.xz += sw * vec2(sin(uTime * 1.6 + aInst.x * 0.05 + p.y * 0.3), cos(uTime * 1.25 + aInst.y * 0.05 + p.y * 0.2)); }
   if (aPart > 0.5 && !cd) { vCol = vec3(0.3, 0.22, 0.15); vNor = vec3(aPos.x, 0.0, aPos.z); }
   else { float g2 = fract(g * 7.31 + 0.17), sp = treeSp(aInst); vCol = vec3(50.0 + g * 34.0 + g2 * 14.0, 94.0 + g * 36.0, 42.0 + g * 16.0) / 255.0;
     vCol *= sp > 2.5 ? vec3(0.9, 1.0, 0.9) : sp > 1.5 ? vec3(1.25, 1.12, 0.85) : sp > 0.5 ? vec3(1.12, 1.08, 0.9) : vec3(0.92, 0.96, 0.98); vNor = normalize(treeLeaf(aPos, aInst) + vec3(0.0, 0.45, 0.0)); }
@@ -4594,6 +4597,19 @@ function mscpDeckGeo(A, B) {   // raw quads on the decks (2026-11-01): one-way a
       const px = 0.085, txt = String(j + 1), w = (txt.length * 6 - 1) * px, u0 = -w / 2; mscpGlyphs(txt, (a0, a1, v0, v1) => { const G = (u, v) => { const p = F(u, v); return [p[0] + n[0] * 0.004, p[1], p[2] + n[2] * 0.004]; };
         A.quad(G(u0 + a0 * px, 1.88 - v1 * px), G(u0 + a1 * px, 1.88 - v1 * px), G(u0 + a1 * px, 1.88 - v0 * px), G(u0 + a0 * px, 1.88 - v0 * px), n, wht, cv, cv, cv, cv); }); } }
 }
+// MSCP roof garden planting (2026-11-01 TY "trees and objects at the top of the carpark very boxy"): shrubs/small trees as real tree instances (leaf cards, sway, shadows) on the roof slab
+// = TREES entries with base MSCP_TOP − 1 in the integer part of g; returns [x, z (world), h, base]; replaces the 10-segment domes + box trunks + box hedges
+function mscpRoofPlants() { const B = SITE_BLOCKS.find(b => b.name.startsWith('MSCP')); if (!B) return []; const [bx0, bz0, bx1, bz1] = B.boxes[0], RG = MSCP_RG, R = MSCP_TOP - 1, out = [], W = (x, z, h) => { const [X, Z] = blkToWorld(B, x, z); out.push([X, Z, h, R]); };
+  const plant = (x, z, m) => { if (mscpChF(x, z) > -0.6 - m || Math.abs(x) > bx1 - 0.6 - m || Math.abs(z) > bz1 - 0.6 - m || mscpGarden0(x, z)) return false; const G2 = MSCP_GARDEN.well;
+    if (x > G2[0] - 0.4 - m && x < G2[2] + 0.4 + m && z > G2[1] - 0.4 - m && z < G2[3] + 0.4 + m) return false; for (const [dx, dz] of [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]]) { const u = x + dx, v = z + dz; if (mscpRoofWalk(u, v) || (u > RG.allot[0] && u < RG.allot[2] && v > RG.allot[1] && v < RG.allot[3])) return false; } return true; };
+  for (let x = bx0 + 0.8; x < bx1 - 0.5; x += 1.6) for (let z = bz0 + 0.8; z < bz1 - 0.5; z += 1.6) { const r = hash01(x, z, 21), jx = x + (hash01(z, x, 3) - 0.5) * 1.0, jz = z + (hash01(x, z, 4) - 0.5) * 1.0; if (r < 0.1) continue;
+    const tree = r > 0.88, h = tree ? 4.2 + 2.4 * hash01(jz, jx, 9) : 0.9 + 1.3 * hash01(jz, jx, 9); if (!plant(jx, jz, tree ? 1.0 : h * 0.45)) continue; W(jx, jz, h); }
+  RG.beds.forEach(([a, b, e, f]) => { const lx = e - a > f - b, L = lx ? e - a : f - b, n = Math.max(1, Math.round(L / 1.3));   // plaza beds: tree every 2nd slot, shrubs between
+    for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = lx ? a + L * t : (a + e) / 2, z = lx ? (b + f) / 2 : b + L * t; W(x, z, i % 4 === 1 ? 4.6 + 1.2 * hash01(z, x, 9) : 0.9 + 0.5 * hash01(x, z, 5)); } });
+  RG.hedge.forEach(([a, b, e, f]) => { const lx = e - a > f - b, L = lx ? e - a : f - b; for (let t = 0.5; t < L; t += 0.9) W(lx ? a + t : (a + e) / 2, lx ? (b + f) / 2 : b + t, 1.5 + 0.3 * hash01(t, a, 7)); });
+  { const [x0, z0, x1, z1] = RG.allot, nc = 9, nr = 6, cw = (x1 - x0) / nc, rh = (z1 - z0) / nr;   // vegetables in the allotment beds
+    for (let i = 0; i < nc; i++) for (let j = 0; j < nr; j++) { if (hash01(j, i, 33) < 0.25) continue; const a = x0 + i * cw + 0.25, b = z0 + j * rh + 0.2, e = a + cw - 0.5, f = b + rh - 0.4; for (let k = 0; k < 3; k++) W(a + (e - a) * (k + 0.5) / 3, (b + f) / 2, 0.7 + 0.3 * hash01(i, j + k, 35)); } }
+  return out; }
 function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 1): lawn around the light well, community lawn, allotments, fitness pad + stations, shrub mounds + small trees (domes), 3 shelters (pyramid roof on 4 posts)
   const B = P.B, G = MSCP_GARDEN, up = [0, 1, 0], z4 = [0, 0, 0, 0], [bx0, bz0, bx1, bz1] = B.boxes[0], R = MSCP_TOP - 1, c = v => v.map(q => q / 255), Wp = (a, y, b) => { const [X, Z] = blkToWorld(B, a, b); return [X, y, Z]; };
   mscpRampGeo(A, B); mscpDeckGeo(A, B);
@@ -4605,12 +4621,14 @@ function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 
   const dome = (lx, lz, y0, r, h, col) => { const S = 10, Rg = 4, k = c(col), pt = (i, j) => { const a = (i / S) * 2 * Math.PI, f = (j / Rg) * Math.PI / 2, w = 1 + 0.12 * Math.sin(a * 3 + lx), ca = Math.cos(a), sa = Math.sin(a);
       const p = Wp(lx + r * w * Math.cos(f) * ca, y0 + h * Math.sin(f), lz + r * w * Math.cos(f) * sa), n0 = nW(Math.cos(f) * ca / r, Math.cos(f) * sa / r), ny = Math.sin(f) / h, l = Math.hypot(n0[0], ny, n0[2]) || 1; return [p, [n0[0] / l, ny / l, n0[2] / l]]; };
     for (let j = 0; j < Rg; j++) for (let i = 0; i < S; i++) { const a = pt(i, j), b2 = pt(i + 1, j), d = pt(i + 1, j + 1), e = pt(i, j + 1); A.v(a[0], a[1], k, z4); A.v(b2[0], b2[1], k, z4); A.v(d[0], d[1], k, z4); if (j < Rg - 1) { A.v(a[0], a[1], k, z4); A.v(d[0], d[1], k, z4); A.v(e[0], e[1], k, z4); } } };
+  const cy = (lx, lz, y0, y1, r, col, N = 10) => { const k = c(col); for (let i = 0; i < N; i++) { const t0 = i * 2 * Math.PI / N, t1 = t0 + 2 * Math.PI / N, tm = (t0 + t1) / 2, P0 = (t, y) => Wp(lx + r * Math.cos(t), y, lz + r * Math.sin(t)); A.quad(P0(t0, y0), P0(t1, y0), P0(t1, y1), P0(t0, y1), nW(Math.cos(tm), Math.sin(tm)), k, z4, z4, z4, z4); } };   // round post
+  const hz = (lx, y, z0, z1, r, col, N = 8) => { const k = c(col); for (let i = 0; i < N; i++) { const t0 = i * 2 * Math.PI / N, t1 = t0 + 2 * Math.PI / N, tm = (t0 + t1) / 2, P0 = (t, z) => Wp(lx + r * Math.cos(t), y + r * Math.sin(t), z), n = nW(Math.cos(tm), 0); A.quad(P0(t0, z0), P0(t1, z0), P0(t1, z1), P0(t0, z1), [n[0], Math.sin(tm), n[2]], k, z4, z4, z4, z4); } };   // round bar along local z
   const RG = MSCP_RG, PV = [214, 206, 190], KB = [176, 172, 164], GN = [92, 128, 64];
   const poly = (pl, col, dy) => { const p = mscpClip(pl, 0.3).map(([a, b]) => Wp(a, R + dy, b)); for (let i = 1; i + 1 < p.length; i++) { A.v(p[0], up, c(col), z4); A.v(p[i], up, c(col), z4); A.v(p[i + 1], up, c(col), z4); } };
   const rq = (r, col, dy) => poly([[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]], col, dy);
   rq([bx0, bz0, bx1, bz1], [74, 98, 52], 0.03);   // planting soil / ground cover under everything
   RG.paved.forEach(r => rq(r, PV, 0.06)); RG.beds.forEach(r => { rq(r, [74, 98, 52], 0.07); [[r[0], r[1], r[2], r[1] + 0.15], [r[0], r[3] - 0.15, r[2], r[3]], [r[0], r[1], r[0] + 0.15, r[3]], [r[2] - 0.15, r[1], r[2], r[3]]].forEach(e => bx(...e, R, R + 0.2, KB)); });
-  RG.hedge.forEach(([a, b, e, f]) => { bx(a, b, e, f, R, R + 0.35, KB); bx(a + 0.1, b + 0.1, e - 0.1, f - 0.1, R + 0.35, R + 1.0, [62, 104, 48]); });
+  RG.hedge.forEach(([a, b, e, f]) => { bx(a, b, e, f, R, R + 0.35, KB); rq([a + 0.1, b + 0.1, e - 0.1, f - 0.1], [74, 98, 52], 0.36); });   // planter box; shrubs = tree instances (mscpRoofPlants)
   { const P = RG.path, S = []; for (let i = 0; i + 1 < P.length; i++) for (let k = 0; k < 4; k++) { const t = k / 4, p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];   // winding path: Catmull-Rom ribbon + kerbs
       S.push([0, 1].map(q => 0.5 * (2 * p1[q] + (-p0[q] + p2[q]) * t + (2 * p0[q] - 5 * p1[q] + 4 * p2[q] - p3[q]) * t * t + (-p0[q] + 3 * p1[q] - 3 * p2[q] + p3[q]) * t * t * t))); } S.push(P[P.length - 1]);
     for (let i = 0; i + 1 < S.length; i++) { const [ax, az] = S[i], [bx2, bz2] = S[i + 1], l = Math.hypot(bx2 - ax, bz2 - az) || 1, nx = -(bz2 - az) / l, nz = (bx2 - ax) / l, w = RG.pw + 0.05;
@@ -4626,18 +4644,14 @@ function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 
     for (let i = 0; i <= N; i++) { const t = Math.PI * i / N, d = 1 - 0.18 * Math.exp(-((t - 1.9) ** 2) / 0.12); pl.push([cx + rx * Math.cos(t) * (i === 0 || i === N ? 0.98 : 1), cz - 0.2 + rz * Math.sin(t) * d]); }
     poly(pl, [88, 150, 196], 0.08); const pc = [[92, 98, 104], [236, 186, 40], [60, 110, 170]];
     for (let i = 0; i < 5; i++) { const x = cx - 4.6 + i * 2.3, z = cz + 1.0 + 1.1 * Math.sin(i * 1.3), k = pc[i % 3];
-      bx(x - 0.05, z - 0.6, x + 0.05, z - 0.5, R, R + 1.5, k); bx(x - 0.05, z + 0.5, x + 0.05, z + 0.6, R, R + 1.5, k); bx(x - 0.04, z - 0.6, x + 0.04, z + 0.6, R + 1.42, R + 1.5, k); if (i % 2) bx(x - 0.3, z - 0.25, x + 0.3, z + 0.25, R, R + 0.45, k); } }
-  const plant = (x, z, m) => { if (mscpChF(x, z) > -0.6 - m || Math.abs(x) > bx1 - 0.6 - m || Math.abs(z) > bz1 - 0.6 - m || mscpGarden0(x, z)) return false; const G2 = MSCP_GARDEN.well;   // planting bed test with margin m
-    if (x > G2[0] - 0.4 - m && x < G2[2] + 0.4 + m && z > G2[1] - 0.4 - m && z < G2[3] + 0.4 + m) return false; for (const [dx, dz] of [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]]) { const u = x + dx, v = z + dz; if (mscpRoofWalk(u, v) || (u > RG.allot[0] && u < RG.allot[2] && v > RG.allot[1] && v < RG.allot[3])) return false; } return true; };
-  for (let x = bx0 + 0.8; x < bx1 - 0.5; x += 2.0) for (let z = bz0 + 0.8; z < bz1 - 0.5; z += 2.0) { const r = hash01(x, z, 21), jx = x + (hash01(z, x, 3) - 0.5) * 1.2, jz = z + (hash01(x, z, 4) - 0.5) * 1.2; if (r < 0.12) continue;   // dense shrubs + small trees
-    const tree = r > 0.84, rad = tree ? 1.6 + 0.8 * hash01(jz, jx, 9) : 0.8 + 0.5 * hash01(jz, jx, 9); if (!plant(jx, jz, tree ? 0.9 : rad * 0.6)) continue;
-    const g = 0.8 + 0.35 * hash01(jx, jz, 7), col = hash01(jx, jz, 11) < 0.2 ? [96 * g, 120 * g, 52 * g] : [58 * g, 104 * g, 46 * g];
-    if (tree) { bx(jx - 0.12, jz - 0.12, jx + 0.12, jz + 0.12, R, R + 2.0, [96, 80, 62]); dome(jx, jz, R + 1.5, rad, 2.2, col); } else dome(jx, jz, R, rad, 0.8 + 0.6 * hash01(jx, jz, 13), col); }
-  RG.beds.forEach(([a, b, e, f]) => { const lx = e - a > f - b, L = lx ? e - a : f - b, n = Math.max(1, Math.round(L / 2.6));   // plaza beds: tree row + shrubs between
-    for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = lx ? a + L * t : (a + e) / 2, z = lx ? (b + f) / 2 : b + L * t, g = 0.8 + 0.35 * hash01(x, z, 7), col = [58 * g, 104 * g, 46 * g];
-      if (i % 2 === 0) { bx(x - 0.12, z - 0.12, x + 0.12, z + 0.12, R, R + 2.2, [96, 80, 62]); dome(x, z, R + 1.7, 1.5 + 0.5 * hash01(z, x, 9), 2.0, col); } else dome(x, z, R + 0.1, 0.8, 0.9, col); } });
+      cy(x, z - 0.55, R, R + 1.55, 0.05, k); cy(x, z + 0.55, R, R + 1.55, 0.05, k); hz(x, R + 1.48, z - 0.55, z + 0.55, 0.03, [200, 202, 206]); cy(x, z - 0.55, R + 1.55, R + 1.6, 0.06, k); cy(x, z + 0.55, R + 1.55, R + 1.6, 0.06, k);   // round posts, steel bar, caps
+      if (i % 2) { cy(x - 0.22, z, R, R + 0.42, 0.04, [92, 98, 104]); cy(x + 0.22, z, R, R + 0.42, 0.04, [92, 98, 104]); bx(x - 0.32, z - 0.22, x + 0.32, z + 0.22, R + 0.42, R + 0.48, k); }   // seat on 2 legs
+      else { hz(x, R + 0.9, z - 0.5, z + 0.5, 0.025, [200, 202, 206]); for (const s2 of [-1, 1]) { cy(x + 0.18 * s2, z, R + 0.2, R + 0.24, 0.12, [40, 42, 46], 12); } } } }   // twister / pedals
+  // shrubs / small trees / bed trees / hedges / vegetables: tree instances (mscpRoofPlants in generateTrees)
   for (const [nm, a, b, cc, d, dh] of MSCP_ROOF) { if (nm !== 'shelter') continue; const y = R + dh - 0.4, k = c([150, 152, 156]);
-    for (const [px, pz] of [[a + 0.2, b + 0.2], [cc - 0.2, b + 0.2], [cc - 0.2, d - 0.2], [a + 0.2, d - 0.2]]) bx(px - 0.08, pz - 0.08, px + 0.08, pz + 0.08, R, y, [80, 84, 90]);
+    for (const [px, pz] of [[a + 0.2, b + 0.2], [cc - 0.2, b + 0.2], [cc - 0.2, d - 0.2], [a + 0.2, d - 0.2]]) { cy(px, pz, R, y, 0.09, [80, 84, 90]); cy(px, pz, R, R + 0.25, 0.14, [150, 150, 146]); }   // round steel posts on plinths
+    bx(a - 0.3, b - 0.3, cc + 0.3, b - 0.15, y - 0.25, y, [236, 236, 232]); bx(a - 0.3, d + 0.15, cc + 0.3, d + 0.3, y - 0.25, y, [236, 236, 232]); bx(a - 0.3, b - 0.15, a - 0.15, d + 0.15, y - 0.25, y, [236, 236, 232]); bx(cc + 0.15, b - 0.15, cc + 0.3, d + 0.15, y - 0.25, y, [236, 236, 232]);   // white fascia
+    { const ck = [a + 0.6, b + 0.6, cc - 0.6, d - 0.6]; cy((a + cc) / 2 - 1.15, (b + d) / 2, R, R + 0.42, 0.25, [196, 192, 184], 14); cy((a + cc) / 2 + 1.15, (b + d) / 2, R, R + 0.42, 0.25, [196, 192, 184], 14); bx(ck[0] + 0.6, (b + d) / 2 - 0.35, ck[2] - 0.6, (b + d) / 2 + 0.35, R + 0.7, R + 0.76, [150, 120, 86]); cy((a + cc) / 2, (b + d) / 2, R, R + 0.7, 0.08, [92, 98, 104]); }   // table + 2 stools
     const e = [[a - 0.3, b - 0.3], [cc + 0.3, b - 0.3], [cc + 0.3, d + 0.3], [a - 0.3, d + 0.3]].map(([p, q]) => Wp(p, y, q)), top = Wp((a + cc) / 2, y + 1.1, (b + d) / 2);
     for (let i = 0; i < 4; i++) { const p = e[i], q = e[(i + 1) % 4], u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], v = [top[0] - p[0], top[1] - p[1], top[2] - p[2]], n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], l = Math.hypot(...n) || 1, nn = n.map(t => t / l * Math.sign(n[1] || 1));
       A.v(p, nn, k, z4); A.v(q, nn, k, z4); A.v(top, nn, k, z4); A.v(q, [0, -1, 0], k.map(t => t * 0.8), z4); A.v(p, [0, -1, 0], k.map(t => t * 0.8), z4); A.v(top.map((t, j) => j === 1 ? y : t), [0, -1, 0], k.map(t => t * 0.8), z4); } }
@@ -4754,7 +4768,7 @@ function gpuTreeInst() {   // instance buffers from TREES; rebuilt when TREES ch
   const gl = GPU.gl, nr = [], fr = []; for (let i = 0; i < TREES.n; i++) (Math.hypot(TREES.x[i] - UNIT134[0], TREES.z[i] - UNIT134[1]) < 900 ? nr : fr).push(TREES.x[i], TREES.z[i], TREES.h[i], TREES.g[i]);   // LOD: rounded canopy ≤900 m of #134, 20-face beyond
   const tile = (I, c) => { const m = new Map(); for (let i = 0; i < I.length; i += 4) { const k = Math.floor(I[i + 1] / c) * 1e5 + Math.floor(I[i] / c); let g = m.get(k); if (!g) m.set(k, g = []); g.push(i); }   // instances bucketed per cell (culled per pass, as the city tiles)
     const o = new Float32Array(I.length), T = []; let n = 0; for (const k of [...m.keys()].sort((p, q) => p - q)) { const g = m.get(k), b = [Infinity, -Infinity, 0, -Infinity, Infinity, -Infinity], s0 = n;
-      for (const i of g) { const r = I[i + 2] * 0.5 + 1; o.set(I.subarray ? I.subarray(i, i + 4) : I.slice(i, i + 4), n * 4); n++; b[0] = Math.min(b[0], I[i] - r); b[1] = Math.max(b[1], I[i] + r); b[3] = Math.max(b[3], I[i + 2] * 1.05 + 1); b[4] = Math.min(b[4], I[i + 1] - r); b[5] = Math.max(b[5], I[i + 1] + r); }
+      for (const i of g) { const r = I[i + 2] * 0.5 + 1; o.set(I.subarray ? I.subarray(i, i + 4) : I.slice(i, i + 4), n * 4); n++; b[0] = Math.min(b[0], I[i] - r); b[1] = Math.max(b[1], I[i] + r); b[3] = Math.max(b[3], I[i + 2] * 1.05 + 1 + Math.floor(I[i + 3])); b[4] = Math.min(b[4], I[i + 1] - r); b[5] = Math.max(b[5], I[i + 1] + r); }
       T.push([s0, n - s0, ...b]); } return [o, T]; };
   const [na, nT] = tile(nr, 150), [fa, fT] = tile(fr, 600); GPU.treeT = nT; GPU.treeTF = fT;
   if (GPU.treeInst) { gl.deleteBuffer(GPU.treeInst); gl.deleteBuffer(GPU.treeInstF); } GPU.treeInst = gpuBuf(na); GPU.treeInstF = gpuBuf(fa); GPU.treeNn = nr.length / 4; GPU.treeNf = fr.length / 4; GPU.treeSrc = TREES.x; GPU.treeCnt = TREES.n; }
