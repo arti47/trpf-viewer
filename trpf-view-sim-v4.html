@@ -4811,12 +4811,14 @@ function gpuEnv(pr, env, unlit) {
   const L = GPU.L; gl.uniform1f(u.uShadow, L && !unlit ? 1 : 0); if (L) { gl.uniform3f(u.uLr, ...L.r); gl.uniform3f(u.uLu, ...L.u); gl.uniform3f(u.uLf, ...L.f); gl.uniform3f(u.uLc0, ...L.c[0]); gl.uniform3f(u.uLc1, ...L.c[1]); gl.uniform4f(u.uLs, L.s[0][0], L.s[0][1], L.s[1][0], L.s[1][1]); }
   gl.uniform1i(u.uSm0, 1); gl.uniform1i(u.uSm1, 2); gl.uniform1i(u.uSmI, 3); if (u.uSmIR) { gl.uniform1i(u.uSmIR, 6); gl.uniform1f(u.uBounce, 0); gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); if (!GPU.rawS) { const S = GPU.rawS = gl.createSampler(); gl.samplerParameteri(S, gl.TEXTURE_COMPARE_MODE, gl.NONE); gl.samplerParameteri(S, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.samplerParameteri(S, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.samplerParameteri(S, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.samplerParameteri(S, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); } gl.bindSampler(6, GPU.rawS); } gl.uniform1i(u.uDep, 4); gl.uniform1f(u.uAO, 0); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.uniform1f(u.uInSun, 0); if (u.uNL) gl.uniform1i(u.uNL, 0); gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, GPU.smI.tx); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[0].tx); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, GPU.sm[1].tx); gl.activeTexture(gl.TEXTURE0);
 }
+// shadow-map centre snapped to whole texels in light space (2048² over ±s): a recentred map keeps the same texel grid, so shadow edges don't crawl/jump when it moves
+function smSnap(c, r, u, s) { const t = 2 * s / 2048, a = c[0] * r[0] + c[1] * r[1] + c[2] * r[2], b = c[0] * u[0] + c[1] * u[1] + c[2] * u[2], da = Math.round(a / t) * t - a, db = Math.round(b / t) * t - b; return [c[0] + r[0] * da + u[0] * db, c[1] + r[1] * da + u[1] * db, c[2] + r[2] * da + u[2] * db]; }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
 function gpuShadows(env) {
   const s = env.sunVec; if (env.direct <= 0.02 || s[1] < 0.02) { GPU.L = null; return; }
   const own = ownUnitTest(), key = [s.map(v => v.toFixed(4)), state.vx.toFixed(1), state.vz.toFixed(1), WORLD_VER, !!own, state.spot, TREES.n, CMP.on].join('|'); if (GPU.skey === key && GPU.L) return; GPU.skey = key;
   const f = [-s[0], -s[1], -s[2]], up = Math.abs(s[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0], cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nz = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
-  const r = nz(cr(f, up)), u = cr(r, f), L = GPU.L = { r, u, f, c: [[state.vx, 40, state.vz], [state.vx, 0, state.vz]], s: [[350, 700], [3200, 4000]] }, gl = GPU.gl;
+  const r = nz(cr(f, up)), u = cr(r, f), sc = [[350, 700], [3200, 4000]], L = GPU.L = { r, u, f, c: [smSnap([state.vx, 40, state.vz], r, u, sc[0][0]), smSnap([state.vx, 0, state.vz], r, u, sc[1][0])], s: sc }, gl = GPU.gl;   // centres snapped to whole texels: moving to another spot doesn't re-raster shadow edges (TY 2026-11-01: light shifts while walking)
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
@@ -4964,9 +4966,10 @@ function sunBounce() { const sp = roomSpot(); if (!sp) return 0; const k = `${sp
   sunBounce.k = k; return (sunBounce.v = v); }
 function gpuShadowInterior() {
   // map centred on the unit; in the corridor it follows the walk eye (snapped to 6 m) so the far corridor / slots stay inside the ±12 m map (TY 2026-10-29: blotchy floor beyond it)
-  const wk = state.walk, far = wk && state.spot === 'corr' && wk.X > 14, [cX, cY] = far ? [Math.round(wk.X / 6) * 6, 7] : [6.5, 4.5], ls = far ? [24, 40] : [12, 30];
+  // corridor config for the whole corridor (was X > 14: map size/resolution flipped mid-corridor) and centre snapped to whole texels (6 m recentres kept the texel grid) → no light jumps while walking (TY 2026-11-01)
+  const wk = state.walk, far = wk && state.spot === 'corr', [cX, cY] = far ? [Math.round(wk.X / 6) * 6, 7] : [6.5, 4.5], ls = far ? [24, 40] : [12, 30];
   const L = GPU.L; if (!L || !GPU.inN) return false; const key = GPU.ikey + '|' + cX + '|' + L.f.map(v => v.toFixed(4)).join(','); if (GPU.iskey === key) return true; GPU.iskey = key;
-  const gl = GPU.gl, pr = GPU.sh, c = GPU.W(cX, cY, 1.3); GPU.LI = { c, s: ls };
+  const gl = GPU.gl, pr = GPU.sh, c = smSnap(GPU.W(cX, cY, 1.3), L.r, L.u, ls[0]); GPU.LI = { c, s: ls };
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.5, 2);
   gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.smI.fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
   gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...L.r); gl.uniform3f(pr.u.uLu, ...L.u); gl.uniform3f(pr.u.uLf, ...L.f); gl.uniform2f(pr.u.uLs, ...ls); gpuAttrib(pr, GPU.inBuf);
@@ -5178,7 +5181,9 @@ function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { const t0 = per
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   const lo = PIN_VIS.lo && cv === perspectiveCanvas && !(GPU.fullMs < 50) ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1; GPU.tgt = [Math.round(cv.width * lo), Math.round(cv.height * lo)];   // GL canvas size for this frame (the half-res sky goes into a corner of it: no realloc per frame)
-  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); const gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); bloom = !(PIN_VIS.fast && cv === perspectiveCanvas) && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
+  // post FX (bloom, sun shafts, flare) also on moving frames when the device is fast (full render < 50 ms): they used to switch off while walking/turning and pop back 250 ms after stopping (TY 2026-11-01 "light shifts awkwardly"); vignette + grain on every frame
+  const fx = !(PIN_VIS.fast && cv === perspectiveCanvas) || GPU.fullMs < 50;
+  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); const gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); BLOOM.flare = null; bloom = fx && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [];
   if (state.showLabels) {
@@ -5221,10 +5226,10 @@ function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscree
       let pinsDone = false; if (gpuRenderInterior(cam, env, X.kIn)) { const gl = GPU.gl, kx = GPU.cv.width / w, ky = GPU.cv.height / h, px = new Uint8Array(4);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); const vis = pt => { gl.readPixels(Math.round(pt.x * kx), Math.round(GPU.cv.height - pt.y * ky), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return px[3] < 140; };   // outside seen through glass / openings
         // readPixels stalls the GPU pipeline: only on full renders; fast frames (drag/walk/animate) reuse the last result per pin
-        BLOOM.inter = true; if (BLOOM.flare && !(PIN_VIS.fast && cv === perspectiveCanvas)) BLOOM.fcov = !vis({ x: BLOOM.flare.x, y: BLOOM.flare.y }); const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
+        BLOOM.inter = true; if (BLOOM.flare) BLOOM.fcov = !vis({ x: BLOOM.flare.x, y: BLOOM.flare.y }); const fast = PIN_VIS.fast && cv === perspectiveCanvas, ok = pinPts.filter(q => { if (fast) return PIN_VIS.m.get(q.name) !== false; const v = vis(q.pt); if (cv === perspectiveCanvas) PIN_VIS.m.set(q.name, v); return v; }); ctx.drawImage(GPU.cv, 0, 0, w, h); if (GPU.hv && GPU.hv.blade) handBloom(ctx, GPU.hv); pinPts.length = 0; pinPts.push(...ok); drawPins(); pinsDone = true; }
       if (!pinsDone) drawPins(); } }
   else drawPins();
-  if (gpu && !(PIN_VIS.fast && cv === perspectiveCanvas)) bloomApply(ctx, w, h, bloom);
+  if (gpu) bloomApply(ctx, w, h, bloom);
   if (state.showBalcony && !curSpot()) {
     const pw = Math.max(10, w * 0.015); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, pw, h); ctx.fillRect(w - pw, 0, pw, h);
     // W1 window: 550mm parapet, eye 1.55m above floor, standing 0.5m behind the glass → sight cut-off at −atan(1.0/0.5) ≈ −63.4°.
