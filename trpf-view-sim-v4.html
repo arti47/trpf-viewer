@@ -3911,6 +3911,7 @@ const GPU = { ok: null, noZ: /[?&]noz/.test(location.search) };   // ?noz: no Z-
 // Linear lighting + tone map (realism 2026-10-31, L1): albedos/colours are sRGB → toLin; lighting is summed in linear 'scene' units (SW = sun/sky scale);
 // output = sRGB(ACES(EXPO·x)). untone() is the exact inverse, so display-space colours (2D sky horizon, fog, glass sky reflections) come out unchanged.
 const GL_TONE = `const float EXPO = 0.7, SUNK = 2.3;
+const vec3 APK = vec3(0.86, 1.0, 1.16);   // aerial perspective (open-world pass 2026-11-01): per-channel haze extinction (blue scatters most) → distant objects fade bluish
 vec3 toLin(vec3 c) { return pow(max(c, 0.0), vec3(2.2)); }
 vec3 aces(vec3 x) { return clamp(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 tone(vec3 x) { return pow(aces(max(x, 0.0) * EXPO), vec3(1.0 / 2.2)); }
@@ -3925,6 +3926,25 @@ float cvn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 float cfbm(vec2 q) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * cvn(q); q = mat2(1.6, 1.2, -1.2, 1.6) * q + vec2(17.1, 9.3); a *= 0.5; } return s; }
 float cloudD(vec2 xz) { if (uCld.x > 0.99) return 0.0; float n = cfbm((xz + uCld.zw) / 2400.0); return smoothstep(uCld.x - 0.03, uCld.x + 0.12, n); }
 float cloudSh(vec3 p, vec3 sun) { if (uCld.x > 0.99 || sun.y < 0.03) return 1.0; return 1.0 - 0.82 * cloudD(p.xz + sun.xz / sun.y * (CLH - p.y)); }
+`;
+// Near-field ground materials (open-world pass 2026-11-01, TY "Elder Scrolls feel"; visual only, estimates): w = ground point (m), px = ground m per pixel.
+// Lawn: clumps, dry/yellow patches, bare soil, blade-scale streaks; paving: 300 mm offset concrete pavers (joints, per-paver tone, stains); asphalt: aggregate speckle + patching.
+// Faded out by pixel footprint (no shimmer from the window). Needs h3 / vn2 from the including shader.
+const GL_GDET = `
+vec3 lawnAlb(vec3 c, vec2 w, float px) { float k0 = 1.0 - smoothstep(0.5, 3.0, px), k1 = 1.0 - smoothstep(0.015, 0.09, px); if (k0 <= 0.0) return c;
+  c *= mix(1.0, 0.8 + 0.4 * vn2(w * 0.45), k0); c = mix(c, c * vec3(1.2, 1.08, 0.6), k0 * 0.4 * smoothstep(0.58, 0.85, vn2(w * 0.13 + 4.0)));
+  c = mix(c, vec3(0.31, 0.25, 0.17), k0 * 0.3 * smoothstep(0.72, 0.9, vn2(w * 1.6 + 9.0)));
+  if (k1 > 0.0) { vec2 r = mat2(0.8, 0.6, -0.6, 0.8) * w; float b = 0.5 * vn2(vec2(r.x * 60.0, r.y * 9.0)) + 0.5 * vn2(vec2(r.y * 52.0, r.x * 11.0) + 3.0); c *= mix(1.0, 0.62 + 0.7 * b, k1); }
+  return c; }
+vec3 pavAlb(vec3 c, vec2 w, float px) { float k0 = 1.0 - smoothstep(0.6, 4.0, px), k = 1.0 - smoothstep(0.02, 0.1, px); if (k0 <= 0.0) return c;
+  c *= 1.0 - k0 * (0.1 * smoothstep(0.55, 0.9, vn2(w * 0.35)) + 0.05 * (vn2(w * 2.3 + 5.0) - 0.5));
+  if (k > 0.0) { vec2 q = w / 0.3; q.x += 0.5 * mod(floor(q.y), 2.0); vec2 id = floor(q), f = fract(q); float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) * 0.3 / max(px, 1e-4);
+    c *= mix(1.0, (0.93 + 0.14 * h3(vec3(id, 2.0))) * mix(0.6, 1.0, smoothstep(0.4, 1.6, e)) * (0.96 + 0.08 * h3(vec3(floor(w * 60.0), 4.0))), k); }
+  return c; }
+vec3 asphAlb(vec3 c, vec2 w, float px) { float k0 = 1.0 - smoothstep(0.8, 5.0, px), k = 1.0 - smoothstep(0.012, 0.06, px); if (k0 <= 0.0) return c;
+  c *= 1.0 + k0 * (0.14 * (vn2(w * 0.25) - 0.5) - 0.12 * smoothstep(0.62, 0.8, vn2(w * 0.07 + 2.0)));
+  if (k > 0.0) { float a = h3(vec3(floor(w * 45.0), 1.0)); c *= mix(1.0, a > 0.93 ? 1.55 : a < 0.12 ? 0.7 : 0.94 + 0.12 * a, k); }
+  return c; }
 `;
 const GL_HDR = `#version 300 es
 precision highp float;
@@ -3949,6 +3969,7 @@ float h3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fra
 float vn3(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);   // value noise 0..1
   return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y), mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
 float vn2(vec2 p) { return vn3(vec3(p, 0.5)); }
+` + GL_GDET + `
 // Interior mapping (realism 2026-10-31, M4): a fake room box behind each window cell (f = position in the cell 0..1, sz = cell m, depth 3–6 m by hash);
 // the view ray hits back wall / side walls / floor / ceiling; day = dim sky-lit room falling off with depth, night = warm lamp light if the cell is on. Linear radiance.
 vec3 roomIM(vec2 f, vec2 sz, vec3 v, vec3 n, float sd, float on) {
@@ -4096,6 +4117,9 @@ void main() {
       alb *= 1.0 - (0.1 * smoothstep(0.45, 0.95, st) * (1.0 - smoothstep(0.4, 2.5, fw)) + 0.05 * (pn - 0.5) * (1.0 - smoothstep(3.0, 12.0, fw))) * (1.0 - gm); }
     else { float n1 = fw < 14.0 ? vn2(tq * 0.18) : 0.5, n2 = fw < 1.4 ? vn2(tq * 1.7 + 9.0) : 0.5, g0 = vWorld.y < 0.6 ? 1.0 : 0.0;
       alb *= 1.0 - (0.12 * (n1 - 0.5) * (1.0 - smoothstep(4.0, 14.0, fw)) + (0.06 + 0.06 * g0) * (n2 - 0.5) * (1.0 - smoothstep(0.4, 1.4, fw))); } }
+  if (uUnlit < 0.5 && vTex.w > 49.5 && vTex.w < 52.5 && mode > -0.5 && mode < 0.1 && vDist < 600.0) { float gpx = length(fwidth(vWorld.xz)); alb = vTex.w < 50.5 ? lawnAlb(alb, vWorld.xz, gpx) : vTex.w < 51.5 ? pavAlb(alb, vWorld.xz, gpx) : asphAlb(alb, vWorld.xz, gpx); }   /* estate lawn / paving / site roads: near-field materials (GL_GDET) */
+  if (uUnlit < 0.5 && vDist < 45.0 && mode > -0.5 && mode < 9.5 && abs(nrm.y) < 0.3 && gm < 0.5) { float k = 1.0 - smoothstep(15.0, 45.0, vDist); vec3 q = vWorld * 14.0; float n0 = vn3(q);   /* close-range wall relief: render/concrete micro-normal (~7 cm) + pores (open-world pass 2026-11-01) */
+    vec3 gq = vec3(vn3(q + vec3(0.5, 0.0, 0.0)), vn3(q + vec3(0.0, 0.5, 0.0)), vn3(q + vec3(0.0, 0.0, 0.5))) - n0; gq -= nrm * dot(gq, nrm); nrm = normalize(nrm + gq * 0.4 * k); alb *= 1.0 - 0.05 * k * (n0 - 0.5); }
   vec3 c;
   if (uUnlit > 0.5 && mode > 10.5) c = untone(min(alb * uEmis, vec3(1.0))) * (uEmis > 1.0 ? 1.8 : 1.0);   // light fittings (on: glowing; off: plain diffuser)
   else if (uUnlit > 0.5) { float kD = uLitK;
@@ -4157,7 +4181,7 @@ void main() {
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
     if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && vWorld.y < 30.0 && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.4 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
-  vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist));   // haze blended in display space (as tuned for the 2D sky)
+  vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist * APK));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
 }`;
@@ -4181,7 +4205,12 @@ vec3 treePos0(vec3 a, float part, vec4 I) { float h = I.z, sp = treeSp(I);
 vec3 treePos(vec3 a, float part, vec4 I) { float by = floor(I.w); vec3 r = treePos0(a, part, vec4(I.xyz, I.w - by)); r.y += by; return r; }`;
 const GL_TREE_VS = GL_HDR + GL_TREE_POS + `invariant gl_Position; in vec3 aPos; in float aPart; in vec4 aInst; uniform float uTime; out vec3 vNor, vCol, vWorld; out vec4 vTex; out float vDist;
 // aPart ≥ 2: leaf card (less blocky 2026-10-31): camera-facing quad centred on the canopy surface, corner = aPart − 2 (u + 2v); sway on leaves/cards (uTime moves with ▶ Animate)
-void main() { float by = floor(aInst.w), g = aInst.w - by; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
+void main() {
+  if (aPart > 5.5) { float g = aInst.w, hh = aInst.z, an = fract(g * 91.7) * 6.2832, ca = cos(an), sa = sin(an), t = aPos.y; vec2 r = vec2(ca * aPos.x - sa * aPos.z, sa * aPos.x + ca * aPos.z);   // grass tuft blade (open-world pass 2026-11-01): aPos.xz m, y 0..1; instance (x, z, height m, hash)
+    vec2 wd = vec2(0.3, 0.08) * (0.7 + 0.3 * sin(uTime * 0.8 + aInst.x * 0.07)) + 0.18 * vec2(sin(uTime * 2.1 + aInst.x * 0.9 + aInst.y * 0.4), cos(uTime * 1.7 + aInst.y * 0.8));   // wind lean + flutter (moves with ▶ Animate)
+    vec3 p = vec3(aInst.x + r.x + wd.x * t * t * hh, t * hh * (1.0 - 0.1 * t * t), aInst.y + r.y + wd.y * t * t * hh); vNor = normalize(vec3(r.x * 5.0, 1.0, r.y * 5.0));
+    float g2 = fract(g * 13.7); vCol = mix(vec3(0.36, 0.54, 0.25), vec3(0.54, 0.6, 0.28), g2 * g2) * (0.85 + 0.3 * t); float d; gl_Position = project(p, d); vDist = d; vTex = vec4(t * 0.9 - 0.3, 0.0, 10.0, g); vWorld = p; return; }
+  float by = floor(aInst.w), g = aInst.w - by; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
   if (cd) { float sp = treeSp(aInst), an0 = fract(sin(dot(aPos, vec3(12.9898, 78.233, 37.719))) * 43758.55), an = an0 * 6.2832 + 0.12 * sin(uTime * 2.7 + an0 * 40.0), s = aInst.z * (sp > 1.5 && sp < 2.5 ? 0.06 : sp > 2.5 ? 0.16 : 0.1);
     vec2 q = vec2(cu * 2.0 - 1.0, cv * 2.0 - 1.0); q = vec2(q.x * cos(an) - q.y * sin(an), q.x * sin(an) + q.y * cos(an)); p += (uR * q.x + uU * q.y) * s; cid = floor(an0 * 50.0); }
   if (aPart < 0.5 || cd) { float h = max(aInst.z, 1.0), sw = smoothstep(0.25, 1.0, (p.y - by) / h) * h * 0.01; p.xz += sw * vec2(sin(uTime * 1.6 + aInst.x * 0.05 + p.y * 0.3), cos(uTime * 1.25 + aInst.y * 0.05 + p.y * 0.2)); }
@@ -4199,16 +4228,18 @@ precision highp float; uniform vec3 uEye, uR, uU, uF, uSun, uFog, uSkyMid; unifo
 ` + GL_TONE + GL_CLOUD + `
 float h3(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 float vn2(vec2 q) { vec3 p = vec3(q, 0.5), i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y); }
+` + GL_GDET + `
 void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF + uR * (q.x / uP.x) + uU * (q.y / uP.y));
   float t = d.y < -1e-5 ? min(uEye.y / -d.y, 40000.0) : 40000.0; vec2 w = uEye.xz + d.xz * t; float px = t * 2.0 / (uP.x * uRes.x * max(-d.y, 0.05));   // ground m per pixel (foreshortened)
   float n = 0.0, wt = 0.0; for (int i = 0; i < 4; i++) { float L = 60.0 / pow(3.2, float(i)), k = 1.0 - smoothstep(L * 0.25, L * 0.9, px); if (k > 0.0) n += (vn2(w / L + float(i) * 7.3) - 0.5) * k * (0.5 + 0.5 * float(i == 0)); wt += 0.5; }   /* faded octaves skipped (same result) */
   vec3 c = uColor.rgb; float a = uCls > 1.5 && uCls < 2.5 ? 0.5 : uCls < 1.5 ? 0.2 : 0.16; c *= 1.0 + a * n;
   if (uCls > 1.5 && uCls < 2.5 && px < 60.0) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
   float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
-  if (uCls > 2.5 && uCls < 3.5) { float g = smoothstep(0.44, 0.6, 0.7 * vn2(w / 38.0 + 11.0) + 0.3 * vn2(w / 11.0 + 5.0)); c = mix(c, vec3(88.0, 120.0, 66.0) / 255.0 * (1.0 + 0.35 * n), g * 0.85); }   // residential grounds: landscaped lawn patches between paving (stage 3, 2026-10-31)
+  if (uCls > 2.5 && uCls < 3.5) { float g = smoothstep(0.44, 0.6, 0.7 * vn2(w / 38.0 + 11.0) + 0.3 * vn2(w / 11.0 + 5.0)); c = mix(pavAlb(c, w, px), lawnAlb(vec3(88.0, 120.0, 66.0) / 255.0 * (1.0 + 0.35 * n), w, px), g * 0.85); }   // residential grounds: landscaped lawn patches between paving (stage 3, 2026-10-31)
+  if ((uCls > 1.5 && uCls < 2.5) || (uCls > 4.5 && uCls < 5.5)) c = lawnAlb(c, w, px); else if (uCls < 1.5) c = asphAlb(c, w, px); else if (uCls < 2.5 || uCls > 3.5) c = pavAlb(c, w, px);   // near-field materials (GL_GDET)
   if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
   vec3 tint = vec3(1.0, 1.0 - 0.2 * uWarm, 1.0 - 0.45 * uWarm), L = toLin(c) * (uAmb * 0.3 * (0.82 + 0.34 * uSkyMid) + uDirect * 0.85 * max(uSun.y, 0.0) * cloudSh(vec3(w.x, 0.0, w.y), uSun) * tint) * SUNK;   // albedo lit as a level GL_FS face (linear)
-  o = vec4(grade(mix(fc, tone(L), exp(-uBeta * t))), 1.0); }`;
+  o = vec4(grade(mix(fc, tone(L), exp(-uBeta * t * APK))), 1.0); }`;
 // GL sky (realism 2026-10-31, L2/L4): palette gradient (skyPalette/weatherSky, display space) shaped per pixel — horizon haze band, sun-side aureole (Mie) and
 // anti-sun deepening (Rayleigh), plus the cloud layer (self-shadowed toward the sun, silver lining, faded with distance). Drawn by drawSkyAndSea in place of the 2D gradient + puff clouds.
 const GL_SKY_FS = `#version 300 es
@@ -4502,16 +4533,16 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck paving, driveways, plazas (wavy stripes), court, pads, jogging loop (white edges + centre line)
-  const up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), poly = (r, y, col) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), z4); };
-  const rib = (P, w, y, col, closed) => { const n = P.length; for (let i = 0; i < (closed ? n : n - 1); i++) { const a = P[i], b = P[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L * w / 2, nz = (b[0] - a[0]) / L * w / 2, ex = (b[0] - a[0]) / L * w * 0.25, ez = (b[1] - a[1]) / L * w * 0.25;
-    X.quad([a[0] + nx - ex, y, a[1] + nz - ez], [b[0] + nx + ex, y, b[1] + nz + ez], [b[0] - nx + ex, y, b[1] - nz + ez], [a[0] - nx - ex, y, a[1] - nz - ez], up, c(col), z4, z4, z4, z4); } };
-  const vf = [0, 0, 0.3, 0]; poly(GEO.trpf, 0.1, [88, 138, 72]);   // TRPF lawn (site plan; MP2025 residential class drew it beige)
+  const up = [0, 1, 0], z4 = [0, 0, 0, 0], TL = [0, 0, 0, 50], TP = [0, 0, 0, 51], TA = [0, 0, 0, 52], c = v => v.map(q => q / 255), poly = (r, y, col, t = z4) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), t); };
+  const rib = (P, w, y, col, closed, t = z4) => { const n = P.length; for (let i = 0; i < (closed ? n : n - 1); i++) { const a = P[i], b = P[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L * w / 2, nz = (b[0] - a[0]) / L * w / 2, ex = (b[0] - a[0]) / L * w * 0.25, ez = (b[1] - a[1]) / L * w * 0.25;
+    X.quad([a[0] + nx - ex, y, a[1] + nz - ez], [b[0] + nx + ex, y, b[1] + nz + ez], [b[0] - nx + ex, y, b[1] - nz + ez], [a[0] - nx - ex, y, a[1] - nz - ez], up, c(col), t, t, t, t); } };
+  const vf = [0, 0, 0.3, 0]; poly(GEO.trpf, 0.1, [88, 138, 72], TL);   // TRPF lawn (site plan; MP2025 residential class drew it beige)
   for (const B of SITE_BLOCKS) if (B.h > BLK_TOP) for (const [x0, z0, x1, z1] of B.boxes) { const p = [[x0 - 1.5, z0 - 1.5], [x1 + 1.5, z0 - 1.5], [x1 + 1.5, z1 + 1.5], [x0 - 1.5, z1 + 1.5]].map(([a, b]) => blkToWorld(B, a, b)); X.quad([p[0][0], 0.12, p[0][1]], [p[1][0], 0.12, p[1][1]], [p[2][0], 0.12, p[2][1]], [p[3][0], 0.12, p[3][1]], up, c([234, 232, 226]), vf, vf, vf, vf); }   // void deck + apron tiles (light homogeneous tiles, typical new BTO)
-  for (const r of SITE_ROADS) X.quad([r[0], 0.13, r[1]], [r[2], 0.13, r[3]], [r[4], 0.13, r[5]], [r[6], 0.13, r[7]], up, c([70, 72, 78]), z4, z4, z4, z4); VD.bins.forEach(q => poly(pxRing(q), 0.15, [176, 178, 180])); VD_FLAT.porches.forEach(r => poly(r, 0.15, [132, 132, 130]));   // site-plan roads (asphalt as OSM roads)
-  VD.plazas.forEach(([a, b, cc, d]) => { const r = pxRing(pxBox([a, b, cc, d])); poly(r, 0.16, [176, 178, 180]);   // wavy white bands (model photos)
+  for (const r of SITE_ROADS) X.quad([r[0], 0.13, r[1]], [r[2], 0.13, r[3]], [r[4], 0.13, r[5]], [r[6], 0.13, r[7]], up, c([70, 72, 78]), TA, TA, TA, TA); VD.bins.forEach(q => poly(pxRing(q), 0.15, [176, 178, 180], TP)); VD_FLAT.porches.forEach(r => poly(r, 0.15, [132, 132, 130], TP));   // site-plan roads (asphalt as OSM roads)
+  VD.plazas.forEach(([a, b, cc, d]) => { const r = pxRing(pxBox([a, b, cc, d])); poly(r, 0.16, [176, 178, 180], TP);   // wavy white bands (model photos)
     for (let k = 1; k < 5; k++) { const P = []; for (let j = 0; j <= 24; j++) { const t = j / 24, px = a + (cc - a) * t, py = b + (d - b) * (k / 5) + Math.sin(t * Math.PI * 3 + k) * (d - b) * 0.07; P.push(SITE_PX(px, py)); } rib(P, 0.9, 0.17, [236, 236, 232]); } });
   poly(VD_FLAT.court, 0.16, [236, 236, 230]); { const r = VD_FLAT.court, m = [0, 0]; for (let i = 0; i < r.length; i += 2) { m[0] += r[i] / (r.length / 2); m[1] += r[i + 1] / (r.length / 2); } poly(r.map((v, i) => m[i % 2] + (v - m[i % 2]) * 0.94), 0.17, [92, 128, 108]); }   // hard court: white line + green surface
-  for (const [a, b] of VD_PATHS) rib([a, b], 1.5, 0.175, [216, 216, 210]);   // footpaths (model photos)
+  for (const [a, b] of VD_PATHS) rib([a, b], 1.5, 0.175, [216, 216, 210], false, TP);   // footpaths (model photos)
   for (const [x, z] of VD_SEAT) { const C = []; for (let k = 0; k < 28; k++) { const t = k / 28 * 2 * Math.PI; C.push([x + 4 * Math.cos(t), z + 4 * Math.sin(t)]); } rib(C, 1.2, 0.178, [222, 222, 216], true); poly(blobRing(x, z, 1.7, 1.7, 3, 16), 0.178, [210, 208, 200]); }   // seating circle: ring path + paved centre
   for (const q of VD_FLAT.pads) { poly(q.r, 0.18, q.c); if (q.c2) { const [x, z] = q.fit, a = 0.6 + 2 * hash01(x, z, 5), nx = Math.cos(a), nz = Math.sin(a), r = q.r, h = []; for (let i = 0, n = r.length / 2; i < n; i++) { const j = (i + 1) % n, p = [r[2 * i], r[2 * i + 1]], o = [r[2 * j], r[2 * j + 1]], dp = (p[0] - x) * nx + (p[1] - z) * nz, dq = (o[0] - x) * nx + (o[1] - z) * nz; if (dp >= 0) h.push(p[0], p[1]); if (dp * dq < 0) { const t = dp / (dp - dq); h.push(p[0] + (o[0] - p[0]) * t, p[1] + (o[1] - p[1]) * t); } } if (h.length >= 6) poly(h, 0.185, q.c2); }   // fitness pads: second colour on one half (model photos)
     if (q.play) { const [x, z] = q.play, S = PLAY_SCH[q.sch], sh = (r, k) => r.map((v, i) => (i % 2 ? z : x) + (v - (i % 2 ? z : x)) * k);   // playgrounds: EPDM wet-pour rubber, band + inner field + dots in a second/third colour
@@ -4783,6 +4814,35 @@ function gpuTrees(pr, test, ex = state.vx, ez = state.vz) { const gl = GPU.gl; i
   const far = t => { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); return dx * dx + dz * dz > 6.25e6; };
   run(GPU.treeGeo, GPU.treeInst, GPU.treeT, GPU.treeN); if (pr === GPU.tree && GPU.treeCard) run(GPU.treeCard, GPU.treeInst, GPU.treeT.filter(t => { const dx = Math.max(t[2] - ex, 0, ex - t[3]), dz = Math.max(t[6] - ez, 0, ez - t[7]); return dx * dx + dz * dz < 2.025e5; }), GPU.treeNC);   // leaf cards ≤450 m of the eye
   run(GPU.treeGeoL, GPU.treeInstF, GPU.treeTF.filter(t => !far(t)), GPU.treeNL); run(GPU.treeGeoX, GPU.treeInstF, GPU.treeTF.filter(far), GPU.treeNX); if (d) glDiag('trees', e0, gl.getError()); }
+// 3D grass (open-world pass 2026-11-01, TY "Elder Scrolls feel"; visual only, estimates): while walking on the ground, mown lawn tufts (9 blades, 4–13 cm,
+// wind sway) on a 0.22 m jittered lattice within GRASS_R of the eye, thinning with distance, only where the TRPF lawn is (LAWN raster 0.5 m: inside GEO.trpf,
+// not on site roads, drives, pads, plazas, porches, court, tracks, paths, seats, linkways, block aprons / boxes); tree program (aPart 6), main pass only (no shadow casting).
+const GRASS_R = 20;
+function lawnGrid() { if (lawnGrid.g) return lawnGrid.g; const tr = GEO.trpf, C = 0.5; let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (let i = 0; i < tr.length; i += 2) { x0 = Math.min(x0, tr[i]); x1 = Math.max(x1, tr[i]); z0 = Math.min(z0, tr[i + 1]); z1 = Math.max(z1, tr[i + 1]); }
+  const W = Math.ceil((x1 - x0) / C) + 1, H = Math.ceil((z1 - z0) / C) + 1, g = new Uint8Array(W * H), cx = i => x0 + (i + 0.5) * C, cz = j => z0 + (j + 0.5) * C;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) g[j * W + i] = ringIn(tr, cx(i), cz(j)) ? 1 : 0;
+  const clr = (bx0, bz0, bx1, bz1, f) => { const i0 = Math.max(0, Math.floor((bx0 - x0) / C)), i1 = Math.min(W - 1, Math.ceil((bx1 - x0) / C)), j0 = Math.max(0, Math.floor((bz0 - z0) / C)), j1 = Math.min(H - 1, Math.ceil((bz1 - z0) / C));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (g[j * W + i] && f(cx(i), cz(j))) g[j * W + i] = 0; };
+  const ring = (r, m) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (let i = 0; i < r.length; i += 2) { a = Math.min(a, r[i]); b = Math.max(b, r[i]); c = Math.min(c, r[i + 1]); d = Math.max(d, r[i + 1]); } clr(a - m, c - m, b + m, d + m, (x, z) => ringIn(r, x, z) || (m > 0 && polyD(r, x, z) < m)); };
+  const segs = (P, w, closed) => { for (let i = 0; i < P.length - (closed ? 0 : 1); i++) { const p = P[i], q = P[(i + 1) % P.length]; clr(Math.min(p[0], q[0]) - w, Math.min(p[1], q[1]) - w, Math.max(p[0], q[0]) + w, Math.max(p[1], q[1]) + w, (x, z) => segD(x, z, p[0], p[1], q[0], q[1]) < w); } };
+  for (const r of SITE_ROADS) ring(r, 0.3); for (const r of [...VD_FLAT.pads.map(q => q.r), ...VD_FLAT.plazas, ...VD_FLAT.drives, ...VD_FLAT.porches, VD_FLAT.court]) ring(r, 0.4);
+  for (const T of VD_TRACKS) segs(T, 1.45, !T.open); for (const l of VD_LINKS) segs(l, 1.8, false); for (const [a, b] of VD_PATHS) segs([a, b], 0.9, false);
+  for (const [x, z] of VD_SEAT) clr(x - 5, z - 5, x + 5, z + 5, (px, pz) => Math.hypot(px - x, pz - z) < 4.8);
+  for (const B of SITE_BLOCKS) for (const [a, b, c, d] of B.boxes) ring([[a - 1.6, b - 1.6], [c + 1.6, b - 1.6], [c + 1.6, d + 1.6], [a - 1.6, d + 1.6]].map(([u, v]) => blkToWorld(B, u, v)).flat(), 0);
+  return (lawnGrid.g = { g, W, H, x0, z0, C }); }
+function gpuGrass(cam) { const gl = GPU.gl; if (!(state.walk && onGround())) return;
+  if (!GPU.grassGeo) { const o = []; for (let j = 0; j < 9; j++) { const h = k => ((Math.sin(j * 12.9898 + k * 78.233) * 43758.5453) % 1 + 1) % 1, b = j * 2.39996 + h(1), rb = 0.015 + 0.075 * h(2), ln = 0.03 + 0.07 * h(3), la = b + (h(4) - 0.5) * 1.2, w = 0.006 + 0.007 * h(5), hy = 0.6 + 0.4 * h(6);
+      const bx = Math.cos(b) * rb, bz = Math.sin(b) * rb, tx = Math.cos(la), tz = Math.sin(la), px = -tz, pz = tx, P = (s, y, e) => [bx + tx * ln * s + px * e, y, bz + tz * ln * s + pz * e, 6];
+      const bl = P(0, 0, -w), br = P(0, 0, w), ml = P(0.35, 0.55 * hy, -w * 0.65), mr = P(0.35, 0.55 * hy, w * 0.65), tp = P(1, hy, 0); for (const v of [bl, br, mr, bl, mr, ml, ml, mr, tp]) o.push(...v); }
+    GPU.grassGeo = gpuIdx(o, 4); GPU.grassInst = gl.createBuffer(); GPU.grassC = null; }
+  const L = lawnGrid(), ex = cam.ex, ez = cam.ez, S = 0.17;
+  if (!GPU.grassC || Math.hypot(GPU.grassC[0] - ex, GPU.grassC[1] - ez) > 3) { const I = [], R = GRASS_R + 3; GPU.grassC = [ex, ez];
+    for (let gz = Math.floor((ez - R) / S); gz <= Math.ceil((ez + R) / S); gz++) for (let gx = Math.floor((ex - R) / S); gx <= Math.ceil((ex + R) / S); gx++) { const h1 = hash01(gx, gz, 81), x = (gx + h1) * S, z = (gz + hash01(gz, gx, 83)) * S, d = Math.hypot(x - ex, z - ez);
+      if (d > R || hash01(gx, gz, 85) > 1.15 - d / R) continue; const i = Math.floor((x - L.x0) / L.C), j = Math.floor((z - L.z0) / L.C); if (i < 0 || j < 0 || i >= L.W || j >= L.H || !L.g[j * L.W + i]) continue;
+      I.push(x, z, (0.045 + 0.085 * hash01(gz, gx, 87)) * (0.6 + 0.4 * vn01(x * 0.25, z * 0.25)), hash01(gx, gz, 89) * 0.999); }
+    gl.bindBuffer(gl.ARRAY_BUFFER, GPU.grassInst); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(I), gl.DYNAMIC_DRAW); GPU.grassN = I.length / 4; }
+  if (!GPU.grassN) return; const pr = GPU.tree, ix = GPU.tIdx.get(GPU.grassGeo); gpuAttrib(pr, GPU.grassGeo, GPU.grassInst); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ix.ib); gl.drawElementsInstanced(gl.TRIANGLES, ix.n, gl.UNSIGNED_SHORT, 0, GPU.grassN); }
+const vn01 = (x, z) => { const i = Math.floor(x), j = Math.floor(z), f = x - i, g = z - j, u = f * f * (3 - 2 * f), v = g * g * (3 - 2 * g); return (hash01(i, j, 91) * (1 - u) + hash01(i + 1, j, 91) * u) * (1 - v) + (hash01(i, j + 1, 91) * (1 - u) + hash01(i + 1, j + 1, 91) * u) * v; };
 // ?diag in the URL (TY 2026-10-30: trees + cars missing on iPhone): one-time on-screen WebGL readout (errors around the instanced draws, renderer, counts); tap to close
 const GL_DIAG = /[?&]diag/.test(location.search), GL_DIAG_R = {};
 function glDiag(k, e0, e1) { if (!GL_DIAG || GL_DIAG_R[k]) return; const gl = GPU.gl; GL_DIAG_R[k] = `${k}: before ${e0} after ${e1}`; if (Object.keys(GL_DIAG_R).length < 2) return;
@@ -4898,7 +4958,7 @@ function gpuRender(cam, env, pxW, pxH) {
   // solids with depth
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city); opaque();   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
-  gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez);
+  gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez); gpuGrass(cam);
   gl.enable(gl.BLEND); if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
     gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
     gpuEdges(cam, env); }
