@@ -2952,10 +2952,14 @@ function walkSub(off, st) {
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); }
+  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); if (onGround()) state.obsFloor = 2; }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   walkUI(on); renderAll();
 }
+// Floor strip 1F (TY 2026-11-01 "go to ground floor"): void deck = walk mode on the ground, start in the 32A lift lobby facing S (out through the corridor line); Stop on the ground → 2F (no window view at 1F)
+const GROUND0 = [21.5, 13.6];
+function goGround() { if (!curSpot()) { const sp = UNIT_SPOTS[0]; state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } state.obsFloor = 1; state.walk = { X: GROUND0[0], Y: GROUND0[1], Z: 0 }; state.heading = UNIT_FN; state.pitchDeg = 0; state.showBalcony = true; $('balconyToggle').checked = true; UW_CACHE.key = ''; FIX_CACHE.key = ''; liftUpdate(GROUND0[0], GROUND0[1]);
+  if (matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); } walkUI(true); renderAll(); }
 // Walk joystick + Run chip sit 10 px above the time bar wherever it overlaps them (phone dock height varies with its rows)
 function padPlace() { const wp = $('walkPad'), tb = $('timeBar'), par = wp && (wp.offsetParent || wp.parentElement); if (!par || !tb || !tb.offsetHeight) return; const P = par.getBoundingClientRect(), T = tb.getBoundingClientRect(), b = T.left < P.left + 150 ? P.bottom - T.top + 10 : 14; wp.style.setProperty('bottom', `${Math.max(14, Math.round(b))}px`, 'important'); }
 if (typeof ResizeObserver !== 'undefined') new ResizeObserver(padPlace).observe($('timeBar')); window.addEventListener('resize', padPlace);
@@ -5135,13 +5139,13 @@ function drawStrip() {
 }
 { const cv = $('floorStrip'); let on = null;   // UX round 4: collapsed pill; press-drag = relative floor change on the full ruler, tap = ruler stays open for a tap on a floor
   const open = o => { if (cv.classList.contains('open') === o) return; cv.classList.toggle('open', o); sizeCanvas(cv, cv.clientWidth, cv.clientHeight); drawStrip(); };
-  const setF = f => { f = clamp(f, 2, 30); if (f !== state.obsFloor) { state.obsFloor = f; buzz(); renderView(); } };
+  const setF = f => { f = clamp(f, 1, 30); if (f === 1) { if (!state.walk) { on = null; open(false); buzz(); goGround(); } return; } if (f !== state.obsFloor) { state.obsFloor = f; buzz(); renderView(); } };   // 1F = void deck: walk on the ground (TY 2026-11-01)
   const abs = e => { const { y } = localXY(cv, e); setF(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29)); };
   cv.addEventListener('pointerdown', e => { e.stopPropagation(); cv.setPointerCapture(e.pointerId); const wasOpen = cv.classList.contains('open'); open(true); on = { y: e.clientY, f: state.obsFloor, abs: wasOpen, moved: false }; if (wasOpen) abs(e); });
   cv.addEventListener('pointermove', e => { if (!on) return; if (Math.abs(e.clientY - on.y) > 4) on.moved = true; if (!on.moved) return; if (on.abs) abs(e); else setF(on.f - Math.round((e.clientY - on.y) / ((cv._h - 2 * STRIP.pad) / 29))); });
   ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { if (!on) return; const keep = !on.moved && !on.abs; on = null; if (!keep) { open(false); renderAll(); } }));
   document.addEventListener('pointerdown', e => { if (e.target !== cv && !on && cv.classList.contains('open')) open(false); });
-  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); state.obsFloor = clamp(state.obsFloor + d, 2, 30); renderView(); }); }
+  cv.addEventListener('keydown', e => { const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key]; if (!d) return; e.preventDefault(); e.stopPropagation(); const f = clamp(state.obsFloor + d, 1, 30); if (f === 1) { if (!state.walk) goGround(); return; } state.obsFloor = f; renderView(); }); }
 // Time scrubber track: sky colour by sun elevation over 05–23 h for the selected date, sunrise/sunset + solar-noon ticks, hour labels
 const TT = { key: '' };
 function drawTimeTrack() {
