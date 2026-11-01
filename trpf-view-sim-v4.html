@@ -1224,11 +1224,13 @@ const MSCP_GARDEN = { well: [-17, -2.5, 17, 2.5], fit: [-14, 11, -2, 16], comm: 
 // MSCP kit (TY 2026-10-31 "render it properly like the typical HDB carpark", 3 developer model photos; 2026-11-01 "render the first floor + inside, like a standard HDB BTO carpark", walkable;
 // Q&A: walk ground + all decks, no plan → typical layout, preschool/UC closed, straight two-way ramp at the W end, parked cars by hour/day). Render only (physics keeps the MSCP box); sizes/positions estimates.
 // Local frame (MSCP box, x along the long axis ≈ E, z ≈ N): levels MSCP_LV L0 ground, L1 3.5 … L6 parking decks, L7 roof garden (MSCP_TOP − 1). Per deck: perimeter lot rows (2.4 × 4.8 m, nose to the facade),
-// 6 m aisles, middle rows beside the light well; stacked straight ramp MSCP_RAMP (ramp k: L_k at x0 → L_{k+1} at x1, 23.4 m, 12.5%; 15% from the ground); W core = open stair (dog-leg, door to each deck + roof)
-// + lift shaft (doors drawn, not working); E core solid with the "BLK 32" sign. 1st storey: preschool + utility centre rooms (closed, shopfront glazing) + open driveway/stair approach at the W end.
+// 6 m aisles, middle rows beside the light well; stacked straight ramp MSCP_RAMP in the W strip (ramp k: L_k at z0 → L_{k+1} at z1, 23.5 m, 12.4%; 15% from the ground); W core = open stair (dog-leg, door to each deck + roof)
+// + lift shaft (doors drawn, not working); E core solid with the "BLK 32" sign. 1st storey per TY plan 2026-11-01: preschool (8) + service rooms incl. UC, 2 courtyards under the well ends, W driveway strip with the ramp.
 const MSCP_DH = (MSCP_TOP - 1 - VOID_DECK_HEIGHT) / 6, MSCP_CORES = [[-33.4, 1.5, -27.6, 15.5], [27.6, -14.5, 33.4, 0.5]];
-const MSCP_LV = Array.from({ length: 8 }, (_, i) => i ? VOID_DECK_HEIGHT + (i - 1) * MSCP_DH : 0), MSCP_RAMP = [-21, -8.53, 2.4, -2.7], MSCP_WC = [-33.2, 1.7, -27.8, 8.4];
-const MSCP_GROOMS = [[-3, 3.73, 27.6, 19.33], [12, -19.33, 27.6, -8.53]], MSCP_ST = { l: 3.8, m: 6.6, xa: -30.55, xb: -30.45 };   // ground open area; stair: landing z < 3.8, flights to 6.6 (A W half up N, B E half up S), mid landing to 8.4
+const MSCP_LV = Array.from({ length: 8 }, (_, i) => i ? VOID_DECK_HEIGHT + (i - 1) * MSCP_DH : 0), MSCP_RAMP = [-26.4, -14.5, -19.8, 9.0], MSCP_WC = [-33.2, 1.7, -27.8, 8.4];
+const MSCP_GROOMS = [[-18.6, 2.5, 33.13, 18], [27.6, 0.5, 33.13, 2.5], [-18.6, -2.5, -17, 2.5], [-10.2, -2.5, 10.2, 2.5], [17, -2.5, 27.6, 2.5], [-18.6, -10, 27.6, -2.5], [-15.5, -15, 27.6, -10], [24.3, -19.78, 27.6, -15], [27.6, -19.78, 33.13, -14.5], [-23.9, 9.4, -18.6, 12.1],
+  [-11.5, -19.78, -3.9, -15, 'u'], [-3.9, -19.78, 2.1, -15, 'u'], [2.1, -19.78, 16.7, -15, 'u'], [16.7, -19.78, 24.3, -15, 'u'], [-33.13, -19.78, -28, -9.3, 'u']];   // TY Blk 32 1st-storey plan 2026-11-01 (±1 m): preschool (8) fills the storey; S row of service rooms incl. UC + W service rooms ('u'); open = W driveway strip (car entrance on the S face W of x −11.5, ramp), N walkway
+const MSCP_CY = [[-17, -2.5, -10.2, 2.5], [10.2, -2.5, 17, 2.5]], MSCP_ST = { l: 3.8, m: 6.6, xa: -30.55, xb: -30.45 };   // ground open area; stair: landing z < 3.8, flights to 6.6 (A W half up N, B E half up S), mid landing to 8.4
 let MSCP_OBS = [], MSCP_LOTS = [], MSCP_RAMPS = [];
 const MSCP_FONT = { B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'], L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'], K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'], 1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'], 2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
@@ -1240,8 +1242,8 @@ const rectMinus = (r, H) => { const xs = [r[0], r[2]], zs = [r[1], r[3]];   // a
   const X = [...new Set(xs)].sort((a, b) => a - b), Z = [...new Set(zs)].sort((a, b) => a - b), out = [];
   for (let j = 0; j + 1 < Z.length; j++) { let run = null; for (let i = 0; i + 1 < X.length; i++) { const cx = (X[i] + X[i + 1]) / 2, cz = (Z[j] + Z[j + 1]) / 2;
     if (H.some(h => cx > h[0] && cx < h[2] && cz > h[1] && cz < h[3])) { run = null; continue; } if (run && run[2] === X[i]) run[2] = X[i + 1]; else { run = [X[i], Z[j], X[i + 1], Z[j + 1]]; out.push(run); } } } return out; };
-const mscpRooms = () => MSCP_GROOMS;   // TY 2026-11-01 "why is the ground floor all closed up": preschool (N/E) + UC (SE) only, rest of the 1st storey = open parking
-const mscpGOpen = (x, z) => !MSCP_GROOMS.some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !MSCP_CORES.some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !(x > MSCP_RAMP[0] && x < MSCP_RAMP[2] && z > MSCP_RAMP[1] && z < MSCP_RAMP[3]);   // 1st storey preschool + UC
+const mscpRooms = () => MSCP_GROOMS;   // preschool courtyards MSCP_CY = end cells of the light well, open from the ground (plan white rects)
+const mscpGOpen = (x, z) => ![...MSCP_GROOMS, ...MSCP_CY].some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !MSCP_CORES.some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !(x > MSCP_RAMP[0] && x < MSCP_RAMP[2] && z > MSCP_RAMP[1] && z < MSCP_RAMP[3]);   // 1st storey preschool + UC
 function mscpKit(M) {
   const out = []; MSCP_OBS = []; MSCP_LOTS = []; MSCP_RAMPS = []; const [XA, ZA] = [M.boxes[0][2], M.boxes[0][3]], [wx0, wz0, wx1, wz1] = MSCP_GARDEN.well, L = MSCP_LV, R = L[7], RP = MSCP_RAMP, CW = MSCP_CORES[0], CE = MSCP_CORES[1], ST = MSCP_ST;
   const WH = [240, 239, 234], GR = [150, 154, 158], DK = [118, 120, 124], SOF = [214, 214, 210], GN = [86, 128, 64], GN2 = [70, 110, 54], YL = [232, 190, 40], LN = [236, 236, 230], SS = [196, 200, 204];
@@ -1254,10 +1256,11 @@ function mscpKit(M) {
   const ramp = [RP[0], RP[1], RP[2], RP[3]], well = MSCP_GARDEN.well;
   // decks L1..L7 (L7 = roof slab): holes at the light well, cores, ramp (L1..L6); well upstands (S side along the ramp: ramp parapet instead)
   for (let j = 1; j <= 7; j++) { const y = L[j], x = { nm: 'deck', top: j === 7 ? [214, 204, 186] : DK, bot: SOF, cov: j < 7 }, u = j === 7 ? 1.1 : 1.0, w = { nm: 'well', ob: true, cov: j < 7 };
-    for (const r of rectMinus([-XA, -ZA, XA, ZA], [...(j > 1 ? [well] : []), ...MSCP_CORES, ...(j < 7 ? [ramp] : [])])) box(...r, y - 0.35, y, WH, x);   // L1 = floor of the light well
-    if (j > 1) box(wx0 - 0.2, wz1, wx1 + 0.2, wz1 + 0.2, y, y + u, WH, w); box(j < 7 ? RP[2] : wx0 - 0.2, wz0 - 0.2, wx1 + 0.2, wz0, y, y + u, WH, w); box(wx0 - 0.2, wz0, wx0, wz1, y, y + u, WH, w); box(wx1, wz0, wx1 + 0.2, wz1, y, y + u, WH, w); }
-  box(wx0, wz0, wx1, wz1, L[1], L[1] + 0.02, [150, 152, 150], { nm: 'well floor' }); for (let i = 0; i < 5; i++) { const xa = wx0 + (wx1 - wx0) * i / 5 + 0.8, xb = wx0 + (wx1 - wx0) * (i + 1) / 5 - 0.8; box(xa, wz0 + 0.8, xb, wz1 - 0.8, L[1], L[1] + 0.5, [200, 196, 188], { nm: 'well planter', top: GN }); }
-  for (let i = 1; i < 5; i++) { const xx = wx0 + (wx1 - wx0) * i / 5; box(xx - 0.12, wz0, xx + 0.12, wz1, L[1] - 0.35, R + 1.1, WH, { nm: 'well wall' }); }   // light well: 5 cells
+    for (const r of rectMinus([-XA, -ZA, XA, ZA], [...(j > 1 ? [well] : MSCP_CY), ...MSCP_CORES, ...(j < 7 ? [ramp] : [])])) box(...r, y - 0.35, y, WH, x);   // L1 = floor of the light well
+    if (j > 1) box(wx0 - 0.2, wz1, wx1 + 0.2, wz1 + 0.2, y, y + u, WH, w); if (j > 1) box(wx0 - 0.2, wz0 - 0.2, wx1 + 0.2, wz0, y, y + u, WH, w); else for (const [a, b, c2, d] of MSCP_CY) { box(a - 0.2, d, c2 + 0.2, d + 0.2, y, y + u, WH, w); box(a - 0.2, b - 0.2, c2 + 0.2, b, y, y + u, WH, w); } box(wx0 - 0.2, wz0, wx0, wz1, y, y + u, WH, w); box(wx1, wz0, wx1 + 0.2, wz1, y, y + u, WH, w); }
+  box(MSCP_CY[0][2], wz0, MSCP_CY[1][0], wz1, L[1], L[1] + 0.02, [150, 152, 150], { nm: 'well floor' }); for (let i = 1; i < 4; i++) { const xa = wx0 + (wx1 - wx0) * i / 5 + 0.8, xb = wx0 + (wx1 - wx0) * (i + 1) / 5 - 0.8; box(xa, wz0 + 0.8, xb, wz1 - 0.8, L[1], L[1] + 0.5, [200, 196, 188], { nm: 'well planter', top: GN }); }
+  for (let i = 1; i < 5; i++) { const xx = wx0 + (wx1 - wx0) * i / 5; box(xx - 0.12, wz0, xx + 0.12, wz1, L[1] - 0.35, R + 1.1, WH, { nm: 'well wall' }); }   // light well: 5 cells; end cells open down to the preschool courtyards
+  for (const [a, b, c2, d] of MSCP_CY) { box(a, b, c2, d, -0.02, 0.04, [196, 190, 178], { nm: 'courtyard paving' }); box(a + 1.2, b + 1.2, c2 - 1.2, d - 1.2, 0, 0.45, [210, 204, 192], { nm: 'courtyard planter', top: GN }); }
   // interior columns (yellow/black guard band per level) on the lot-row edges, every second bay
   for (let m = 1; m <= 5; m++) for (const zz of [-14.83, -8.23, 8.23, 14.83]) { const xx = -XA + 11.04 * m; if (inCore(xx, zz, 1) || inR(ramp, xx, zz, 0.4) || inR(well, xx, zz, 0.5)) continue;
     box(xx - 0.3, zz - 0.3, xx + 0.3, zz + 0.3, 0, R - 0.35, [222, 222, 218], { nm: 'column', cov: true, ob: true });
@@ -1267,9 +1270,9 @@ function mscpKit(M) {
     for (let i = 0; i <= n; i++) { const t = i * bw, [cx, cz] = Lc(t, -0.3); if (inCore(cx, cz, 0.6)) continue; sbox(S, Math.max(0, t - 0.35), Math.min(S[3], t + 0.35), -0.45, 0.22, 0, MSCP_TOP + 0.15, WH, { nm: 'column', ob: true }); }
     for (let j = 1; j <= 7; j++) { const A = Lc(0, -0.3), B = Lc(S[3], 0.6); ob(A[0], A[1], B[0], B[1], L[j], L[j] + 1.1); }   // walk fence along the facade (blocks only)
     for (let i = 0; i < n; i++) { const t0 = i * bw + 0.35, t1 = (i + 1) * bw - 0.35, [mx, mz] = Lc((t0 + t1) / 2, -0.3); if (inCore(mx, mz, 0.3)) continue;
-      if (!open(mx, mz) && !inCore(mx, mz, 0.3)) { const uc = mz < 0; sbox(S, t0, t1, 0.0, 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: uc ? 'UC door' : 'shopfront' }); sbox(S, t0, t1, 0, 0.06, 2.8, 3.15, WH, { nm: 'transom' });
+      if (!open(mx, mz) && !inCore(mx, mz, 0.3)) { const uc = MSCP_GROOMS.some(r => r[4] === 'u' && inR(r, mx, mz, 0.5)); sbox(S, t0, t1, 0.0, 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: uc ? 'UC door' : 'shopfront' }); sbox(S, t0, t1, 0, 0.06, 2.8, 3.15, WH, { nm: 'transom' });
         for (let k = 0; k <= 3; k++) { const tm = t0 + (t1 - t0) * k / 3; sbox(S, tm - 0.04, tm + 0.04, 0.0, 0.07, 0.3, 2.8, uc ? [120, 124, 128] : [210, 212, 214], { nm: 'mullion' }); } }
-      else if (si !== 3) { sbox(S, t0, t1, -0.12, -0.04, 0, 0.95, GR, { nm: 'parapet' }); sbox(S, t0 + 0.05, t1 - 0.05, 0.02, 0.62, 0, 0.55, [228, 228, 224], { nm: 'planter' }); sbox(S, t0 + 0.12, t1 - 0.12, 0.06, 0.58, 0.55, 0.85 + 0.15 * hash01(i, 9, si), GN, { nm: 'planter', top: GN }); const A = Lc(t0 - 0.4, -0.3), B = Lc(t1 + 0.4, 0.6); ob(A[0], A[1], B[0], B[1], 0, 1.0); }   // 1st storey parking: low planter + parapet (W end = open entrance)
+      else if (si !== 3 && !(si === 0 && mx < -11.5)) { sbox(S, t0, t1, -0.12, -0.04, 0, 0.95, GR, { nm: 'parapet' }); sbox(S, t0 + 0.05, t1 - 0.05, 0.02, 0.62, 0, 0.55, [228, 228, 224], { nm: 'planter' }); sbox(S, t0 + 0.12, t1 - 0.12, 0.06, 0.58, 0.55, 0.85 + 0.15 * hash01(i, 9, si), GN, { nm: 'planter', top: GN }); const A = Lc(t0 - 0.4, -0.3), B = Lc(t1 + 0.4, 0.6); ob(A[0], A[1], B[0], B[1], 0, 1.0); }   // 1st storey parking: low planter + parapet (W end = open entrance)
       for (let j = 0; j < 6; j++) { const y = L[j + 1], yt = L[j + 2] - 0.35;
         if ((i + j + si) % 2 === 0) { sbox(S, t0, t1, -0.12, -0.04, y, y + 0.95, GR, { nm: 'parapet' }); sbox(S, t0 + 0.05, t1 - 0.05, 0.02, 0.62, y - 0.1, y + 0.55, [228, 228, 224], { nm: 'planter' });
           sbox(S, t0 + 0.12, t1 - 0.12, 0.06, 0.58, y + 0.55, y + 0.85 + 0.15 * hash01(i, j, si), GN, { nm: 'planter', top: GN }); sbox(S, t0 + 0.3, t1 - 0.3, 0.58, 0.66, y - 0.25, y + 0.7, GN2, { nm: 'planter' }); }
@@ -1277,8 +1280,8 @@ function mscpKit(M) {
   sides.forEach(S => sbox(S, 0, S[3], -0.25, 0, R, R + 1.1, WH, { nm: 'parapet', top: [200, 200, 196] }));   // roof parapet
   [[-XA + 0.25, -ZA + 0.25, XA - 0.25, -ZA + 1.6], [-XA + 0.25, ZA - 1.6, XA - 0.25, ZA - 0.25]].forEach(([a, b, c, d]) => box(a, b, c, d, R, R + 0.55, [200, 196, 188], { nm: 'planter', top: GN, ob: true }));
   // parking lots (dynamic cars: mscpCarsNow), lot lines, wheel stoppers, soffit LED battens over the lot rows and aisles
-  const rows = [[14.53, 19.33, 1, -27.6, 27.6], [-19.33, -14.53, -1, -27.6, 27.6], [3.73, 8.53, -1, -17, 17], [-8.53, -3.73, 1, RP[2], 17]];
-  const rows0 = [[14.53, 19.33, 1, -27.6, -3], [-19.33, -14.53, -1, -27.6, 12], [3.73, 8.53, -1, -17, -3], [-8.53, -3.73, 1, RP[2], 12]];   // 1st storey: around the rooms
+  const rows = [[14.53, 19.33, 1, -27.6, 27.6], [-19.33, -14.53, -1, -20, 27.6], [3.73, 8.53, -1, -17, 17], [-8.53, -3.73, 1, -17, 17]];
+  const rows0 = [];   // 1st storey: preschool, no lots
   for (let j = 0; j <= 6; j++) { const y = j ? L[j] : 0.03;
     for (const [z0, z1, nz, xa, xb] of j ? rows : rows0) for (let i = 0; i < 12; i++) { const bx = -XA + i * 5.52; if (bx < xa - 0.01 || bx + 5.52 > xb + 0.01) continue; const xs = [bx + 0.35, bx + 2.76, bx + 5.17];
       for (const xl of xs) box(xl - 0.05, z0 + 0.1, xl + 0.05, z1 - 0.1, y, y + 0.012, LN, { nm: 'lot line', cov: true });
@@ -1286,14 +1289,18 @@ function mscpKit(M) {
         box(cx - 0.8, zw - 0.08, cx + 0.8, zw + 0.08, y, y + 0.12, [204, 200, 190], { nm: 'wheel stopper', cov: true }); } }
     for (let i = 1; i < 11; i++) for (const zz of [16.9, 11.5, 6.1, -6.1, -11.5, -16.9]) { const xx = -XA + (i + 0.5) * 5.52; if ((j > 0 && inR(well, xx, zz, 0.5)) || (!j && !open(xx, zz)) || inR(ramp, xx, zz, 0.3) || inCore(xx, zz, 0.5)) continue;
       box(xx - 0.6, zz - 0.07, xx + 0.6, zz + 0.07, L[j + 1] - 0.41, L[j + 1] - 0.35, [255, 250, 236], { nm: 'lamp', lamp: true }); } }
-  for (const r of rectMinus([-XA, -ZA, XA, ZA], [...MSCP_GROOMS, ...MSCP_CORES, ramp])) box(...r, -0.02, 0.03, [84, 86, 90], { nm: 'drive', cov: true });   // 1st storey asphalt
-  { const fr = (x0, z0, x1, z1, uc) => { const L2 = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L2 / 1.8)), nx = (z1 - z0) / L2, nz = -(x1 - x0) / L2;   // room fronts on the parking side: glazing + mullions (preschool), louvred doors (UC)
+  for (const r of rectMinus([-XA, -ZA, XA, ZA], [...MSCP_GROOMS, ...MSCP_CY, ...MSCP_CORES, ramp])) box(...r, -0.02, 0.03, [84, 86, 90], { nm: 'drive', cov: true });   // 1st storey asphalt
+  { const fr = (x0, z0, x1, z1, uc, nx, nz) => { const L2 = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L2 / 1.8));   // room fronts on the parking side: glazing + mullions (preschool), louvred doors (UC)
       box(x0 + nx * 0.0, z0 + nz * 0.0, x1 + nx * 0.04, z1 + nz * 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: 'room front' });
       for (let k = 0; k <= n; k++) { const t = k / n, cx = x0 + (x1 - x0) * t, cz = z0 + (z1 - z0) * t; box(cx - 0.04, cz - 0.04, cx + 0.04 + nx * 0.03, cz + 0.04 + nz * 0.03, 0.3, 2.8, uc ? [120, 124, 128] : [210, 212, 214], { nm: 'mullion' }); } };
-    fr(-3, 19.33, -3, 3.73, 0); fr(-3, 3.73, 27.6, 3.73, 0); fr(12, -8.53, 12, -19.33, 1); fr(27.6, -8.53, 12, -8.53, 1); }
+    for (const r of MSCP_GROOMS) { const uc = r[4] === 'u', E = [[r[0], r[1], r[2], r[1], 0, -1], [r[2], r[1], r[2], r[3], 1, 0], [r[2], r[3], r[0], r[3], 0, 1], [r[0], r[3], r[0], r[1], -1, 0]];   // fronts where open ground / a courtyard lies outside (0.5 m samples)
+      const fac = (x, z) => (mscpGOpen(x, z) && Math.abs(x) < XA && Math.abs(z) < ZA) || MSCP_CY.some(q => inR(q, x, z));
+      for (const [x0, z0, x1, z1, nx, nz] of E) { const Ln = Math.hypot(x1 - x0, z1 - z0), n = Math.round(Ln / 0.5); let st = -1;
+        for (let k = 0; k <= n; k++) { const t = (k + 0.5) / n, ok = k < n && fac(x0 + (x1 - x0) * t + nx * 0.3, z0 + (z1 - z0) * t + nz * 0.3);
+          if (ok && st < 0) st = k; if (!ok && st >= 0) { const ta = st / n, tb = k / n; fr(x0 + (x1 - x0) * ta, z0 + (z1 - z0) * ta, x0 + (x1 - x0) * tb, z0 + (z1 - z0) * tb, uc, nx, nz); st = -1; } } } } }
   // ramps (sloped geometry in gpuGarden via MSCP_RAMPS); walk blocks along both parapets
-  for (let k = 0; k < 6; k++) { const y0 = L[k], y1 = L[k + 1]; MSCP_RAMPS.push([y0, y1]); for (let x = RP[0]; x < RP[2] - 1e-3; x += 1) { const a = y0 + (y1 - y0) * (x - RP[0]) / (RP[2] - RP[0]), b = y0 + (y1 - y0) * (Math.min(RP[2], x + 1) - RP[0]) / (RP[2] - RP[0]);
-    if (x > RP[0] + 0.5) ob(x, RP[1] - 0.2, x + 1, RP[1], Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); ob(x, RP[3], x + 1, RP[3] + 0.2, Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); } }
+  for (let k = 0; k < 6; k++) { const y0 = L[k], y1 = L[k + 1]; MSCP_RAMPS.push([y0, y1]); for (let z = RP[1]; z < RP[3] - 1e-3; z += 1) { const a = y0 + (y1 - y0) * (z - RP[1]) / (RP[3] - RP[1]), b = y0 + (y1 - y0) * (Math.min(RP[3], z + 1) - RP[1]) / (RP[3] - RP[1]);   // ramp rises along +z
+    ob(RP[0] - 0.2, z, RP[0], z + 1, Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); ob(RP[2], z, RP[2] + 0.2, z + 1, Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); } }
   // cores: E solid; W = stair (walls with a door to each deck/roof + ground door S) + solid lift shaft (doors drawn on the deck side)
   const H = MSCP_TOP + 4.5, CWH = [242, 241, 236], IN = [226, 224, 218];
   box(...CE, 0, H, CWH, { nm: 'core', top: [200, 200, 198], ob: true }); box(CW[0], 8.4, CW[2], CW[3], 0, H, CWH, { nm: 'core', top: [200, 200, 198], ob: true });
@@ -1340,7 +1347,7 @@ function mscpSurfs(x, z, M) { const XA = M.boxes[0][2], ZA = M.boxes[0][3], L = 
   if (inR(MSCP_WC)) { for (let k = 0; k <= 7; k++) { if (z < ST.l) S.push(L[k]); if (k === 7) break; const hk = L[k + 1] - L[k], hm = L[k] + hk / 2;
       if (z >= ST.m) S.push(hm); else if (z >= ST.l) { if (x < ST.xa) S.push(L[k] + hk / 2 * (z - ST.l) / (ST.m - ST.l)); else if (x > ST.xb) S.push(hm + hk / 2 * (ST.m - z) / (ST.m - ST.l)); } } return S; }
   if (!inR(MSCP_GARDEN.well) && !MSCP_CORES.some(inR)) for (let j = 1; j <= 7; j++) if (j === 7 || !rp) S.push(L[j]);
-  if (rp) for (let k = 0; k < 6; k++) S.push(L[k] + (L[k + 1] - L[k]) * (x - RP[0]) / (RP[2] - RP[0]));
+  if (rp) for (let k = 0; k < 6; k++) S.push(L[k] + (L[k + 1] - L[k]) * (z - RP[1]) / (RP[3] - RP[1]));
   return S; }
 function mscpZ(X, Y, Z) { const l = mscpLoc(X, Y); let z = null; for (const v of mscpSurfs(l[0], l[1], l[2])) if (Math.abs(v - Z) <= 0.35 && (z === null || Math.abs(v - Z) < Math.abs(z - Z))) z = v; return z; }
 function mscpFree(X, Y, r, z) { const [x, y] = mscpLoc(X, Y); for (const [a, b, c, d, y0, y1] of MSCP_OBS) if (y0 < z + 1.2 && y1 > z + 0.05 && x > a - r && x < c + r && y > b - r && y < d + r) return false;
@@ -4394,8 +4401,8 @@ function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dom
       quad([[e0[0], S.eave - 0.3, e0[2]], [g0[0], S.eave - 0.3, g0[2]], [g1[0], S.eave - 0.3, g1[2]], [e1[0], S.eave - 0.3, e1[2]]], [dn, dn, dn, dn], c([120, 124, 128])); } }   // eave soffit
 }
 function mscpRampGeo(A, B) {   // stacked straight ramps (sloped): slab (ramp 0 = solid wedge on the ground), 1.0 m parapets both sides, dashed centre line; covered fill light (mode 0.3)
-  const RP = MSCP_RAMP, cv = [0, 0, 0.3, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), Wp = (a, y, b) => { const [X, Z] = blkToWorld(B, a, b); return [X, y, Z]; };
-  const nW = (lx, ly, lz) => { const [X, Z] = blkToWorld(B, lx, lz), [X0, Z0] = blkToWorld(B, 0, 0), l = Math.hypot(X - X0, ly, Z - Z0) || 1; return [(X - X0) / l, ly / l, (Z - Z0) / l]; };
+  const RP = [MSCP_RAMP[1], MSCP_RAMP[0], MSCP_RAMP[3], MSCP_RAMP[2]], cv = [0, 0, 0.3, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), Wp = (a, y, b) => { const [X, Z] = blkToWorld(B, b, a); return [X, y, Z]; };   // ramp rises along local +z: (a, b) = (along z, across x)
+  const nW = (lz, ly, lx) => { const [X, Z] = blkToWorld(B, lx, lz), [X0, Z0] = blkToWorld(B, 0, 0), l = Math.hypot(X - X0, ly, Z - Z0) || 1; return [(X - X0) / l, ly / l, (Z - Z0) / l]; };
   const slab = (x0, x1, z0, z1, y0, y1, th, col, top, t = cv, base = null) => { const g = (y1 - y0) / (x1 - x0), nt = nW(-g, 1, 0), k = c(col), kt = c(top || col), yb = x => base === null ? (y0 + g * (x - x0)) - th : base, yt = x => y0 + g * (x - x0);
     A.quad(Wp(x0, yt(x0), z0), Wp(x1, yt(x1), z0), Wp(x1, yt(x1), z1), Wp(x0, yt(x0), z1), nt, kt, t, t, t, t);
     if (base === null) A.quad(Wp(x0, yb(x0), z1), Wp(x1, yb(x1), z1), Wp(x1, yb(x1), z0), Wp(x0, yb(x0), z0), nW(g, -1, 0), k, t, t, t, t);
@@ -4403,7 +4410,7 @@ function mscpRampGeo(A, B) {   // stacked straight ramps (sloped): slab (ramp 0 
     A.quad(Wp(x0, yb(x0), z1), Wp(x0, yb(x0), z0), Wp(x0, yt(x0), z0), Wp(x0, yt(x0), z1), nW(-1, 0, 0), k, t, t, t, t); A.quad(Wp(x1, yb(x1), z0), Wp(x1, yb(x1), z1), Wp(x1, yt(x1), z1), Wp(x1, yt(x1), z0), nW(1, 0, 0), k, t, t, t, t); };
   MSCP_RAMPS.forEach(([y0, y1], k) => { const g = (y1 - y0) / (RP[2] - RP[0]), at = x => y0 + g * (x - RP[0]);
     slab(RP[0], RP[2], RP[1], RP[3], y0, y1, 0.3, [214, 214, 210], [108, 110, 114], cv, k === 0 ? -0.02 : null);
-    slab(RP[0] + 0.5, RP[2], RP[1] - 0.2, RP[1], at(RP[0] + 0.5) + 1.0, y1 + 1.0, 1.3, [240, 239, 234], null, cv); slab(RP[0], RP[2], RP[3], RP[3] + 0.2, y0 + 1.0, y1 + 1.0, 1.3, [240, 239, 234], null, cv);
+    slab(RP[0], RP[2], RP[1] - 0.2, RP[1], y0 + 1.0, y1 + 1.0, 1.3, [240, 239, 234], null, cv); slab(RP[0], RP[2], RP[3], RP[3] + 0.2, y0 + 1.0, y1 + 1.0, 1.3, [240, 239, 234], null, cv);
     const zm = (RP[1] + RP[3]) / 2; for (let x = RP[0] + 1; x < RP[2] - 2; x += 4) slab(x, x + 2, zm - 0.06, zm + 0.06, at(x) + 0.012, at(x + 2) + 0.012, 0.01, [236, 236, 230], null, z4); });
 }
 function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 1): lawn around the light well, community lawn, allotments, fitness pad + stations, shrub mounds + small trees (domes), 3 shelters (pyramid roof on 4 posts)
