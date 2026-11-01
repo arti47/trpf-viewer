@@ -1228,7 +1228,7 @@ const MSCP_GARDEN = { well: [-17, -2.5, 17, 2.5], fit: [-14, 11, -2, 16], comm: 
 // + lift shaft (doors drawn, not working); E core solid with the "BLK 32" sign. 1st storey: preschool + utility centre rooms (closed, shopfront glazing) + open driveway/stair approach at the W end.
 const MSCP_DH = (MSCP_TOP - 1 - VOID_DECK_HEIGHT) / 6, MSCP_CORES = [[-33.4, 1.5, -27.6, 15.5], [27.6, -14.5, 33.4, 0.5]];
 const MSCP_LV = Array.from({ length: 8 }, (_, i) => i ? VOID_DECK_HEIGHT + (i - 1) * MSCP_DH : 0), MSCP_RAMP = [-21, -8.53, 2.4, -2.7], MSCP_WC = [-33.2, 1.7, -27.8, 8.4];
-const MSCP_OPEN = [[-33.13, -8.53, -27.6, 1.5], [-27.6, -8.53, -21, -2.7]], MSCP_ST = { l: 3.8, m: 6.6, xa: -30.55, xb: -30.45 };   // ground open area; stair: landing z < 3.8, flights to 6.6 (A W half up N, B E half up S), mid landing to 8.4
+const MSCP_GROOMS = [[-3, 3.73, 27.6, 19.33], [12, -19.33, 27.6, -8.53]], MSCP_ST = { l: 3.8, m: 6.6, xa: -30.55, xb: -30.45 };   // ground open area; stair: landing z < 3.8, flights to 6.6 (A W half up N, B E half up S), mid landing to 8.4
 let MSCP_OBS = [], MSCP_LOTS = [], MSCP_RAMPS = [];
 const MSCP_FONT = { B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'], L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'], K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'], 1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'], 2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
@@ -1240,7 +1240,8 @@ const rectMinus = (r, H) => { const xs = [r[0], r[2]], zs = [r[1], r[3]];   // a
   const X = [...new Set(xs)].sort((a, b) => a - b), Z = [...new Set(zs)].sort((a, b) => a - b), out = [];
   for (let j = 0; j + 1 < Z.length; j++) { let run = null; for (let i = 0; i + 1 < X.length; i++) { const cx = (X[i] + X[i + 1]) / 2, cz = (Z[j] + Z[j + 1]) / 2;
     if (H.some(h => cx > h[0] && cx < h[2] && cz > h[1] && cz < h[3])) { run = null; continue; } if (run && run[2] === X[i]) run[2] = X[i + 1]; else { run = [X[i], Z[j], X[i + 1], Z[j + 1]]; out.push(run); } } } return out; };
-const mscpRooms = M => rectMinus([-M.boxes[0][2], -M.boxes[0][3], M.boxes[0][2], M.boxes[0][3]], [...MSCP_OPEN, [MSCP_RAMP[0], MSCP_RAMP[1], MSCP_RAMP[2], MSCP_RAMP[3]], ...MSCP_CORES]);   // 1st storey preschool + UC
+const mscpRooms = () => MSCP_GROOMS;   // TY 2026-11-01 "why is the ground floor all closed up": preschool (N/E) + UC (SE) only, rest of the 1st storey = open parking
+const mscpGOpen = (x, z) => !MSCP_GROOMS.some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !MSCP_CORES.some(r => x > r[0] && x < r[2] && z > r[1] && z < r[3]) && !(x > MSCP_RAMP[0] && x < MSCP_RAMP[2] && z > MSCP_RAMP[1] && z < MSCP_RAMP[3]);   // 1st storey preschool + UC
 function mscpKit(M) {
   const out = []; MSCP_OBS = []; MSCP_LOTS = []; MSCP_RAMPS = []; const [XA, ZA] = [M.boxes[0][2], M.boxes[0][3]], [wx0, wz0, wx1, wz1] = MSCP_GARDEN.well, L = MSCP_LV, R = L[7], RP = MSCP_RAMP, CW = MSCP_CORES[0], CE = MSCP_CORES[1], ST = MSCP_ST;
   const WH = [240, 239, 234], GR = [150, 154, 158], DK = [118, 120, 124], SOF = [214, 214, 210], GN = [86, 128, 64], GN2 = [70, 110, 54], YL = [232, 190, 40], LN = [236, 236, 230], SS = [196, 200, 204];
@@ -1249,12 +1250,13 @@ function mscpKit(M) {
     const P = makePrism('Carpark ' + (x.nm || 'part'), 'trpf', y1, y0, [[a, b], [c, b], [c, d], [a, d]].flatMap(([p, q]) => blkToWorld(M, p, q)), 0); P.tank = true; P.alb = alb; P.topc = x.top || alb; P.botc = x.bot || alb; if (x.cov) P.cov = 1; if (x.lamp) P.lamp = 1; out.push(P); };
   const sides = [[[-XA, -ZA], [1, 0], [0, -1], 2 * XA], [[XA, -ZA], [0, 1], [1, 0], 2 * ZA], [[XA, ZA], [-1, 0], [0, 1], 2 * XA], [[-XA, ZA], [0, -1], [-1, 0], 2 * ZA]];
   const sbox = (S, t0, t1, o0, o1, y0, y1, alb, x) => { const [p, d, n] = S, Lc = (t, o) => [p[0] + d[0] * t + n[0] * o, p[1] + d[1] * t + n[1] * o], A = Lc(t0, o0), B = Lc(t1, o1); box(A[0], A[1], B[0], B[1], y0, y1, alb, x); };
-  const inR = (r, x, z, m = 0) => x > r[0] - m && x < r[2] + m && z > r[1] - m && z < r[3] + m, inCore = (x, z, m = 0) => MSCP_CORES.some(r => inR(r, x, z, m)), open = (x, z) => MSCP_OPEN.some(r => inR(r, x, z));
+  const inR = (r, x, z, m = 0) => x > r[0] - m && x < r[2] + m && z > r[1] - m && z < r[3] + m, inCore = (x, z, m = 0) => MSCP_CORES.some(r => inR(r, x, z, m)), open = (x, z) => mscpGOpen(x, z);
   const ramp = [RP[0], RP[1], RP[2], RP[3]], well = MSCP_GARDEN.well;
   // decks L1..L7 (L7 = roof slab): holes at the light well, cores, ramp (L1..L6); well upstands (S side along the ramp: ramp parapet instead)
   for (let j = 1; j <= 7; j++) { const y = L[j], x = { nm: 'deck', top: j === 7 ? [214, 204, 186] : DK, bot: SOF, cov: j < 7 }, u = j === 7 ? 1.1 : 1.0, w = { nm: 'well', ob: true, cov: j < 7 };
-    for (const r of rectMinus([-XA, -ZA, XA, ZA], [well, ...MSCP_CORES, ...(j < 7 ? [ramp] : [])])) box(...r, y - 0.35, y, WH, x);
-    box(wx0 - 0.2, wz1, wx1 + 0.2, wz1 + 0.2, y, y + u, WH, w); box(j < 7 ? RP[2] : wx0 - 0.2, wz0 - 0.2, wx1 + 0.2, wz0, y, y + u, WH, w); box(wx0 - 0.2, wz0, wx0, wz1, y, y + u, WH, w); box(wx1, wz0, wx1 + 0.2, wz1, y, y + u, WH, w); }
+    for (const r of rectMinus([-XA, -ZA, XA, ZA], [...(j > 1 ? [well] : []), ...MSCP_CORES, ...(j < 7 ? [ramp] : [])])) box(...r, y - 0.35, y, WH, x);   // L1 = floor of the light well
+    if (j > 1) box(wx0 - 0.2, wz1, wx1 + 0.2, wz1 + 0.2, y, y + u, WH, w); box(j < 7 ? RP[2] : wx0 - 0.2, wz0 - 0.2, wx1 + 0.2, wz0, y, y + u, WH, w); box(wx0 - 0.2, wz0, wx0, wz1, y, y + u, WH, w); box(wx1, wz0, wx1 + 0.2, wz1, y, y + u, WH, w); }
+  box(wx0, wz0, wx1, wz1, L[1], L[1] + 0.02, [150, 152, 150], { nm: 'well floor' }); for (let i = 0; i < 5; i++) { const xa = wx0 + (wx1 - wx0) * i / 5 + 0.8, xb = wx0 + (wx1 - wx0) * (i + 1) / 5 - 0.8; box(xa, wz0 + 0.8, xb, wz1 - 0.8, L[1], L[1] + 0.5, [200, 196, 188], { nm: 'well planter', top: GN }); }
   for (let i = 1; i < 5; i++) { const xx = wx0 + (wx1 - wx0) * i / 5; box(xx - 0.12, wz0, xx + 0.12, wz1, L[1] - 0.35, R + 1.1, WH, { nm: 'well wall' }); }   // light well: 5 cells
   // interior columns (yellow/black guard band per level) on the lot-row edges, every second bay
   for (let m = 1; m <= 5; m++) for (const zz of [-14.83, -8.23, 8.23, 14.83]) { const xx = -XA + 11.04 * m; if (inCore(xx, zz, 1) || inR(ramp, xx, zz, 0.4) || inR(well, xx, zz, 0.5)) continue;
@@ -1265,8 +1267,9 @@ function mscpKit(M) {
     for (let i = 0; i <= n; i++) { const t = i * bw, [cx, cz] = Lc(t, -0.3); if (inCore(cx, cz, 0.6)) continue; sbox(S, Math.max(0, t - 0.35), Math.min(S[3], t + 0.35), -0.45, 0.22, 0, MSCP_TOP + 0.15, WH, { nm: 'column', ob: true }); }
     for (let j = 1; j <= 7; j++) { const A = Lc(0, -0.3), B = Lc(S[3], 0.6); ob(A[0], A[1], B[0], B[1], L[j], L[j] + 1.1); }   // walk fence along the facade (blocks only)
     for (let i = 0; i < n; i++) { const t0 = i * bw + 0.35, t1 = (i + 1) * bw - 0.35, [mx, mz] = Lc((t0 + t1) / 2, -0.3); if (inCore(mx, mz, 0.3)) continue;
-      if (!open(mx, mz)) { const uc = mx > 12; sbox(S, t0, t1, 0.0, 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: uc ? 'UC door' : 'shopfront' }); sbox(S, t0, t1, 0, 0.06, 2.8, 3.15, WH, { nm: 'transom' });
+      if (!open(mx, mz) && !inCore(mx, mz, 0.3)) { const uc = mz < 0; sbox(S, t0, t1, 0.0, 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: uc ? 'UC door' : 'shopfront' }); sbox(S, t0, t1, 0, 0.06, 2.8, 3.15, WH, { nm: 'transom' });
         for (let k = 0; k <= 3; k++) { const tm = t0 + (t1 - t0) * k / 3; sbox(S, tm - 0.04, tm + 0.04, 0.0, 0.07, 0.3, 2.8, uc ? [120, 124, 128] : [210, 212, 214], { nm: 'mullion' }); } }
+      else if (si !== 3) { sbox(S, t0, t1, -0.12, -0.04, 0, 0.95, GR, { nm: 'parapet' }); sbox(S, t0 + 0.05, t1 - 0.05, 0.02, 0.62, 0, 0.55, [228, 228, 224], { nm: 'planter' }); sbox(S, t0 + 0.12, t1 - 0.12, 0.06, 0.58, 0.55, 0.85 + 0.15 * hash01(i, 9, si), GN, { nm: 'planter', top: GN }); const A = Lc(t0 - 0.4, -0.3), B = Lc(t1 + 0.4, 0.6); ob(A[0], A[1], B[0], B[1], 0, 1.0); }   // 1st storey parking: low planter + parapet (W end = open entrance)
       for (let j = 0; j < 6; j++) { const y = L[j + 1], yt = L[j + 2] - 0.35;
         if ((i + j + si) % 2 === 0) { sbox(S, t0, t1, -0.12, -0.04, y, y + 0.95, GR, { nm: 'parapet' }); sbox(S, t0 + 0.05, t1 - 0.05, 0.02, 0.62, y - 0.1, y + 0.55, [228, 228, 224], { nm: 'planter' });
           sbox(S, t0 + 0.12, t1 - 0.12, 0.06, 0.58, y + 0.55, y + 0.85 + 0.15 * hash01(i, j, si), GN, { nm: 'planter', top: GN }); sbox(S, t0 + 0.3, t1 - 0.3, 0.58, 0.66, y - 0.25, y + 0.7, GN2, { nm: 'planter' }); }
@@ -1275,15 +1278,19 @@ function mscpKit(M) {
   [[-XA + 0.25, -ZA + 0.25, XA - 0.25, -ZA + 1.6], [-XA + 0.25, ZA - 1.6, XA - 0.25, ZA - 0.25]].forEach(([a, b, c, d]) => box(a, b, c, d, R, R + 0.55, [200, 196, 188], { nm: 'planter', top: GN, ob: true }));
   // parking lots (dynamic cars: mscpCarsNow), lot lines, wheel stoppers, soffit LED battens over the lot rows and aisles
   const rows = [[14.53, 19.33, 1, -27.6, 27.6], [-19.33, -14.53, -1, -27.6, 27.6], [3.73, 8.53, -1, -17, 17], [-8.53, -3.73, 1, RP[2], 17]];
-  for (let j = 1; j <= 6; j++) { const y = L[j];
-    for (const [z0, z1, nz, xa, xb] of rows) for (let i = 0; i < 12; i++) { const bx = -XA + i * 5.52; if (bx < xa - 0.01 || bx + 5.52 > xb + 0.01) continue; const xs = [bx + 0.35, bx + 2.76, bx + 5.17];
+  const rows0 = [[14.53, 19.33, 1, -27.6, -3], [-19.33, -14.53, -1, -27.6, 12], [3.73, 8.53, -1, -17, -3], [-8.53, -3.73, 1, RP[2], 12]];   // 1st storey: around the rooms
+  for (let j = 0; j <= 6; j++) { const y = j ? L[j] : 0.03;
+    for (const [z0, z1, nz, xa, xb] of j ? rows : rows0) for (let i = 0; i < 12; i++) { const bx = -XA + i * 5.52; if (bx < xa - 0.01 || bx + 5.52 > xb + 0.01) continue; const xs = [bx + 0.35, bx + 2.76, bx + 5.17];
       for (const xl of xs) box(xl - 0.05, z0 + 0.1, xl + 0.05, z1 - 0.1, y, y + 0.012, LN, { nm: 'lot line', cov: true });
       for (let q = 0; q < 2; q++) { const cx = (xs[q] + xs[q + 1]) / 2, zw = nz > 0 ? z1 - 0.75 : z0 + 0.75; MSCP_LOTS.push({ j, y, x: cx, z: (z0 + z1) / 2, nz, r: [xs[q] + 0.25, z0 + 0.25, xs[q + 1] - 0.25, z1 - 0.25], k: MSCP_LOTS.length });
         box(cx - 0.8, zw - 0.08, cx + 0.8, zw + 0.08, y, y + 0.12, [204, 200, 190], { nm: 'wheel stopper', cov: true }); } }
-    for (let i = 1; i < 11; i++) for (const zz of [16.9, 11.5, 6.1, -6.1, -11.5, -16.9]) { const xx = -XA + (i + 0.5) * 5.52; if (inR(well, xx, zz, 0.5) || inR(ramp, xx, zz, 0.3) || inCore(xx, zz, 0.5)) continue;
+    for (let i = 1; i < 11; i++) for (const zz of [16.9, 11.5, 6.1, -6.1, -11.5, -16.9]) { const xx = -XA + (i + 0.5) * 5.52; if ((j > 0 && inR(well, xx, zz, 0.5)) || (!j && !open(xx, zz)) || inR(ramp, xx, zz, 0.3) || inCore(xx, zz, 0.5)) continue;
       box(xx - 0.6, zz - 0.07, xx + 0.6, zz + 0.07, L[j + 1] - 0.41, L[j + 1] - 0.35, [255, 250, 236], { nm: 'lamp', lamp: true }); } }
-  for (const [x0, z0, x1, z1] of MSCP_OPEN) { box(x0, z0, x1, z1, -0.02, 0.03, [84, 86, 90], { nm: 'drive', cov: true }); for (let xx = x0 + 2; xx < x1 - 1; xx += 4) box(xx, (z0 + z1) / 2 - 0.06, xx + 2, (z0 + z1) / 2 + 0.06, 0.03, 0.04, LN, { nm: 'drive line' });   // 1st storey driveway + lamps
-    for (let xx = x0 + 2.5; xx < x1 - 1; xx += 5.5) box(xx - 0.6, (z0 + z1) / 2 - 0.07, xx + 0.6, (z0 + z1) / 2 + 0.07, L[1] - 0.41, L[1] - 0.35, [255, 250, 236], { nm: 'lamp', lamp: true }); }
+  for (const r of rectMinus([-XA, -ZA, XA, ZA], [...MSCP_GROOMS, ...MSCP_CORES, ramp])) box(...r, -0.02, 0.03, [84, 86, 90], { nm: 'drive', cov: true });   // 1st storey asphalt
+  { const fr = (x0, z0, x1, z1, uc) => { const L2 = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L2 / 1.8)), nx = (z1 - z0) / L2, nz = -(x1 - x0) / L2;   // room fronts on the parking side: glazing + mullions (preschool), louvred doors (UC)
+      box(x0 + nx * 0.0, z0 + nz * 0.0, x1 + nx * 0.04, z1 + nz * 0.04, 0.3, 2.8, uc ? [150, 156, 160] : [64, 78, 92], { nm: 'room front' });
+      for (let k = 0; k <= n; k++) { const t = k / n, cx = x0 + (x1 - x0) * t, cz = z0 + (z1 - z0) * t; box(cx - 0.04, cz - 0.04, cx + 0.04 + nx * 0.03, cz + 0.04 + nz * 0.03, 0.3, 2.8, uc ? [120, 124, 128] : [210, 212, 214], { nm: 'mullion' }); } };
+    fr(-3, 19.33, -3, 3.73, 0); fr(-3, 3.73, 27.6, 3.73, 0); fr(12, -8.53, 12, -19.33, 1); fr(27.6, -8.53, 12, -8.53, 1); }
   // ramps (sloped geometry in gpuGarden via MSCP_RAMPS); walk blocks along both parapets
   for (let k = 0; k < 6; k++) { const y0 = L[k], y1 = L[k + 1]; MSCP_RAMPS.push([y0, y1]); for (let x = RP[0]; x < RP[2] - 1e-3; x += 1) { const a = y0 + (y1 - y0) * (x - RP[0]) / (RP[2] - RP[0]), b = y0 + (y1 - y0) * (Math.min(RP[2], x + 1) - RP[0]) / (RP[2] - RP[0]);
     if (x > RP[0] + 0.5) ob(x, RP[1] - 0.2, x + 1, RP[1], Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); ob(x, RP[3], x + 1, RP[3] + 0.2, Math.min(a, b) - 0.2, Math.max(a, b) + 1.0); } }
@@ -1329,7 +1336,7 @@ const mscpLoc = (X, Y) => { const M = SITE_BLOCKS.find(b => b.name.startsWith('M
 const mscpIn = (X, Y) => { const l = mscpLoc(X, Y); return !!l && Math.abs(l[0]) < l[2].boxes[0][2] + 0.6 && Math.abs(l[1]) < l[2].boxes[0][3] + 0.6; };
 function mscpSurfs(x, z, M) { const XA = M.boxes[0][2], ZA = M.boxes[0][3], L = MSCP_LV, RP = MSCP_RAMP, ST = MSCP_ST, S = [], inR = r => x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3];
   if (Math.abs(x) > XA || Math.abs(z) > ZA) return [0];
-  if (MSCP_OPEN.some(inR) || inR([-31.0, 1.4, -29.4, 1.8])) S.push(0); const rp = inR(RP); if (inR([-27.9, 2.0, -27.5, 3.6])) for (let j = 1; j <= 7; j++) S.push(L[j]);   // + core door thresholds (ground S door, deck/roof E doors)
+  if (mscpGOpen(x, z) || inR([-31.0, 1.4, -29.4, 1.8])) S.push(0); const rp = inR(RP); if (inR([-27.9, 2.0, -27.5, 3.6])) for (let j = 1; j <= 7; j++) S.push(L[j]);   // + core door thresholds (ground S door, deck/roof E doors)
   if (inR(MSCP_WC)) { for (let k = 0; k <= 7; k++) { if (z < ST.l) S.push(L[k]); if (k === 7) break; const hk = L[k + 1] - L[k], hm = L[k] + hk / 2;
       if (z >= ST.m) S.push(hm); else if (z >= ST.l) { if (x < ST.xa) S.push(L[k] + hk / 2 * (z - ST.l) / (ST.m - ST.l)); else if (x > ST.xb) S.push(hm + hk / 2 * (ST.m - z) / (ST.m - ST.l)); } } return S; }
   if (!inR(MSCP_GARDEN.well) && !MSCP_CORES.some(inR)) for (let j = 1; j <= 7; j++) if (j === 7 || !rp) S.push(L[j]);
