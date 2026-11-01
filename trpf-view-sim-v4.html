@@ -1225,7 +1225,7 @@ function rebuildTRPF() {
   TRPF_RELIEF = SITE_BLOCKS.filter(B => B.h > BLK_TOP).flatMap(trpfRelief); if (M) TRPF_RELIEF.push(...mscpKit(M));   // all residential blocks (TY 2026-10-31 "do for all blocks")
 }
 const MSCP_ROOF = [['W core', -32.1, -6.5, -27.3, 10.7, 4.5, [232, 232, 228]], ['E core (Blk 32)', 28.5, -14.7, 32.1, 3.3, 4.5, [232, 232, 228]],   // site plan 2026-11-01: cores = white bars, S = shelters
-  ['shelter', 1.4, 11.8, 5.4, 15.8, 3, [226, 226, 222]], ['shelter', -22.8, -9.4, -18.8, -5.4, 3, [226, 226, 222]], ['shelter', 23.9, -14.9, 27.9, -10.9, 3, [226, 226, 222]]];   // shelters moved to the roof model photo 2026-11-01
+  ['shelter', 1.4, 13.0, 5.4, 17.0, 3, [226, 226, 222]], ['shelter', -22.8, -9.4, -18.8, -5.4, 3, [226, 226, 222]], ['shelter', 23.9, -14.9, 27.9, -10.9, 3, [226, 226, 222]]];   // shelters moved to the roof model photo 2026-11-01
 // Roof garden surface (visual only): paved perimeter path, lawn + planting clumps, central light well, elderly fitness pad, community-use lawn.
 const ML_SH = [-32.1, 7.0, -28.0, 10.6], ML_CAR = [-31.1, 7.25, -29.0, 9.45], ML_DOOR = [-30.55, -29.55], ML = { y: 0, lv: 0, o: 0, tgt: 0, busy: 0, dest: -1, v: 0, raf: 0, idle: 0, pend: null, sig: '', psig: '' };
 const MSCP_GARDEN = { well: [-17.6, -3.34, 17.9, 0.37], fit: [-13.5, 9.0, 0, 12.8], comm: [-19.1, -14.1, -0.9, -6.3] };
@@ -1354,7 +1354,8 @@ function mscpKit(M) {
   for (let k = 0; k < 7; k++) { const y0 = L[k], hk = L[k + 1] - y0, hm = y0 + hk / 2, n = Math.round(hk / 2 / 0.175), run = (ST.m - ST.l) / n;   // dog-leg flights + mid landings + centre balustrade
     box(MSCP_WC[0], ST.m, MSCP_WC[2], WZ, hm - 0.2, hm, IN, { nm: 'stair landing', cov: true, top: [176, 174, 168] });
     for (let i = 1; i <= n; i++) { const ya = y0 + i * hk / 2 / n, yb = hm + i * hk / 2 / n, za = ST.l + (i - 1) * run, zb = ST.m - i * run;
-      const rh = hk / 2 / n; box(MSCP_WC[0], za, ST.xa, za + run, ya - rh - 0.06, ya, IN, { nm: 'stair', cov: true, top: [176, 174, 168] }); box(ST.xb, zb, MSCP_WC[2], zb + run, yb - rh - 0.06, yb, IN, { nm: 'stair', cov: true, top: [176, 174, 168] });   // steps sit on the sloped waist slab (mscpRampGeo); 2026-11-01: were 0.4 m blocks → stepped underside
+      const rh = hk / 2 / n; box(MSCP_WC[0], za, ST.xa, za + run, ya - rh - 0.06, ya, [196, 192, 184], { nm: 'stair', cov: true, top: [214, 210, 202] }); box(ST.xb, zb, MSCP_WC[2], zb + run, yb - rh - 0.06, yb, [196, 192, 184], { nm: 'stair', cov: true, top: [214, 210, 202] });   // tread lighter than riser (block stair colours)
+      box(MSCP_WC[0], za, ST.xa, za + 0.05, ya, ya + 0.004, [70, 72, 76], { nm: 'stair nosing', cov: true }); box(ST.xb, zb + run - 0.05, MSCP_WC[2], zb + run, yb, yb + 0.004, [70, 72, 76], { nm: 'stair nosing', cov: true });   // dark anti-slip nosing strip on each tread edge   // steps sit on the sloped waist slab (mscpRampGeo); 2026-11-01: were 0.4 m blocks → stepped underside
     } }   // balusters + sloped handrails in mscpRampGeo (2026-11-01; was a stepped solid wall of 0.95 m blocks)
   box(MSCP_WC[0], ST.l - 0.03, ST.xa, ST.l + 0.03, R, R + 1.0, [92, 96, 100], { nm: 'stair rail', cov: true });
   MSCP_CORES.slice(0, 2).forEach(([a, b, c, d], ci) => { const e = ci ? c : a, s = ci ? 1 : -1, zm = (b + d) / 2;   // core exterior: louvre strip on the end face, deck bands, panel joints
@@ -4154,7 +4155,7 @@ void main() {
       c = mix(c, untone(r.y > 0.0 ? mix(uFog, uSkyTop, sqrt(r.y)) : mix(uFog, vec3(0.27, 0.3, 0.32), 0.6)), 0.22 + 0.55 * F); c += vec3(1.0, 0.96, 0.86) * pow(max(dot(r, uSun), 0.0), 900.0) * uDirect * vis * 3.0 * SUNK; }
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
-    if (mode > 0.2 && mode < 0.4) c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96);   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > 0.4 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
+    if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y)); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > 0.4 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
   vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
@@ -4634,7 +4635,7 @@ function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 
   { const P = RG.path, S = []; for (let i = 0; i + 1 < P.length; i++) for (let k = 0; k < 4; k++) { const t = k / 4, p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];   // winding path: Catmull-Rom ribbon + kerbs
       S.push([0, 1].map(q => 0.5 * (2 * p1[q] + (-p0[q] + p2[q]) * t + (2 * p0[q] - 5 * p1[q] + 4 * p2[q] - p3[q]) * t * t + (-p0[q] + 3 * p1[q] - 3 * p2[q] + p3[q]) * t * t * t))); } S.push(P[P.length - 1]);
     for (let i = 0; i + 1 < S.length; i++) { const [ax, az] = S[i], [bx2, bz2] = S[i + 1], l = Math.hypot(bx2 - ax, bz2 - az) || 1, nx = -(bz2 - az) / l, nz = (bx2 - ax) / l, w = RG.pw + 0.05;
-      const q = (o0, o1, col, dy) => { const p = [[ax + nx * o0, az + nz * o0], [bx2 + nx * o0, bz2 + nz * o0], [bx2 + nx * o1, bz2 + nz * o1], [ax + nx * o1, az + nz * o1]]; poly(p, col, dy); };
+      const ex = 0.25, ux = nz * ex, uz = -nx * ex, q = (o0, o1, col, dy) => { const p = [[ax - ux + nx * o0, az - uz + nz * o0], [bx2 + ux + nx * o0, bz2 + uz + nz * o0], [bx2 + ux + nx * o1, bz2 + uz + nz * o1], [ax - ux + nx * o1, az - uz + nz * o1]]; poly(p, col, dy); };   // segments overlap 0.25 m (wedge gaps at bends showed the soil as green slivers, 2026-11-01)
       q(-w, w, PV, 0.065); q(-w - 0.15, -w, KB, 0.1); q(w, w + 0.15, KB, 0.1); } }
   { const [x0, z0, x1, z1] = RG.lawn; rq(RG.lawn, [118, 162, 86], 0.075); const seg = 0.6, put = (a, b, w, h, k) => rq([a, b, a + w, b + h], k ? [30, 30, 32] : [236, 236, 232], 0.09);   // community lawn + dashed border
     for (let x = x0, k = 0; x < x1 - 1e-3; x += seg, k++) { put(x, z0, Math.min(seg, x1 - x), 0.25, k % 2); put(x, z1 - 0.25, Math.min(seg, x1 - x), 0.25, k % 2); }
@@ -4645,7 +4646,7 @@ function gpuGarden(A, P) {   // MSCP roof garden on the roof slab (MSCP_TOP − 
   { const [cx, cz, rx, rz] = RG.pad, N = 24, pl = [];   // kidney-shaped elderly fitness pad (blue EPDM, dented N edge) + 5 stations
     for (let i = 0; i <= N; i++) { const t = Math.PI * i / N, d = 1 - 0.18 * Math.exp(-((t - 1.9) ** 2) / 0.12); pl.push([cx + rx * Math.cos(t) * (i === 0 || i === N ? 0.98 : 1), cz - 0.2 + rz * Math.sin(t) * d]); }
     poly(pl, [88, 150, 196], 0.08); const pc = [[236, 186, 40], [84, 164, 92], [60, 130, 200]];
-    for (let i = 0; i < 5; i++) { const x = cx - 4.6 + i * 2.3, z = cz + 1.0 + 1.1 * Math.sin(i * 1.3), k = pc[i % 3];
+    for (let i = 0; i < 5; i++) { const x = cx - 4.2 + i * 2.1, z = cz + 1.9 + 0.4 * Math.sin(i * 1.3), k = pc[i % 3];   // stations kept inside the pad, clear of the path (2026-11-01 TY: end station stood on the path)
       cy(x, z - 0.55, R, R + 1.2, 0.06, k); cy(x, z + 0.55, R, R + 1.2, 0.06, k); hz(x, R + 1.12, z - 0.55, z + 0.55, 0.03, [200, 202, 206]); cy(x, z - 0.55, R + 1.2, R + 1.25, 0.075, k); cy(x, z + 0.55, R + 1.2, R + 1.25, 0.075, k); cy(x, z - 0.55, R + 0.06, R + 0.14, 0.11, [150, 150, 146]); cy(x, z + 0.55, R + 0.06, R + 0.14, 0.11, [150, 150, 146]);   // elderly stations 1.2 m (were 1.55 m dark grey, TY 2026-11-01), base plates   // round posts, steel bar, caps
       if (i % 2) { cy(x - 0.22, z, R, R + 0.42, 0.04, [92, 98, 104]); cy(x + 0.22, z, R, R + 0.42, 0.04, [92, 98, 104]); bx(x - 0.32, z - 0.22, x + 0.32, z + 0.22, R + 0.42, R + 0.48, k); }   // seat on 2 legs
       else { hz(x, R + 0.9, z - 0.5, z + 0.5, 0.025, [200, 202, 206]); for (const s2 of [-1, 1]) { cy(x + 0.18 * s2, z, R + 0.2, R + 0.24, 0.12, [40, 42, 46], 12); } } } }   // twister / pedals
