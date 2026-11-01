@@ -1435,7 +1435,7 @@ VD_FLAT.plazas = VD.plazas.map(r => pxRing(pxBox(r))).concat(VD.bins.map(pxRing)
 VD_FLAT.drives = VD.drives.map(pxRing);   // (was swallowed by the comment above: drives never reached trees / walk map)
 // Site-plan roads (GEO.siteRoads trapezoids, site px → world rings): public roads (Tanjong Rhu Rd / Close, ECP slips) + internal drives / drop-off loops; replace the OSM ribbons inside the plan image
 const SITE_ROADS = (GEO.siteRoads || []).map(([ya, yb, a0, a1, b0, b1]) => pxRing([[a0, ya], [a1, ya], [b1, yb], [b0, yb]]));
-const SITE_IMG = pxRing([[0, 0], [1284, 0], [1284, 1009], [0, 1009]]);
+const SITE_LOOPS = (GEO.siteRoadLoops || []).map(pxRing), SITE_LANES = (GEO.siteLanes || []).map(([e, q]) => ({ e, p: pxRing(q.map(v => [v[0], v[1]])), wd: q.map(v => v[2]) })); const SITE_IMG = pxRing([[0, 0], [1284, 0], [1284, 1009], [0, 1009]]);
 // Playgrounds (1) + fitness corners (2)/(3) (TY 2026-10-31 "render the playground… typical HDB BTO playgrounds"; sizes/colours estimates): world-space triangle mesh, built once
 let PLAY_KIT = null;
 function playKit() {
@@ -1608,7 +1608,7 @@ function roadKit() {
   W.forEach((w, wi) => {
     if (w.R.minx > ux + RK_R || w.R.maxx < ux - RK_R || w.R.minz > uz + RK_R || w.R.maxz < uz - RK_R) { if (w.c !== 0) return; }
     const hw = w.hw, e = Math.max(1, hw - 0.6), med = w.med = partner(w, wi), one = w.c === 0 || med !== 0, ph = hash01(w.p[0], w.p[1], 3) * 6;
-    const inS = (x, z, i) => w.sIn[i] || ringIn(SITE_IMG, x, z), mOK = (x, z, i) => near(x, z, RK_R) && !other(wi, x, z, 1.0) && !nearJ(wi, x, z) && (inS(x, z, i) ? siteOn(x, z, 0.4) : true);
+    const inS = (x, z, i) => w.sIn[i] || ringIn(SITE_IMG, x, z), mOK = (x, z, i) => near(x, z, RK_R) && !other(wi, x, z, 1.0) && !nearJ(wi, x, z) && !inS(x, z, i);   // inside the plan image: lines from the plan's own centre-lines (below)
     const eOK = m => (x, z, i) => near(x, z, RK_R) && !inS(x, z, i) && !other(wi, x, z, m);
     if ((w.c <= 3 || w.lanes >= 2) && midNear(w, RK_R + w.len)) {   // cls 4 (minor/unclassified, e.g. Tanjong Rhu Rd) with ≥ 2 lanes: as cls 3
       const D = w.c === 0 ? [4, 8, ph] : [2, 4, ph], lw = w.c === 0 ? 0.075 : 0.06, n = w.lanes;
@@ -1657,10 +1657,26 @@ function roadKit() {
     for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) { let q = 1 - x; for (let d = -r; d <= r; d++) { const a = i + d; if ((a >= 0 && a < MW ? src[j * MW + a] : 0) === x) { q = x; break; } } t[j * MW + i] = q; }
     for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) { let q = 1 - x; for (let d = -r; d <= r; d++) { const b = j + d; if ((b >= 0 && b < MH ? t[b * MW + i] : 0) === x) { q = x; break; } } o[j * MW + i] = q; } return o; };
   const MKs = MS(MS(MS(MS(MK, true, 2), false, 2), false, 2), true, 2);   // closing + opening (1 m): plan-mask staircase / pinholes smoothed before tracing
-  for (const lp of gridLoops(MKs, MW, MH, MX, MZ, MC, 0.5, true)) { let ar = 0; for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length]; ar += a[0] * b[1] - b[0] * a[1]; } if (Math.abs(ar) / 2 < 25) continue;
-    for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue;
+  const mkW = q => { const n = q.length / 2, sn = [], A = [0]; for (let i = 0; i + 1 < n; i++) { const ex = q[2 * i + 2] - q[2 * i], ez = q[2 * i + 3] - q[2 * i + 1], L = Math.hypot(ex, ez) || 1e-6; sn.push([-ez / L, ex / L, ex / L, ez / L]); A.push(A[i] + L); }
+    const mv = []; for (let i = 0; i < n; i++) { const a = sn[Math.max(0, i - 1)], b = sn[Math.min(n - 2, i)]; let mx = a[0] + b[0], mz = a[1] + b[1]; const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l; const k = 1 / Math.max(0.5, mx * b[0] + mz * b[1]); mv.push([mx * k, mz * k]); } return { p: q, n, sn, A, mv, len: A[n - 1] }; };
+  // site-plan centre-lines (skeleton of the smoothed plan mask, GEO.siteLanes): style from the OSM way running along it (class, one-way/dual), else estate drive (two-way, dashed centre ≥ 5.5 m)
+  for (const S of SITE_LANES) { const q = S.p, n = q.length / 2; if (n < 2) continue; const v = mkW(q), ws = S.wd.slice(n > 4 ? 1 : 0, n > 4 ? -1 : n).sort((a, b) => a - b), wd = ws[ws.length >> 1]; if (v.len < 6 || wd < 3) continue;
+    const vote = new Map(); for (let a = 0; a <= v.len; a += 4) { const [x, z, i] = posAt(v, a, 0), t = v.sn[i], L = cell(x, z); let best = -1, bd = Infinity;
+      for (let k = 0; k < L.length; k += 2) { const w = W[L[k]], j = L[k + 1], o = w.sn[j], d = segD(x, z, w.p[2 * j], w.p[2 * j + 1], w.p[2 * j + 2], w.p[2 * j + 3]); if (Math.abs(o[2] * t[2] + o[3] * t[3]) > 0.85 && d < Math.max(w.hw, wd / 2) + 3 && d < bd) { bd = d; best = L[k]; } }
+      if (best >= 0) vote.set(best, (vote.get(best) || 0) + 1); }
+    let mi = -1, mc = 0; for (const [k, c] of vote) if (c > mc) { mc = c; mi = k; } if (mc < Math.max(1, (v.len / 4 + 1) * 0.3)) mi = -1; const m = mi >= 0 ? W[mi] : null;
+    const tr = wd / 2 + 4, P0 = [q[0], q[1]], P1 = [q[2 * n - 2], q[2 * n - 1]];
+    const ok = (x, z, i) => near(x, z, RK_R) && ringIn(SITE_IMG, x, z) && siteOn(x, z, 0.4) && !(S.e[0] && Math.hypot(x - P0[0], z - P0[1]) < tr) && !(S.e[1] && Math.hypot(x - P1[0], z - P1[1]) < tr) && !(m && nearJ(mi, x, z)) && Math.abs((S.wd[i] + S.wd[i + 1]) / 2 - wd) < Math.max(1.2, 0.25 * wd);
+    const e = Math.max(1, wd / 2 - 0.6), lanes = Math.max(1, Math.round((wd - 1.2) / 3.4)), ph = hash01(q[0], q[1], 13) * 6;
+    if (m && (m.c === 0 || m.med)) { const D = m.c === 0 ? [4, 8, ph] : [2, 4, ph], lw = m.c === 0 ? 0.075 : 0.06; for (let k = 1; k < lanes; k++) line(v, -e + k * 2 * e / lanes, ok, lw, WH, D); }
+    else if (wd >= 5.5) { if (m && m.c <= 2) { line(v, 0.11, ok, 0.05, WH); line(v, -0.11, ok, 0.05, WH); } else line(v, 0, ok, 0.06, WH, [2, 4, ph]); const ns = Math.max(1, Math.floor(lanes / 2)); for (let k = 1; k < ns; k++) for (const sg of [-1, 1]) line(v, sg * k * e / ns, ok, 0.06, WH, [2, 4, ph]); } }
+  // kerbs + kerbside lines along the smoothed plan road outlines (GEO.siteRoadLoops; islands too), not along the image border: single yellow 0.3 m in (no parking), expressway white 0.45 m in
+  for (const lr of SITE_LOOPS) { const lp = []; for (let i = 0; i < lr.length; i += 2) lp.push([lr[i], lr[i + 1]]); let ar = 0; for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length]; ar += a[0] * b[1] - b[0] * a[1]; } if (Math.abs(ar) / 2 < 25) continue;
+    for (let k = 0; k < lp.length; k++) { const a = lp[k], b = lp[(k + 1) % lp.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.02) continue;
     const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; if (polyD(SITE_IMG, mx, mz) < 1.5) continue; let ox = (b[1] - a[1]) / L, oz = -(b[0] - a[0]) / L; { const i = Math.floor((mx + ox * 0.6 - MX) / MC), j = Math.floor((mz + oz * 0.6 - MZ) / MC); if (i >= 0 && i < MW && j >= 0 && j < MH && MKs[j * MW + i]) { ox = -ox; oz = -oz; } }
-    const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L; box(mx + ox * 0.1, mz + oz * 0.1, 0, 0.15, tx, tz, L / 2 + 0.05, 0.1, KB); } }
+    const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L; if (near(mx, mz, RK_K)) box(mx + ox * 0.1, mz + oz * 0.1, 0, 0.15, tx, tz, L / 2 + 0.05, 0.1, KB);
+      let xw = false; { const Lc = cell(mx - ox * 3, mz - oz * 3); for (let k = 0; k < Lc.length && !xw; k += 2) { const w = W[Lc[k]], j = Lc[k + 1]; xw = w.c === 0 && segD(mx, mz, w.p[2 * j], w.p[2 * j + 1], w.p[2 * j + 2], w.p[2 * j + 3]) < w.hw + 4; } }
+      const di = xw ? 0.45 : 0.3, hh = xw ? 0.075 : 0.05, cx = mx - ox * di, cz = mz - oz * di, h2 = L / 2 + 0.02; M.quad([cx - tx * h2 - ox * hh, 0.03, cz - tz * h2 - oz * hh], [cx + tx * h2 - ox * hh, 0.03, cz + tz * h2 - oz * hh], [cx + tx * h2 + ox * hh, 0.03, cz + tz * h2 + oz * hh], [cx - tx * h2 + ox * hh, 0.03, cz - tz * h2 + oz * hh], up, xw ? WH : YE, z4, z4, z4, z4); } }
   return (ROAD_KIT = { M, T, lamps, lit });
 }
 function gpuRoadKit(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of roadKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
@@ -1669,7 +1685,7 @@ function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of p
 let ELAMP = null;
 function estateLamps() {
   if (ELAMP && ELAMP.t === TRPF) return ELAMP; const T = [], S = [], posts = [], cc = v => v.map(q => q / 255), POLE = cc([128, 132, 136]), HEAD = cc([92, 96, 100]), LENS = cc([236, 238, 240]), z4 = [0, 0, 0, 0], ln = [0, 0, 0.48, 0];
-  const obs = TRPF.filter(P => P.base < 1.25 && P.h > 0.05).map(P => ({ P, f: Array.from(P.xs).flatMap((v, i) => [v, P.zs[i]]) })), drives = [...VD_FLAT.drives, ...SITE_ROADS.filter(r => ringIn(GEO.trpf, (r[0] + r[4]) / 2, (r[1] + r[5]) / 2))];
+  const obs = TRPF.filter(P => P.base < 1.25 && P.h > 0.05).map(P => ({ P, f: Array.from(P.xs).flatMap((v, i) => [v, P.zs[i]]) })), drives = [...VD_FLAT.drives, ...SITE_LOOPS];
   const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, tri = (a, b, d, n, c, t = z4) => T.push([a, b, d, n, c, t]), quad = (a, b, d, e, n, c, t) => { tri(a, b, d, n, c, t); tri(a, d, e, n, c, t); };
   const box = (cx, cz, y0, y1, ux, uz, hu, hv, c, t, tb = t) => { const V = [-uz, ux], p = (su, sv, y) => [cx + ux * su * hu + V[0] * sv * hv, y, cz + uz * su * hu + V[1] * sv * hv], R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
     for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2]; quad(p(a0, b0, y0), p(a1, b1, y0), p(a1, b1, y1), p(a0, b0, y1), nz([ux * m[0] + V[0] * m[1], 0, uz * m[0] + V[1] * m[1]]), c, t); }
