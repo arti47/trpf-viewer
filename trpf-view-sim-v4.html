@@ -4136,13 +4136,12 @@ void main() {
     vec3 p = vWorld; float fw = length(fwidth(p)), k1 = 1.0 - smoothstep(0.4, 1.6, fw), k2 = 1.0 - smoothstep(0.15, 0.6, fw);
     bool tcard = false;
 #ifdef CARDS
-    if (uTexOn > 0.5 && vTex.z < 10.1 && vTex.y < 0.2 && vDist < 22.0) discard;   // canopy body dissolves near the eye (UE5 pass): under a tree you see the leaf clusters and sky through them
 #endif
     if (vTex.z > 10.1) { vec2 uv = vec2(vTex.w - 2.0 * floor(vTex.w * 0.5), vTex.y + 1.0) - 0.5; float qd = floor(vTex.w * 0.5), sp = floor(qd / 64.0), cid = qd - 64.0 * sp, sd = cid * 1.37, kc = 1.0 - smoothstep(0.08, 0.3, length(fwidth(uv)));   // leaf card: ragged cluster outline + gaps (alpha test), solid disc when ≲4 px
       if (uTexOn > 0.5) {   // photo leaf clusters (UE5 pass): 0 broadleaf (angsana/tembusu), 1 bipinnate (rain tree; 30% of round trees = yellow flame), 2 palmate shrub, 3 palm frond
         float cell = sp < 0.5 ? (fract(cid * 0.618) < 0.3 ? 1.0 : 0.0) : sp < 1.5 ? 1.0 : sp < 2.5 ? 3.0 : 2.0; vec4 tx = texture(uLeaf, (vec2(mod(cell, 2.0), floor(cell * 0.5)) + vec2(uv.x + 0.5, 0.5 - uv.y)) * 0.5);
 #ifdef CARDS
-        if (tx.a < 0.5) discard;
+        if (tx.a < 0.3) discard;
 #endif
         alb = tx.rgb * mix(vec3(1.0), vCol / vec3(0.27, 0.42, 0.19), 0.35) * (0.8 + 0.25 * fract(sd * 0.71)); alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.82); tcard = true; alb *= 0.72 + 0.28 * smoothstep(-1.0, 0.5, vTex.x); }
       else {
@@ -4152,7 +4151,7 @@ void main() {
       } }
     if (tcard) { }
     else if (vTex.y < 0.5) {  float n1 = k1 > 0.0 ? vn3(p * 0.9) : 0.0, n2 = k2 > 0.0 ? vn3(p * 2.6 + 11.0) : 0.0; alb *= mix(1.0, 0.72 + 0.42 * n1, k1) * mix(1.0, 0.82 + 0.3 * n2, k2);   /* noise only where it isn't faded out (same result) */
-      alb = mix(alb, alb * vec3(1.12, 1.08, 0.7), (uTexOn > 0.5 ? 0.12 : 0.35) * smoothstep(0.55, 0.85, vn3(p * 0.35 + 5.0))); if (uTexOn > 0.5 && vTex.z < 10.1 && vDist < 450.0) alb *= 0.62;   // with photo cards: body = shaded inner foliage between clusters
+      alb = mix(alb, alb * vec3(1.12, 1.08, 0.7), (uTexOn > 0.5 ? 0.12 : 0.35) * smoothstep(0.55, 0.85, vn3(p * 0.35 + 5.0))); if (uTexOn > 0.5 && vTex.z < 10.1 && vDist < 450.0) alb *= 0.8;   // with photo cards: body = shaded inner foliage between clusters
       if (k1 > 0.0) nrm = normalize(nrm + (vec3(vn3(p * 1.3), vn3(p * 1.3 + 17.0), vn3(p * 1.3 + 31.0)) - 0.5) * 1.1 * k1);
       alb *= 0.55 + 0.45 * smoothstep(-1.0, 0.5, vTex.x); }
     else if (uTexOn > 0.5) alb *= mDet(6, vec2(atan(nrm.z, nrm.x) * 0.4, -p.y), 1.0) * 0.95;   // photo bark (UE5 pass)
@@ -4265,7 +4264,7 @@ void main() {
     vec3 p = vec3(aInst.x + r.x + wd.x * t * t * hh, t * hh * (1.0 - 0.1 * t * t), aInst.y + r.y + wd.y * t * t * hh); vNor = normalize(vec3(r.x * 5.0, 1.0, r.y * 5.0));
     float g2 = fract(g * 13.7); vCol = mix(vec3(0.36, 0.54, 0.25), vec3(0.54, 0.6, 0.28), g2 * g2) * (0.85 + 0.3 * t); float d; gl_Position = project(p, d); vDist = d; vTex = vec4(t * 0.9 - 0.3, 0.3, 10.0, g); vWorld = p; return; }
   float by = floor(aInst.w), g = aInst.w - by; bool cd = aPart > 1.5; vec3 p = treePos(aPos, cd ? 0.0 : aPart, aInst); float ck = aPart - 2.0, cu = mod(ck, 2.0), cv = floor(ck * 0.5 + 0.01), cid = 0.0;
-  if (cd) { float sp = treeSp(aInst), an0 = fract(sin(dot(aPos, vec3(12.9898, 78.233, 37.719))) * 43758.55), an = an0 * 6.2832 + 0.12 * sin(uTime * 2.7 + an0 * 40.0), s = aInst.z * (sp > 1.5 && sp < 2.5 ? 0.14 : sp > 2.5 ? 0.22 : 0.16);
+  if (cd) { float sp = treeSp(aInst), an0 = fract(sin(dot(aPos, vec3(12.9898, 78.233, 37.719))) * 43758.55), an = an0 * 6.2832 + 0.12 * sin(uTime * 2.7 + an0 * 40.0), s = aInst.z * (sp > 1.5 && sp < 2.5 ? 0.18 : sp > 2.5 ? 0.27 : 0.21);
     vec2 q = vec2(cu * 2.0 - 1.0, cv * 2.0 - 1.0); q = vec2(q.x * cos(an) - q.y * sin(an), q.x * sin(an) + q.y * cos(an)); p += (uR * q.x + uU * q.y) * s; cid = floor(an0 * 50.0); }
   if (aPart < 0.5 || cd) { float h = max(aInst.z, 1.0), sw = smoothstep(0.25, 1.0, (p.y - by) / h) * h * 0.01; p.xz += sw * vec2(sin(uTime * 1.6 + aInst.x * 0.05 + p.y * 0.3), cos(uTime * 1.25 + aInst.y * 0.05 + p.y * 0.2)); }
   if (aPart > 0.5 && !cd) { vCol = vec3(0.42, 0.37, 0.31); vNor = vec3(aPos.x, 0.0, aPos.z); }
@@ -5201,11 +5200,6 @@ function bloomGrab(ctx, w, h, SUN) {
   if (any < 0.5) return false; Object.assign(BLOOM, { R, bw, bh, im, cb }); return true; }
 // Camera motion blur (UE5 pass 2026-11-01, cinematic look): on moving frames (drag/turn/walk), the frame is smeared along the screen motion since the last frame
 // (180° shutter ≈ half the per-frame shift, ≤ 36 device px; 4 alpha taps of the canvas onto itself). Still frames (and the 250 ms settle render) stay sharp.
-const MB = {}; function motionFx(ctx, cam) { const c = ctx.canvas, k = c.width / (c._w || c.width), now = performance.now(), mv = PIN_VIS.fast || PIN_VIS.lo;
-  const dy = Math.atan2(Math.sin(cam.yaw - (MB.yaw ?? cam.yaw)), Math.cos(cam.yaw - (MB.yaw ?? cam.yaw))), dp = cam.pitch - (MB.pitch ?? cam.pitch), dt = now - (MB.t || 0); Object.assign(MB, { yaw: cam.yaw, pitch: cam.pitch, t: now });
-  if (!mv || dt > 200 || state.walk && !dy && !dp) return; const sx = dy * cam.fPx * k * 0.5, sy = -dp * cam.fPx * k * 0.5, L = Math.hypot(sx, sy); if (L < 1.5) return; const f = Math.min(1, 36 / L), ox = sx * f, oy = sy * f;
-  const T = MB.c || (MB.c = document.createElement('canvas')); if (T.width !== c.width || T.height !== c.height) { T.width = c.width; T.height = c.height; } const tx = T.getContext('2d'); tx.clearRect(0, 0, T.width, T.height); tx.drawImage(c, 0, 0);
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); for (const [t, a] of [[0.5, 0.5], [-0.5, 0.33], [0.25, 0.25], [-0.25, 0.2]]) { ctx.globalAlpha = a; ctx.drawImage(T, ox * t, oy * t); } ctx.restore(); }
 function bloomApply(ctx, w, h, on) {
   const F = BLOOM.flare && !(BLOOM.inter && BLOOM.fcov) ? BLOOM.flare : null; if (F) { const cx = w / 2, cy = h / 2, dx = cx - F.x, dy = cy - F.y; ctx.save(); ctx.globalCompositeOperation = 'lighter';   // lens flare ghosts along sun → centre → beyond (realism 2026-10-31, estimate)
     for (const [t, r, c, a] of [[0.35, 0.05, '255,220,170', 0.09], [0.7, 0.025, '170,210,255', 0.12], [1.1, 0.09, '200,255,210', 0.05], [1.45, 0.04, '255,190,150', 0.08], [1.9, 0.14, '180,190,255', 0.04]]) {
@@ -5436,7 +5430,6 @@ function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscree
       if (!pinsDone) drawPins(); } }
   else drawPins();
   if (gpu) bloomApply(ctx, w, h, bloom);
-  if (gpu && cv === perspectiveCanvas) motionFx(ctx, cam);
   if (state.showBalcony && !curSpot()) {
     const pw = Math.max(10, w * 0.015); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, pw, h); ctx.fillRect(w - pw, 0, pw, h);
     // W1 window: 550mm parapet, eye 1.55m above floor, standing 0.5m behind the glass → sight cut-off at −atan(1.0/0.5) ≈ −63.4°.
