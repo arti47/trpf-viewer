@@ -1437,7 +1437,8 @@ function mscpSurfs(x, z, M) { const XA = M.boxes[0][2], ZA = M.boxes[0][3], L = 
   if (rp) for (let k = 0; k < 6; k++) S.push(L[k] + (L[k + 1] - L[k]) * (z - RP[1]) / (RP[3] - RP[1]));
   return S; }
 function mscpZ(X, Y, Z) { const l = mscpLoc(X, Y); let z = null; for (const v of mscpSurfs(l[0], l[1], l[2])) if (Math.abs(v - Z) <= 0.35 && (z === null || Math.abs(v - Z) < Math.abs(z - Z))) z = v; return z; }
-function mscpFree(X, Y, r, z) { const [x, y] = mscpLoc(X, Y); if (x > ML_CAR[2] - 0.25 && x < MSCP_CORES[0][2] + 0.15 && y > ML_DOOR[0] - 0.2 && y < ML_DOOR[1] + 0.2 && !mlOpenAt(z)) return false;   // closed lift doors if (Math.abs(z - MSCP_LV[7]) < 0.4 && !mscpGarden0(x, y) && !mscpRoofWalk(x, y)) return false; for (const [a, b, c, d, y0, y1] of MSCP_OBS) if (y0 < z + 1.2 && y1 > z + 0.05 && x > a - r && x < c + r && y > b - r && y < d + r) return false;
+function mscpFree(X, Y, r, z) {   // closed lift doors, roof planting, MSCP_OBS, parked cars
+ const [x, y] = mscpLoc(X, Y); if (x > ML_CAR[2] - 0.25 && x < MSCP_CORES[0][2] + 0.15 && y > ML_DOOR[0] - 0.2 && y < ML_DOOR[1] + 0.2 && !mlOpenAt(z)) return false; if (Math.abs(z - MSCP_LV[7]) < 0.4 && !mscpGarden0(x, y) && !mscpRoofWalk(x, y)) return false; for (const [a, b, c, d, y0, y1] of MSCP_OBS) if (y0 < z + 1.2 && y1 > z + 0.05 && x > a - r && x < c + r && y > b - r && y < d + r) return false;
   for (const q of mscpCarsNow()) { const [a, b, c, d] = q.r; if (q.y < z + 1.2 && q.y + 1.5 > z + 0.05 && x > a - r && x < c + r && y > b - r && y < d + r) return false; } return true; }
 // ===== Void deck (1st storey) + TRPF grounds (TY 2026-10-30; site plan site.jpg + developer model photos in project files ground/; positions ±2 m, sizes/colours estimates) =====
 // Residential blocks stand on a 3.5 m open void deck: raster boxes lifted to base VOID_DECK_HEIGHT (white soffit), except the 1st-storey facilities (site plan hatched units: (7) under 32A #144/#146,
@@ -3224,7 +3225,23 @@ function drawGroundMap(g, P) {   // walk map on the void deck: TRPF site, ground
   g.strokeStyle = 'rgba(96,165,250,0.8)'; g.lineWidth = 2; for (const T of VD_TRACKS) { g.beginPath(); T.forEach(([x, z], i) => { const [a, b] = P(...P2W.inv(x, z)); i ? g.lineTo(a, b) : g.moveTo(a, b); }); if (!T.open) g.closePath(); g.stroke(); }
   for (const Pp of TRPF) { if (Pp.base >= 1.25 && Pp.base < 5 && Pp.h > 10 || Pp.name === 'Covered linkway') { const r = []; for (let i = 0; i < Pp.n; i++) r.push(Pp.xs[i], Pp.zs[i]); path(r, Pp.name === 'Covered linkway' ? 'rgba(161,98,7,0.35)' : 'rgba(148,163,184,0.14)'); } }
   for (const Pp of groundObs()) { const r = []; for (let i = 0; i < Pp.n; i++) r.push(Pp.xs[i], Pp.zs[i]); path(r, '#cbd5e1'); }
+  mapTags(g, P, groundTags());
 }
+// Lift / stair tags on the walk maps (TY 2026-11-01 "where is the lift"): amber = lift, green = stairs; plan coords
+function groundTags() {
+  if (GROUND_TAGS) return GROUND_TAGS; const T = [['Lifts', 21.5, 14.1, 1], ['Stairs', 14.3, 4.6, 0], ['Stairs', 53.6, 4.6, 0]], M = SITE_BLOCKS.find(b => b.name.startsWith('MSCP'));
+  const W = (x, z, t, k) => T.push([t, ...P2W.inv(x, z), k]);
+  if (M) { const L = (x, z) => [M.ox + M.c * x - M.s * z, M.oz + M.s * x + M.c * z]; W(...L((ML_CAR[0] + ML_CAR[2]) / 2, (ML_DOOR[0] + ML_DOOR[1]) / 2), 'Carpark lift', 1); W(...L(-29.4, -3), 'Carpark stairs', 0); }
+  VD.coresPx.forEach(([n, r]) => { if (n === 'Blk 31A') return; W(...SITE_PX((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), 'Lifts', 1); });
+  return (GROUND_TAGS = T);
+}
+let GROUND_TAGS = null;
+function mapTags(g, P, T) {
+  g.font = '700 10px -apple-system, Inter, sans-serif'; g.textAlign = 'center';
+  for (const [t, X, Y, k] of T) { const [x, y] = P(X, Y), w = g.measureText(t).width + 8, c = k ? '#fbbf24' : '#4ade80'; g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fillStyle = c; g.fill(); g.fillStyle = 'rgba(2,6,23,0.8)'; g.fillRect(x - w / 2, y - 18, w, 13); g.fillStyle = c; g.fillText(t, x, y - 8); }
+  g.textAlign = 'left';
+}
+
 function drawWalkMap() {
   const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1, T = WALK_MAP.T = walkMapT(cv), bw = Math.round(T.w * dpr), bh = Math.round(T.h * dpr); if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const g = cv.getContext('2d'), sc = T.sc, P = (X, Y) => walkMapP(T, X, Y), R = (x0, y0, x1, y1) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); return [Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)]; }; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = WALK_MAP.big ? 'rgba(15,23,42,0.96)' : 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, T.w, T.h);
@@ -3233,6 +3250,7 @@ function drawWalkMap() {
   const g0 = onGround(); if (!g0) UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, w, h); if (x1 === UNIT_PLAN.corr.stop) { const [p, q] = P(x1, y0), [p2, q2] = P(x1, y1); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(p, q); g.lineTo(p2, q2); g.stroke(); } });   // corridor + stop line
   for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || z1 <= 0 || z0 >= UNIT_H) continue; const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, w), Math.max(1, h)); }
   if (!g0) FURN.items.forEach(it => { if ((it.e || 0) >= 1.2 || it.h < 0.05) return; g.beginPath(); const [a, b, c, d] = it._ext || (it._ext = furnExt(it)), cs = Math.cos(it.r * DEG), sn = Math.sin(it.r * DEG); [[a, b], [c, b], [c, d], [a, d]].forEach(([lx, ly], i) => { const [x, y] = P(it.x + cs * lx - sn * ly, it.y + sn * lx + cs * ly); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(251,191,36,0.35)'; g.fill(); });   // furniture footprints
+  if (!g0 && !WALK_MAP.big) mapTags(g, P, [['Lifts', 21.5, 14.1, 1], ['Stairs', 14.3, 4.6, 0], ['Stairs', 53.6, 4.6, 0]]);
   if (WALK_MAP.big && !g0) { g.font = '600 11px -apple-system, Inter, sans-serif'; g.fillStyle = 'rgba(226,232,240,0.7)'; g.textAlign = 'center'; const seen = new Set(); for (const [id, [x0, y0, x1, y1]] of UNIT_ROOMS) { const sp = UNIT_SPOTS.find(q => q.id === id), [cx, cy] = P((x0 + x1) / 2, (y0 + y1) / 2); if (!sp || seen.has(id)) continue; seen.add(id); const tx = (sp.label || id).replace(/ \(.*\)| window/g, ''), [, , rw, rh] = R(x0, y0, x1, y1); const t2 = { mbrS: 'Master', br2: 'BR2', br3: 'BR3', yard: 'Yard', corr: 'Corridor' }[id] || tx, t = g.measureText(tx).width < rw - 4 ? tx : t2; if (rh > 16 && g.measureText(t).width < rw - 4) g.fillText(t, cx, cy + 4); } g.fillStyle = 'rgba(148,163,184,0.75)'; g.font = '600 10px -apple-system, Inter, sans-serif'; for (const [t, X, Y] of MAP_LABELS) { const [lx, ly] = P(X, Y), hw = g.measureText(t).width / 2 + 4; g.fillText(t, clamp(lx, hw, T.w - hw), ly + 4); } g.textAlign = 'left'; }   // room names + storey-plan labels
   const nb = UNIT_FN * DEG, h = state.heading * DEG, wx = Math.sin(h), wz = Math.cos(h), dX = wx * Math.cos(nb) - wz * Math.sin(nb), dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)), [x, y] = P(state.walk.X, state.walk.Y);
   const fov = 2 * Math.atan(SENSOR_W / 2 / state.focalLength) / 2, a0 = T.rot ? Math.atan2(-dX, dY) : Math.atan2(-dY, -dX), rw = WALK_MAP.big ? 34 : 22; g.beginPath(); g.moveTo(x, y); g.arc(x, y, rw, a0 - fov, a0 + fov); g.closePath(); g.fillStyle = 'rgba(52,211,153,0.25)'; g.fill();
