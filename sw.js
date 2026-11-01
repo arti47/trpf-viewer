@@ -1,5 +1,5 @@
 // Offline cache for the installed app: network first (always the latest from GitHub Pages), cache fallback when offline.
-const CACHE = 'trpf134-v3', FILES = ['./', './index.html', './trpf-view-sim-v4.html', './geo.js', './site.jpg', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './tex/mat.webp', './tex/nrm.webp', './tex/leaf.webp', './tex/sky.webp'];
+const CACHE = 'trpf134-v4', FILES = ['./', './index.html', './trpf-view-sim-v4.html', './geo.js', './site.jpg', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './tex/mat.webp', './tex/nrm.webp', './tex/leaf.webp', './tex/sky.webp', './tex/fac.webp'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
