@@ -1355,7 +1355,7 @@ const RFPX = (px, py) => [30 + (px - 366) / 3.95, 116.5 + (953 - py) / 3.95];
 const RF30 = { O: [30, 116.5], U: [0.9976, 0.0696], V: [-0.0696, 0.9976], A: 21.5, B: 22.1 };
 const rf30L = (a, b) => [RF30.O[0] + RF30.U[0] * a + RF30.V[0] * b, RF30.O[1] + RF30.U[1] * a + RF30.V[1] * b];
 const rf30Rect = (a0, a1, b0, b1) => [rf30L(a0, b0), rf30L(a1, b0), rf30L(a1, b1), rf30L(a0, b1)].flat();
-const RF29 = [-6.5, 167.5, 3.5, 168, 8, 164.5, 11, 164, 11.5, 155.5, -5.5, 154];   // Blk 29 = OSM outline (plan: brown roof (6) with the "29" label, model: low block with a white roof slab; use not on the plan)
+const RF29 = [-6.5, 167.5, 3.5, 168, 8, 164.5, 11, 164, 11.5, 155.5, -5.5, 154];   // Blk 29 = OSM outline = precinct pavilion (legend 6; TY legend 2026-11-02)
 const RF_PX = {   // site plan px (colour plan, 1284 px crop)
   road: [[228, 1042], [316, 1042], [316, 812], [228, 812]], fore: [[304, 808], [470, 808], [470, 764], [304, 764]], wap: [[338, 808], [357, 808], [357, 992], [338, 992]], verge: [[316, 812], [338, 812], [338, 1000], [316, 1000]],
   sap: [[357, 953], [462, 953], [462, 992], [357, 992]], isl: [[254, 1028], [290, 1028], [290, 848], [254, 848]], plant: [[357, 860], [364, 860], [364, 953], [357, 953]],
@@ -1364,14 +1364,14 @@ const RF_PX = {   // site plan px (colour plan, 1284 px crop)
   walk: [[352, 706], [320, 694], [285, 691], [250, 694], [226, 706], [213, 725], [211, 745], [220, 760]],
   trees: [[320, 843], [328, 900], [327, 942], [332, 983], [350, 1007], [383, 1008], [403, 1003], [452, 1000], [228, 712], [226, 735], [370, 760], [440, 760]] };
 const RF_W = k => RF_PX[k].map(([x, y]) => RFPX(x, y));
-// physics: replace the OSM boxes (unnamed, 5.2 m) with bin centre 10 m, ESS 6 m, fan room 4.2 m, Blk 29 4.6 m (estimates)
+// physics: replace the OSM boxes (unnamed, 5.2 m) with bin centre 10 m, ESS 6 m, fan room 4.2 m, Blk 29 pavilion roof 3.4–4.25 m (estimates)
 { const near = (x, z) => EXISTING.findIndex(P => !P.name && P.h === 5.2 && Math.hypot(P.cx - x, P.cz - z) < 6);
   for (const [x, z] of [[38, 136.8], [3.7, 162.3]]) { const i = near(x, z); if (i >= 0) EXISTING.splice(i, 1); }
   const add = (n, h, f, alb, topc) => { const P = makePrism(n, 'existing', h, 0, f, 2); Object.assign(P, { plain: true, alb, topc: topc || alb, rf30: true }); EXISTING.push(P); return P; };
   add('Riverfront bin centre (Blk 30)', 10.25, rf30Rect(0, RF30.A, 0, RF30.B), [74, 76, 80], [140, 142, 140]);
   add('Riverfront ESS', 6, rf30Rect(0, 6.6, 22.4, 36.2), [220, 210, 192], [128, 130, 128]);
   add('Riverfront bin centre fan room', 4.2, rf30Rect(6.6, 18.5, RF30.B, 29.4), [84, 86, 90], [132, 134, 132]);
-  add('Riverfront Blk 29 (1-storey)', 4.6, RF29, [214, 210, 202], [196, 192, 186]); }
+  add('Riverfront precinct pavilion (Blk 29)', 4.25, RF29, [214, 210, 202], [150, 146, 140]).base = 3.4; }   // open pavilion: physics = roof only
 // render-only kit (cached): louvre screens, shutters, doors, roof plant, "30"/"29" numbers, Blk 29 roof slab + glazing, covered walkway + canopy (7)
 function rf30Kit() { if (rf30Kit.L) return rf30Kit.L; const out = [], mk = (f, y0, y1, alb, topc, botc) => { const P = makePrism('Riverfront corner kit', 'existing', y1, y0, f, 2); Object.assign(P, { plain: true, alb, topc: topc || alb, botc: botc || alb }); out.push(P); };
   const box = (a0, a1, b0, b1, y0, y1, alb, topc, botc) => { if (Math.abs(a1 - a0) < 1e-3 || Math.abs(b1 - b0) < 1e-3) return; mk(rf30Rect(Math.min(a0, a1), Math.max(a0, a1), Math.min(b0, b1), Math.max(b0, b1)), y0, y1, alb, topc, botc); };
@@ -1405,32 +1405,31 @@ function rf30Kit() { if (rf30Kit.L) return rf30Kit.L; const out = [], mk = (f, y
     for (const c of [26, 32]) { box(-0.1, 0.05, c - 1.42, c + 1.42, 0.4, 3.42, [240, 239, 234]); box(-0.12, 0.04, c - 1.3, c - 0.01, 0.4, 3.3, [86, 98, 96]); box(-0.12, 0.04, c + 0.01, c + 1.3, 0.4, 3.3, [86, 98, 96]); lou(c - 1.2, c + 1.2, 3.9, 5.2); box(-0.1, 0, c - 0.3, c + 0.3, 3.5, 3.82, YL); }
     for (const c of [3.3]) { box(c - 1.6, c + 1.6, 36.2, 36.3, 3.9, 5.2, [52, 56, 58]); } }
   for (const [b0, b1] of [[23, 25.6], [26.6, 29.2]]) box(17, 18.6, b0, b1, 1.2, 3.6, [120, 126, 128]);   // fan-room intake louvres (E face)
-  // Blk 29: rounded white roof slab (0.9 m overhang), dark glazing band with mullions, "29"
+  // Blk 29 = precinct pavilion (6, legend "precinct pavilion at 1st storey"): open-sided, columns, rounded white roof slab (0.9 m overhang) + raised roof, 2 concrete tables with stools
   { const n = RF29.length / 2, X = [], Z = []; for (let i = 0; i < n; i++) { X.push(RF29[2 * i]); Z.push(RF29[2 * i + 1]); }
-    const P0 = makePrism('t', 'existing', 1, 0, RF29, 0), xs = P0.xs, zs = P0.zs, off = [], OV = 0.9;
+    const P0 = makePrism('t', 'existing', 1, 0, RF29, 0), xs = P0.xs, zs = P0.zs, off = [], OV = 0.9; let cx0 = 0, cz0 = 0; for (let i = 0; i < n; i++) { cx0 += xs[i]; cz0 += zs[i]; } cx0 /= n; cz0 /= n;
     const nrm = (i, j) => { const ex = xs[j] - xs[i], ez = zs[j] - zs[i], L = Math.hypot(ex, ez) || 1; let nx = ez / L, nz = -ex / L; if (pointIn(P0, (xs[i] + xs[j]) / 2 + nx * 0.05, (zs[i] + zs[j]) / 2 + nz * 0.05)) { nx = -nx; nz = -nz; } return [nx, nz]; };
     for (let i = 0; i < n; i++) { const p = (i + n - 1) % n, q = (i + 1) % n, n1 = nrm(p, i), n2 = nrm(i, q); let a1 = Math.atan2(n1[1], n1[0]), a2 = Math.atan2(n2[1], n2[0]); let da = a2 - a1; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
       const k = Math.max(1, Math.ceil(Math.abs(da) / 0.3)); for (let s = 0; s <= k; s++) { const a = a1 + da * s / k; off.push(xs[i] + Math.cos(a) * OV, zs[i] + Math.sin(a) * OV); } }
-    mk(off, 4.6, 5.0, [238, 238, 234], [204, 200, 194], [232, 232, 228]);
-    for (let i = 0; i < n; i++) { const q = (i + 1) % n, [nx, nz] = nrm(i, q), ex = xs[q] - xs[i], ez = zs[q] - zs[i], L = Math.hypot(ex, ez); if (L < 1.5) continue; const ux = ex / L, uz = ez / L;
-      const strip = (t0, t1, d0, d1, y0, y1, c) => mk([xs[i] + ux * t0 + nx * d0, zs[i] + uz * t0 + nz * d0, xs[i] + ux * t1 + nx * d0, zs[i] + uz * t1 + nz * d0, xs[i] + ux * t1 + nx * d1, zs[i] + uz * t1 + nz * d1, xs[i] + ux * t0 + nx * d1, zs[i] + uz * t0 + nz * d1], y0, y1, c);
-      strip(0.4, L - 0.4, -0.02, 0.04, 0.6, 3.4, [64, 76, 84]); for (let t = 0.4; t <= L - 0.39; t += (L - 0.8) / Math.max(1, Math.round((L - 0.8) / 1.5))) strip(t - 0.04, t + 0.04, 0.04, 0.1, 0.6, 3.4, [200, 202, 204]);
-      strip(0.4, L - 0.4, 0.04, 0.12, 3.4, 3.6, [200, 202, 204]);
-      if (nz < -0.9) mscpGlyphs('29', (u0, u1, v0, v1) => { const c = 0.18, m = L / 2 - 11 * c / 2, tt = u => ux > 0 ? m + u * c : L - m - u * c; strip(Math.min(tt(u0), tt(u1)), Math.max(tt(u0), tt(u1)), 0.04, 0.08, 4.4 - v1 * c, 4.4 - v0 * c, [60, 62, 66]); }); } }
+    mk(off, 3.4, 3.8, [238, 238, 234], [204, 200, 194], [232, 232, 228]); mk(off.map((v, k) => k % 2 ? cz0 + (v - cz0) * 0.97 : cx0 + (v - cx0) * 0.97), 3.8, 4.25, [150, 146, 140], [150, 146, 140]);   // roof slab + raised roof (plan dark fill)
+    for (let i = 0; i < n; i++) { const x = cx0 + (xs[i] - cx0) * 0.86, z = cz0 + (zs[i] - cz0) * 0.86; mk([x - 0.15, z - 0.15, x + 0.15, z - 0.15, x + 0.15, z + 0.15, x - 0.15, z + 0.15], 0, 3.4, [232, 232, 228]); }   // open sides: columns only
+    for (const [fx, fz] of [[-0.25, 0], [0.25, 0]]) { const tx = cx0 + fx * (P0.maxx - P0.minx), tz = cz0 + fz; const rd = (x, z, r, y0, y1, c) => { const f = []; for (let k = 0; k < 10; k++) f.push(x + r * Math.cos(k / 10 * 2 * Math.PI), z + r * Math.sin(k / 10 * 2 * Math.PI)); mk(f, y0, y1, c, c, c); };
+      rd(tx, tz, 0.15, 0, 0.72, [176, 172, 164]); rd(tx, tz, 0.5, 0.72, 0.78, [196, 192, 184]); for (let k = 0; k < 4; k++) rd(tx + Math.cos(k * Math.PI / 2) * 0.85, tz + Math.sin(k * Math.PI / 2) * 0.85, 0.18, 0, 0.45, [176, 172, 164]); } }   // concrete table + 4 stools ×2
   // covered walkway (plan brown band, 4 m) from the Blk 29A lobby round to Blk 29 + canopy lobe (7); roof 3.2 / 3.9 m, posts
   const RF = [176, 178, 180], UN = [300, 302, 300], PO = [92, 96, 100], post = (x, z, h) => mk([x - 0.11, z - 0.11, x + 0.11, z - 0.11, x + 0.11, z + 0.11, x - 0.11, z + 0.11], 0, h, PO);
   { const W = RF_W('walk'); for (let i = 0; i + 1 < W.length; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = 2, e = i + 2 < W.length ? 1 : 0;
       mk([ax - uz * w, az + ux * w, bx - uz * w + ux * e, bz + ux * w + uz * e, bx + uz * w + ux * e, bz - ux * w + uz * e, ax + uz * w, az - ux * w], 2.95, 3.2, RF, RF, UN);
       for (let t = 0; t < L; t += 6) for (const sg of [-1, 1]) post(ax + ux * t - uz * (w - 0.3) * sg, az + uz * t + ux * (w - 0.3) * sg, 2.95); } }
-  { const Lb = RF_W('lobe'); mk(Lb.flat(), 3.6, 3.95, RF, RF, UN); let cx = 0, cz = 0; Lb.forEach(([x, z]) => { cx += x; cz += z; }); cx /= Lb.length; cz /= Lb.length;
-    for (const [x, z] of Lb) post(cx + (x - cx) * 0.8, cz + (z - cz) * 0.8, 3.6); }
+  // drop-off porch (7): drive-under canopy
+  { const Lb = RF_W('lobe'); mk(Lb.flat(), 4.4, 4.8, RF, RF, UN); let cx = 0, cz = 0; Lb.forEach(([x, z]) => { cx += x; cz += z; }); cx /= Lb.length; cz /= Lb.length;
+    Lb.forEach(([x, z], k) => { if (k % 2 === 0) { const px = cx + (x - cx) * 0.9, pz = cz + (z - cz) * 0.9; mk([px - 0.25, pz - 0.25, px + 0.25, pz - 0.25, px + 0.25, pz + 0.25, px - 0.25, pz + 0.25], 0, 4.4, [228, 228, 224]); } }); }
   return rf30Kit.L = out; }
 // ground (gx painter): drive + aprons asphalt, island/planter lawn, plaza + walkway paving
 function rf30Grounds(X) { const up = [0, 1, 0], c = v => v.map(q => q / 255), TL = [0, 0, 0, 50], TP = [0, 0, 0, 51], TA = [0, 0, 0, 52];
   const poly = (pts, y, col, t) => { const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), t); };
   for (const k of ['road', 'fore', 'wap', 'sap']) poly(RF_W(k), 0.22, [96, 98, 102], TA);
   for (const k of ['isl', 'plant', 'verge']) poly(RF_W(k), 0.24, [92, 140, 74], TL);
-  poly(RF_W('plaza'), 0.2, [204, 200, 194], TP); poly(RF_W('lobe'), 0.205, [204, 200, 194], TP);
+  poly(RF_W('plaza'), 0.22, [96, 98, 102], TA); poly(RF_W('lobe'), 0.221, [96, 98, 102], TA); poly(RF29.reduce((a, v, i) => (i % 2 ? a[a.length - 1].push(v) : a.push([v]), a), []), 0.2, [204, 200, 194], TP);   // drop-off loop under the porch (asphalt), pavilion floor
   { const W = RF_W('walk'); for (let i = 0; i + 1 < W.length; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = 1.9, e = 1;
     poly([[ax - uz * w - ux * e, az + ux * w - uz * e], [bx - uz * w + ux * e, bz + ux * w + uz * e], [bx + uz * w + ux * e, bz - ux * w + uz * e], [ax + uz * w - ux * e, az - ux * w - uz * e]], 0.206, [204, 200, 194], TP); } }
   { const dash = (p, q, y) => { const L2 = Math.hypot(q[0] - p[0], q[1] - p[1]), ux = (q[0] - p[0]) / L2, uz = (q[1] - p[1]) / L2;
