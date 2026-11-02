@@ -768,6 +768,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <option value="low">Low: Marina East GPR 3.5, 20–30F</option>
 <option value="base" selected>Base: Marina East GPR 4.0, 30–44F</option>
 <option value="tall">Upside: Marina East GPR 5.6, 35–50F</option>
+<option value="build">Under construction (~2032): Base, towers part-built</option>
 <option value="allres">Full build-out: Base + all reserves</option>
 </select>
 <div id="scnCards" class="scn-cards" role="radiogroup" aria-label="Scenario"></div>
@@ -1060,7 +1061,7 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
     const hb = 8 / 31.6; add(14, 0, box(0, 1, 0, hb), [232, 232, 228]); add(15.1, 14, box(0.01, 0.99, 0.005, hb - 0.01), [205, 208, 210]).topc = [190, 192, 194];   // front block + railing band
     add(12.5, 0, box(0, 1, hb, 1), [232, 232, 228]); add(17, 12.5, box(0, 1, hb, 1), [170, 116, 78]).topc = [120, 112, 108]; } }   // hall: white base, timber upper hall, dark metal roof
   // Tanjong Rhu condos W of TRPF (OSM heights): cream condo facade (as E1/E2)
-  for (const P of EXISTING) if (P.h > 20 && P.cx > -920 && P.cx < -200 && P.cz > -150 && P.cz < 170) P.style = 'condo';
+  for (const P of EXISTING) if (P.h > 20 && P.cx > -920 && P.cx < -200 && P.cz > -150 && P.cz < 170) { P.style = 'condo'; P.pal = [[222, 214, 198], [236, 234, 228], [206, 208, 206], [216, 204, 184], [200, 206, 210]][Math.floor(hash01(Math.floor(P.cx / 110), Math.floor(P.cz / 110), 83) * 5)]; }   // per-estate wall palette (realism r5: 110 m clusters ≈ one estate each; colours estimates, not surveyed)
   // Tanjong Rhu Riverfront HDB blocks (TY 2026-11-02, HDB scale-model photos: were random blue curtain-wall towers, h > 90 m): HDB style 'rf' (GL_FS mode 6, w ≥ 20):
   // storeys from OSM h (≈3.27 m incl. crown), 3.5 m void deck + 2.8 m storeys, white / light-grey / mid-grey stacks, dark grey recess returns + jogging dark strips,
   // 28A/26A/26B lime-green strips, 28C beige; crown = rest of h, top raked along the long axis (h at one end → crown base + 2 m), dark sloped roof. Palettes/rake estimates.
@@ -1135,6 +1136,7 @@ const LU = GEO.lu.map(([c, ext, ...holes]) => {
 });
 // + two empty URA residential parcels east of TRPF across Tanjong Rhu Close (site plan: "reserved for future high-rise residential").
 const PARCELS = GEO.parcels.concat([{"id":"E1","label":"Planned residential E of TRPF","lu":"RESIDENTIAL","gpr":"3.7","area":12238,"ring":[270.5,-1.5,128.5,-1.5,129.0,73.0,135.0,79.5,141.0,80.0,142.0,74.5,131.0,72.0,133.0,63.0,146.0,66.0,143.0,80.0,244.0,88.5,275.5,92.0,270.0,29.0]},{"id":"E2","label":"Planned residential E of TRPF","lu":"RESIDENTIAL","gpr":"3.5","area":12283,"ring":[270.5,-1.5,271.5,-50.5,275.0,-88.0,128.5,-86.5,128.5,-1.5]}]);
+for (const L of LU) if (L.c === 3 && PARCELS.some(p => /^[NS]$/.test(p.id) && ringIn(p.ring, L.cx, L.cz))) { L.c = 5; L.vac = 1; }   // Marina East N/S residential zones are vacant land today (realism r5): drawn as rough grass (class 5), not paved estate grounds; future towers bring their own planting (towerTrees)
 // Kampong Bugis (TY 2026-10-29, Future row off by default): vacant MP2025 residential zones W of the Kallang River, traced from the land-use raster (±20 m).
 // URA plans a car-lite precinct (~4,000 homes); no GPR/massing published → GPR 3.5 + grid towers (estimate).
 [['KB1', [-1310, 1250, -1090, 1250, -1080, 1360, -1180, 1390, -1260, 1360, -1310, 1300]], ['KB2', [-1150, 1490, -1040, 1490, -970, 1560, -990, 1620, -1060, 1700, -1160, 1710, -1160, 1600]], ['KB3', [-1265, 1050, -1190, 1050, -1110, 1180, -1120, 1195, -1210, 1195, -1250, 1120]]].forEach(([id, ring]) => {
@@ -1301,7 +1303,15 @@ const MSCP_FONT = { B: ['11110', '10001', '10001', '11110', '10001', '10001', '1
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'], 1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'], 2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
   3: ['11110', '00001', '00001', '01110', '00001', '00001', '11110'], 4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'], 5: ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
   6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'], 7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'], A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'], R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'] };
-const mscpGlyphs = (s, put) => [...s].forEach((ch, k) => (MSCP_FONT[ch] || []).forEach((row, r) => { for (let q = 0; q < 5; q++) { if (row[q] !== '1') continue; let e = q; while (e + 1 < 5 && row[e + 1] === '1') e++; put(k * 6 + q, k * 6 + e + 1, r, r + 1); q = e; } }));
+// smooth glyphs (realism r5, "blocky pixel letters"): each 5×7 bitmap is turned into strokes (on-cell centres joined to their on neighbours, diagonals where no orthogonal path),
+// width 1 cell with round ends, rasterised at 4 sub-cells per cell; put() gets the merged runs in the same cell units as before (fractional), so every caller is unchanged
+const GLYPH_RUNS = {}; function glyphRuns(ch) { if (GLYPH_RUNS[ch]) return GLYPH_RUNS[ch]; const B = MSCP_FONT[ch] || [], on = (q, r) => r >= 0 && r < 7 && q >= 0 && q < 5 && B[r] && B[r][q] === '1', seg = [];
+  for (let r = 0; r < 7; r++) for (let q = 0; q < 5; q++) if (on(q, r)) { seg.push([q, r, q, r]); if (on(q + 1, r)) seg.push([q, r, q + 1, r]); if (on(q, r + 1)) seg.push([q, r, q, r + 1]);
+    if (on(q + 1, r + 1) && !on(q + 1, r) && !on(q, r + 1)) seg.push([q, r, q + 1, r + 1]); if (on(q - 1, r + 1) && !on(q - 1, r) && !on(q, r + 1)) seg.push([q, r, q - 1, r + 1]); }
+  const R = 4, out = [], hit = (x, y) => seg.some(([a, b, c, d]) => { const dx = c - a, dy = d - b, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, ((x - a) * dx + (y - b) * dy) / L2)) : 0; return Math.hypot(x - a - t * dx, y - b - t * dy) <= 0.5; });
+  for (let j = 0; j < 7 * R; j++) { let st = -1; for (let i = 0; i <= 5 * R; i++) { const h = i < 5 * R && hit((i + 0.5) / R - 0.5, (j + 0.5) / R - 0.5); if (h && st < 0) st = i; if (!h && st >= 0) { out.push([st / R, i / R, j / R, (j + 1) / R]); st = -1; } } }
+  return GLYPH_RUNS[ch] = out; }
+const mscpGlyphs = (s, put) => [...s].forEach((ch, k) => glyphRuns(ch).forEach(([u0, u1, v0, v1]) => put(k * 6 + u0, k * 6 + u1, v0, v1)));
 const rectMinus = (r, H) => { const xs = [r[0], r[2]], zs = [r[1], r[3]];   // axis-aligned rect minus holes → rects (grid cells merged along x)
   for (const h of H) { if (h[2] <= r[0] || h[0] >= r[2] || h[3] <= r[1] || h[1] >= r[3]) continue; xs.push(Math.max(r[0], h[0]), Math.min(r[2], h[2])); zs.push(Math.max(r[1], h[1]), Math.min(r[3], h[3])); }
   const X = [...new Set(xs)].sort((a, b) => a - b), Z = [...new Set(zs)].sort((a, b) => a - b), out = [];
@@ -1843,7 +1853,14 @@ function roadKit() {
       // lamp posts: at the old night-lamp spacing (35 m, both sides cls ≤ 2 at 10 m, else one side at 8 m) on the footpath, arm 1.8 m over the road
       if (midNear(w, RK_K + w.len / 2)) { lit.add(w.R); const ph2 = hash01(w.p[0], w.p[1], 5) * 35, hp = w.c <= 2 ? 10 : 8;
         for (let a = ph2; a < w.len; a += 35) for (const sg of w.c <= 2 ? [-1, 1] : [1]) { const [x, z, i] = posAt(w, a, sg * (hw + 0.9)); if (other(wi, x, z, 0.6) || (inS(x, z, i) && mk(x, z))) continue;
-          const [hx, hz] = posAt(w, a, sg * (hw - 0.9)), [tx, tz] = [w.sn[i][2], w.sn[i][3]]; lamps.push([hx, hp - 0.22, hz, 0]); if (!near(x, z, RK_L)) continue; box(x, z, 0, hp, tx, tz, 0.09, 0.09, POLE); box((x + hx) / 2, (z + hz) / 2, hp - 0.12, hp, -w.sn[i][0], -w.sn[i][1], 0.9, 0.04, POLE); box(hx, hz, hp - 0.22, hp - 0.05, tx, tz, 0.16, 0.3, POLE); } } }
+          const [hx, hz] = posAt(w, a, sg * (hw - 0.9)), [tx, tz] = [w.sn[i][2], w.sn[i][3]]; lamps.push([hx, hp - 0.22, hz, 0]); if (!near(x, z, RK_L)) continue; box(x, z, 0, hp, tx, tz, 0.09, 0.09, POLE); box((x + hx) / 2, (z + hz) / 2, hp - 0.12, hp, -w.sn[i][0], -w.sn[i][1], 0.9, 0.04, POLE); box(hx, hz, hp - 0.22, hp - 0.05, tx, tz, 0.16, 0.3, POLE); }
+        // street furniture (realism r5; LTA-style, positions NOT from bus-stop data → estimates): bus shelter every ~330 m on cls 1–4 (left side; roof, 3 posts, back panel + ad box, bench, bin), litter bins every 90 m both sides on cls ≤ 3
+        const ph3 = hash01(w.p[1], w.p[0], 7) * 330, BIN = cc([46, 92, 70]), RF = cc([96, 100, 106]), AD = cc([224, 228, 232]), BEN = cc([150, 154, 158]);
+        for (let a = ph3 + 60; a < w.len - 40; a += 330) { const [x, z, i] = posAt(w, a, hw + 2.4); if (!near(x, z, RK_L) || other(wi, x, z, 2.5) || inS(x, z, i) || nearJ(wi, x, z)) continue; const [tx, tz] = [w.sn[i][2], w.sn[i][3]], [nx, nz] = [w.sn[i][0], w.sn[i][1]], bk = (o, al) => [x + nx * o + tx * al, z + nz * o + tz * al];
+          box(x, z, 2.55, 2.7, tx, tz, 3.2, 1.0, RF); for (const al of [-2.9, 0, 2.9]) { const [px, pz] = bk(0.8, al); box(px, pz, 0, 2.55, tx, tz, 0.05, 0.05, POLE); }
+          { const [px, pz] = bk(0.85, 0); box(px, pz, 0.1, 2.3, tx, tz, 2.6, 0.02, cc([170, 186, 196])); } { const [px, pz] = bk(0.8, 3.6); box(px, pz, 0.05, 2.1, tx, tz, 0.6, 0.12, AD, RF); }
+          { const [px, pz] = bk(0.45, -0.8); box(px, pz, 0.42, 0.47, tx, tz, 1.4, 0.2, BEN); box(px, pz, 0, 0.42, tx, tz, 1.3, 0.05, POLE); } { const [px, pz] = bk(0.2, -3.8); cyl(px, pz, 0, 0.95, 0.27, BIN); cyl(px, pz, 0.95, 1.0, 0.29, RF); } }
+        if (w.c <= 3) for (let a = ph3 % 90 + 20; a < w.len - 10; a += 90) for (const sg of [-1, 1]) { const [x, z, i] = posAt(w, a, sg * (hw + 1.3)); if (!near(x, z, RK_L) || other(wi, x, z, 0.8) || inS(x, z, i) || nearJ(wi, x, z)) continue; cyl(x, z, 0, 0.95, 0.27, BIN); cyl(x, z, 0.95, 1.0, 0.29, RF); } } }
     else {   // expressway
       const xOK = (m, r) => (x, z, i) => near(x, z, r) && !inSG(x, z, i) && !other(wi, x, z, m), GP = [];
       if (med) for (let a = 0; a <= w.len; a += 3) { const g = gapAt(w, wi, a, med), [x, z, i] = posAt(w, a, med * (w.hw + 1)); GP.push(g >= 3 && near(x, z, RK_X) && !inSG(x, z, i) ? g : 0); }
@@ -2459,7 +2476,7 @@ const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 50,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 26, towers: 3, slim: 1 }, E2: { floors: 24, towers: 3, slim: 1 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 }, LI: { on: false, min: 20, max: 40, gpr: 3.0, net: 0.5, low: 10, step: false } },
-  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: false, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
+  showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 1, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: false, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
 let towers = [];
@@ -2565,6 +2582,17 @@ function liBuild(g, st, out) {
       gfa += fp * fp * floors; const P = add(`LI${++n}`, newRoof(floors) + LI_Z, LI_Z, [x - hf, z - hf, x + hf, z - hf, x + hf, z + hf, x - hf, z + hf], null, floors); P.low = low; } }
   LI_GATES.forEach(([x, z], i) => add(`Long Island tidal gate ${i + 1}`, 12, 0, [x - 30, z - 10, x + 30, z - 10, x + 30, z + 10, x - 30, z + 10], [150, 156, 162], 0));
 }
+// Marina East mix (TY 2026-11-02 "at Marina East there is a mix of HDB and condo"; realism r5): plot-ratio towers on N/S are grouped into 260 m clusters,
+// each cluster HDB (≈45%) or private condo by hash. HDB = BTO point block (Riverfront 'rf' facade: void deck 3.5 m + 2.8 m storeys + 6 m crown, palette 0–2),
+// condo = newRoof storeys + one of 5 wall palettes (P.pal); both on a cruciform plan (corner notches 0.15a HDB / 0.22a condo) instead of a plain square. Estimates.
+const ME_PAL = [[222, 214, 198], [236, 234, 228], [206, 208, 206], [214, 200, 178], [198, 206, 212]];
+function meCross(x, z, h, k) { const n = 2 * h * k; return [x - h + n, z - h, x + h - n, z - h, x + h - n, z - h + n, x + h, z - h + n, x + h, z + h - n, x + h - n, z + h - n, x + h - n, z + h, x - h + n, z + h, x - h + n, z + h - n, x - h, z + h - n, x - h, z - h + n, x - h + n, z - h + n]; }
+function meTower(id, x, z, h, floors) { let uc = 0; if (state.build) { const u = hash01(x, z, 101); if (u < 0.78) { floors = Math.max(3, Math.round(floors * (0.12 + 0.8 * u / 0.78))); uc = 1; } }   // 'Under construction' scenario: 78% of the towers part-built (12–92% of their floors)
+  const P = meTower0(id, x, z, h, floors); P.uc = uc; return P; }
+function meTower0(id, x, z, h, floors) { const hdb = hash01(Math.floor(x / 180), Math.floor(z / 180), 77 + state.seed) < 0.45;
+  if (!hdb) { const P = makePrism(id, 'new', newRoof(floors), 0, meCross(x, z, h, 0.22), 0); P.floors = floors; P.style = 'condo'; P.pal = ME_PAL[Math.floor(hash01(Math.floor(x / 260), Math.floor(z / 260), 79) * ME_PAL.length)]; return P; }
+  const hc = VOID_DECK_HEIGHT + (floors - 1) * FLOOR_HEIGHT, P = makePrism(id, 'new', hc + 6, 0, meCross(x, z, h, 0.15), 0);
+  P.floors = floors; P.style = 'rf'; P.hdb = true; P.glass = false; P.res = true; P.alb = [236, 236, 232]; P.topc = [96, 100, 104]; P.rfF = floors; P.rfHc = hc; P.rfPal = Math.floor(hash01(x, z, 81) * 3); return P; }
 function generateTowers() {
   const out = [], S = state.spacing, h = state.footprint / 2; CONDO_POOLS = []; CONDO_SITES = [];
   for (const g of GROUPS) {
@@ -2595,7 +2623,7 @@ function generateTowers() {
           let floors = low ? st.low : st.step ? clamp(Math.round(lo + fmFrac(x, z) * (hi - lo) + (u - 0.5) * 2), lo, hi) : lo + Math.floor(u * (hi - lo + 1));
           floors = Math.min(floors, Math.floor((target - gfa) / (fp * fp)));   // never exceed GPR × net site
           if (floors < (low ? st.low : lo)) return false; gfa += fp * fp * floors;   // remainder too small for a full block: stop (GFA ≤ target)
-          const P = makePrism(`${g.id}${++n}`, 'new', newRoof(floors), 0, [x - h, z - h, x + h, z - h, x + h, z + h, x - h, z + h], 0); P.floors = floors; P.group = g; P.low = low; P.style = 'condo'; out.push(P); return true; };   // style: new-condo look (render only, stage 4 2026-10-31)
+          const P = meTower(`${g.id}${++n}`, x, z, h, floors); P.group = g; P.low = low; out.push(P); return true; };   // style: new-condo look (render only, stage 4 2026-10-31)
         place(pick[0]);
         while (gfa < target && pick.length < cand.length) { let best = null, bd = -1; for (const c of cand) { const d = Math.min(...pick.map(q => Math.hypot(c[0] - q[0], c[1] - q[1]))); if (d > bd) { bd = d; best = c; } } if (bd < fp + 12) break; pick.push(best); if (!place(best)) break; }
         continue;
@@ -2624,9 +2652,18 @@ function generateTowers() {
 const CELL = 40, GX0 = -5400, GZ0 = -4400, NI = Math.ceil(8200 / CELL), NJ = Math.ceil(6400 / CELL);
 let GRID = [], ALL = [], stampCtr = 1;
 let WORLD_VER = 0;
+// Estate planting round future towers (realism r5 2026-11-02): N/S/reserve towers (not E1/E2: designed condo planting) get a landscaped ring of trees, 13 m jittered grid
+// within 14–48 m of the tower centre, 60%, inside its parcel, ≥6 m off any other tower; appended to the startup TREES (TT_BASE), rebuilt with the scenario. Estimate.
+let TT_BASE = null;
+function towerTrees() { if (!TT_BASE) return; const X = [], Z = [], H = [], G = [], tw = towers.filter(P => P.group && P.group.id !== 'EA' && !P.group.fixed && P.floors && P.group.id !== 'LI');
+  const near = (x, z) => tw.some(Q => Math.abs(x - Q.cx) < 40 && Math.abs(z - Q.cz) < 40 && pointIn(Q, x, z)) || tw.some(Q => Math.hypot(x - Q.cx, z - Q.cz) < (Q.maxx - Q.minx) / 2 + 6);
+  for (const P of tw) { const ring = (groupParcels(P.group).find(p => ringIn(p.ring, P.cx, P.cz)) || {}).ring; for (let a = -48; a <= 48; a += 13) for (let b = -48; b <= 48; b += 13) { const x = P.cx + a + (hash01(a + P.cx, b, 91) - 0.5) * 7, z = P.cz + b + (hash01(b + P.cz, a, 93) - 0.5) * 7, d = Math.hypot(x - P.cx, z - P.cz);
+    if (d < 14 + (P.maxx - P.minx) / 2 - 17 || d > 48 || hash01(x, z, 95) < 0.4 || (ring && !ringIn(ring, x, z)) || near(x, z)) continue; X.push(x); Z.push(z); H.push(6 + hash01(x, z, 97) * 6); G.push(hash01(z, x, 99)); } }
+  const B = TT_BASE, n = B.n + X.length; if (!X.length && TREES.n === B.n && TREES.x === B.x) return; const cat = (a, e) => { const o = new Float64Array(n); o.set(a.subarray(0, B.n)); o.set(e, B.n); return o; };
+  TREES.n = n; TREES.x = cat(B.x, X); TREES.z = cat(B.z, Z); TREES.h = cat(B.h, H); TREES.g = cat(B.g, G); }
 function rebuildIndex() {
   WORLD_VER++;
-  ALL = (state.showExisting ? EXISTING : []).concat(state.showRoads ? DECKS : [], TRPF, towers);
+  ALL = (state.showExisting ? EXISTING : []).concat(state.showRoads ? DECKS : [], TRPF, towers); towerTrees();
   GRID = new Array(NI * NJ);
   for (const P of ALL) {
     const i0 = clamp(Math.floor((P.minx - GX0) / CELL), 0, NI - 1), i1 = clamp(Math.floor((P.maxx - GX0) / CELL), 0, NI - 1);
@@ -3378,7 +3415,7 @@ function drawSkyAndSea(ctx, cam, env, m) {
   const pts = []; for (let i = 0; i <= 48; i++) { const a = cam.yaw - m.hFovRad / 2 - 0.25 + ((m.hFovRad + 0.5) * i) / 48, p = cam.projectPoint(cam.ex + dh * Math.sin(a), 0, cam.ez + dh * Math.cos(a)); if (p) pts.push([p.x, p.y]); }
   if (pts.length > 1) { const sea = ctx.createLinearGradient(0, Math.max(0, hy), 0, h); sea.addColorStop(0, rgbStr(mix(env.sky.sea, env.sky.hor, 0.55))); sea.addColorStop(0.35, rgbStr(env.sky.sea)); sea.addColorStop(1, rgbStr(mix(env.sky.sea, [0, 0, 0], 0.3))); ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(pts[pts.length - 1][0], h + 50); ctx.lineTo(pts[0][0], h + 50); ctx.closePath(); ctx.fillStyle = sea; ctx.fill(); }
 }
-const GROUND_ALB = [null, [100, 102, 106], [80, 110, 58], [168, 160, 146], [160, 158, 155], [150, 148, 112], [150, 150, 150]];   // realism 2026-10-31 (M3): asphalt/grass/reserve scrub nearer measured albedos (less saturated)
+const GROUND_ALB = [null, [100, 102, 106], [80, 110, 58], [168, 160, 146], [160, 158, 155], [122, 132, 84], [150, 150, 150]];   // reserve (5): vacant rough grassland (Marina East today; realism r5, was beige scrub 150/148/112)   // realism 2026-10-31 (M3): asphalt/grass/reserve scrub nearer measured albedos (less saturated)
 // Tree generation (once): parks/open space grid 22m (jittered), roadside every 16m both sides, TRPF lawn 14m.
 const TREES = { n: 0, x: [], z: [], h: [], g: [] };
 // Sports Hub plaza (TY 2026-10-29: paved + edge trees): park land use inside this ring (hand-traced around the venues, W of Stadium Walk) is drawn as
@@ -4290,7 +4327,8 @@ float cloudSh(vec3 p, vec3 sun) { if (uCld.x > 0.99 || sun.y < 0.03) return 1.0;
 // Lawn: clumps, dry/yellow patches, bare soil, blade-scale streaks; paving: 300 mm offset concrete pavers (joints, per-paver tone, stains); asphalt: aggregate speckle + patching.
 // Faded out by pixel footprint (no shimmer from the window). Needs h3 / vn2 from the including shader.
 const GL_GDET = `
-vec3 lawnAlb(vec3 c, vec2 w, float px) { float k0 = 1.0 - smoothstep(0.5, 3.0, px), k1 = 1.0 - smoothstep(0.015, 0.09, px); if (k0 <= 0.0) return c;
+vec3 lawnAlb(vec3 c, vec2 w, float px) { float k0 = 1.0 - smoothstep(0.5, 3.0, px), k1 = 1.0 - smoothstep(0.015, 0.09, px); c = mix(vec3(dot(c, vec3(0.3, 0.55, 0.15))), c, 0.82) * vec3(1.05, 1.0, 0.88); if (k0 <= 0.0) return c;   /* r5: SG cow grass = less saturated, yellower; worn patches below */
+  c = mix(c, c * vec3(1.2, 1.08, 0.74) * 0.94, k0 * 0.35 * smoothstep(0.6, 0.8, 0.6 * vn2(w * 0.08 + 21.0) + 0.4 * vn2(w * 0.5 + 2.0)));
   c *= mix(1.0, 0.8 + 0.4 * vn2(w * 0.45), k0); c = mix(c, c * vec3(1.2, 1.08, 0.6), k0 * 0.4 * smoothstep(0.58, 0.85, vn2(w * 0.13 + 4.0)));
   c = mix(c, vec3(0.31, 0.25, 0.17), k0 * 0.3 * smoothstep(0.72, 0.9, vn2(w * 1.6 + 9.0)));
   if (uTexOn > 0.5) return c * mDet(0, w, 0.95); if (k1 > 0.0) { vec2 r = mat2(0.8, 0.6, -0.6, 0.8) * w; float b = 0.5 * vn2(vec2(r.x * 60.0, r.y * 9.0)) + 0.5 * vn2(vec2(r.y * 52.0, r.x * 11.0) + 3.0); c *= mix(1.0, 0.62 + 0.7 * b, k1); }
@@ -4333,7 +4371,7 @@ vec4 project(vec3 p, out float dist) { vec3 r = p - uEye; r.y -= dot(r.xz, r.xz)
 const GL_FS = `#version 300 es
 precision highp float; precision highp sampler2DShadow;
 in vec3 vNor, vCol, vWorld; in vec4 vTex; in float vDist; out vec4 o;
-uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
+uniform vec3 uSun, uSkyMid, uFog, uWater, uGlass; uniform float uOffice; uniform float uDirect, uAmb, uWarm, uBeta, uNight, uUnlit, uLitK, uExtK, uAlpha, uShadow, uGroundSh;
 uniform sampler2DShadow uSm0, uSm1; uniform vec3 uLr, uLu, uLf, uLc0, uLc1; uniform vec4 uLs; uniform vec3 uSkyTop, uEye; uniform float uTime, uMirror, uMirA, uSlab, uRoomH, uWet; uniform vec3 uClit, uCbase; uniform vec4 uOL[24]; uniform int uNOL;
 uniform sampler2DShadow uSmI; uniform sampler2D uSmIR; uniform float uBounce; uniform vec3 uLcI; uniform vec2 uLsI; uniform float uInSun, uHQ; uniform int uNL; uniform vec4 uLp[28], uLR[28]; uniform vec3 uLcol[28]; uniform vec2 uPO, uPU, uPN, uPP; uniform float uEmis; uniform int uNW; uniform vec3 uWo[8], uWa[8], uWb[8]; uniform vec4 uWR[8]; uniform float uWD; uniform sampler2D uDep; uniform float uAO; uniform vec2 uRes, uNF; uniform vec4 uP; uniform vec3 uR, uU, uF;
 const float VOID = ${VOID_DECK_HEIGHT.toFixed(2)}, FH = ${FLOOR_HEIGHT.toFixed(2)}, BTOP = ${BLK_TOP.toFixed(2)}, SW = ${STACK_W.toFixed(2)}, CL = ${CONDO.lobby.toFixed(2)}, CF = ${CONDO.f2f.toFixed(3)};
@@ -4362,6 +4400,7 @@ vec3 roomIM(vec2 f, vec2 sz, vec3 v, vec3 n, float sd, float on) {
   return al * (uAmb * 0.3 * SUNK * 0.3 * (1.0 - 0.6 * dep) + uNight * on * mix(vec3(1.0, 0.76, 0.48), vec3(0.82, 0.9, 1.0), step(0.7, fract(sd * 23.7))) * (0.5 + 0.35 * (1.0 - dep))); }   // 2700 K / 6500 K mix (N2)
 vec3 fogCol(vec3 v) { float m = max(0.0, dot(v, uSun));   // haze colour + forward (Mie) in-scatter toward the sun; matches the 2D sky's wide sun glow
   return uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y); }
+vec3 fogColO(vec3 v) { float m = max(0.0, dot(v, uSun)); return uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.06 * m * m * m * m + 0.07 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y); }   // objects (realism r5 2026-11-02: afternoon glare over MBS): a finite haze path in-scatters less than the sky's, so towers stay silhouettes against the sun
 vec3 skyRefl(vec3 r) {   // reflected sky (display space): gradient + photo cloud layer lit like the sky clouds (UE5 pass: 'HDRI' reflections that follow the time of day)
   if (r.y <= 0.0) return mix(uFog, vec3(0.3, 0.32, 0.33) * (0.3 + uAmb), 0.6); vec3 c = mix(fogCol(r), uSkyTop, sqrt(r.y)); float sh, pd = photoCld(r, sh);
   return mix(c, mix(uCbase, uClit, 0.15 + 0.85 * sh), clamp(pd, 0.0, 0.95)); }
@@ -4403,7 +4442,7 @@ float shadowAt(vec3 p, vec3 n) {
   return 1.0;
 }
 void main() {
-  vec3 alb = vCol, nrm = normalize(vNor), wroom = vec3(0.0), vv = normalize(vWorld - uEye); float mode = vTex.z, lit = 0.0, gm = 0.0;   // gm: glazing fraction (sky reflection)
+  vec3 alb = vCol, nrm = normalize(vNor), wroom = vec3(0.0), vv = normalize(vWorld - uEye); float mode = vTex.z, lit = 0.0, gm = 0.0, ofc = 0.0;   // gm: glazing fraction (sky reflection)
   if (mode < -2.5) {   // sea plane: Fresnel sky reflection (n 1.33) on rippled normals (fade with distance), sun glitter (facet tilt σ 0.12 rad, analytic density + per-pixel sparkles), streaks
     vec3 v = normalize(vWorld - uEye); float amp = 0.06 * (1.0 - smoothstep(60.0, 700.0, vDist)); vec2 q = vWorld.xz; float t = uTime;
     vec2 g = vec2(sin(q.x * 0.31 + q.y * 0.12 + t * 1.3) + 0.6 * sin(q.x * 0.73 - q.y * 0.41 + t * 2.1), cos(q.y * 0.27 - q.x * 0.09 + t * 1.1) + 0.6 * cos(q.y * 0.81 + q.x * 0.37 + t * 1.9));
@@ -4432,6 +4471,7 @@ void main() {
     float m = smoothstep(x0 - aa.x, x0 + aa.x, f.x) * (1.0 - smoothstep(x1 - aa.x, x1 + aa.x, f.x)) * smoothstep(y0 - aa.y, y0 + aa.y, f.y) * (1.0 - smoothstep(y1 - aa.y, y1 + aa.y, f.y));
     if (ty > 0.5 && ty < 1.5) m *= 1.0 - band(f.x, -1.0, 0.025, aa.x) * dk;   // ribbon: thin mullion per bay
     float k = mix(wx * wy, m, det) * step(0.0, g.y) * step(g.y, tw - 0.25 + step(tw, 0.0) * 999.0), on = step(hash(floor(g) + sw), mode > 2.5 ? 0.5 : 0.3);
+    if (res < 0.5) { float fl = step(hash(vec2(floor(g.y), sw) + 5.1), uOffice), cl = step(hash(floor(g) + sw + 2.3), 0.88); on = mix(on * 0.3, cl, fl); }   // offices at night (realism r5): whole floors lit (cleaners / late work, share uOffice by hour), a few dark bays; was a random checkerboard
     vec3 tn = vec3(-nrm.z, 0.0, nrm.x); float sl = dot(tn, uSun), lt = step(0.0, dot(nrm, uSun));
     if (ty > 1.5 && ty < 2.5) { float fin = band(f.x, -1.0, 0.07, aa.x) + band(f.x, 0.93, 2.0, aa.x); alb = mix(alb, alb * 1.12 + 0.03, fin * dk);   // vertical fins: lighter pilasters + their shadow on the wall beside them
       alb *= 1.0 - 0.3 * lt * dk * (sl > 0.0 ? band(f.x, 0.07, 0.12, aa.x) : band(f.x, 0.88, 0.93, aa.x)); }
@@ -4442,7 +4482,7 @@ void main() {
       float si = band(f.y, y0 - 0.045, y0, aa.y) * band(f.x, x0 - 0.05, x1 + 0.05, aa.x), ss = band(f.y, y0 - 0.1, y0 - 0.045, aa.y) * band(f.x, x0 - 0.05, x1 + 0.05, aa.x);
       vec3 fc = fract(bh * 7.3) > 0.5 ? vec3(0.86, 0.86, 0.84) : vec3(0.3, 0.26, 0.22); float nr = 1.0 - step(abs(ty - 1.0), 0.5); alb = mix(alb, fc, clamp(fr, 0.0, 1.0) * dk * nr); alb = mix(alb, alb * 1.15 + 0.06, si * dk * nr); alb *= 1.0 - 0.35 * ss * dk * nr; }
     float cu = mode < 2.5 ? step(0.72, hash(floor(g) + sw + 7.0)) * det : 0.0;   // some windows show blinds/curtains (pale), rest dark glass
-    alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(mode > 2.5 ? 0.5 : 0.3, on, det); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
+    alb = mix(alb, mix(mode > 2.5 ? vec3(0.42, 0.52, 0.6) : vec3(0.24, 0.28, 0.32), vec3(0.62, 0.58, 0.52), cu * 0.6), k * 0.85); lit = uNight * k * mix(res < 0.5 ? uOffice * 0.9 : 0.3, on, det); ofc = (1.0 - res) * step(1.0, mode); gm = mode > 2.5 ? 0.0 : k * 0.85 * (1.0 - 0.5 * cu);
     if (ty < 3.5 && dk > 0.0) { float rv = (band(f.y, y1 - 0.09, y1, aa.y) + 0.6 * (sl > 0.0 ? band(f.x, x0, x0 + 0.05, aa.x) : band(f.x, x1 - 0.05, x1, aa.x))) * lt * k * dk; alb *= 1.0 - 0.45 * clamp(rv, 0.0, 1.0); }   // reveal: lintel + jamb shadow on the glass (sun side)
     if (mode < 2.5 && det > 0.01) { float im = det * smoothstep(0.35, 0.15, max(fw.x, fw.y)); wroom = k * im * (1.0 - 0.85 * cu) * roomIM(f, vec2(3.6, 3.2), vv, nrm, hash(floor(g) + sw + 3.0), on); lit *= 1.0 - 0.8 * im; }
     if (g.y < 0.0 && g.y > -2.0) { float sp = band(g.y, -0.95, -0.22, aa.y), cn = band(g.y, -0.22, -0.13, aa.y), mu = band(fract(g.x * 2.0), -1.0, 0.04, aa.x * 2.0) * dk;   // ground storey: shopfront glazing + mullions + canopy band (offices) / dark void-deck recess + columns (residential)
@@ -4530,7 +4570,7 @@ void main() {
 #ifdef CARDS
         if (tx.a < 0.3) discard;
 #endif
-        alb = tx.rgb * mix(vec3(1.0), vCol / vec3(0.27, 0.42, 0.19), 0.35) * (0.8 + 0.25 * fract(sd * 0.71)); alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.82); tcard = true; alb *= 0.72 + 0.28 * smoothstep(-1.0, 0.5, vTex.x); }
+        alb = tx.rgb * mix(vec3(1.0), vCol / vec3(0.27, 0.42, 0.19), 0.35) * (0.86 + 0.16 * fract(sd * 0.71)); alb = mix(vec3(dot(alb, vec3(0.3, 0.55, 0.15))), alb, 0.82); alb = mix(vCol * (0.92 + 0.08 * fract(sd * 0.71)), alb, 0.4 + 0.6 * kc); tcard = true;   /* r5: small cards (seen from 27F) fade to the species colour → no salt-and-pepper speckle from sub-pixel leaf texture */ alb *= 0.72 + 0.28 * smoothstep(-1.0, 0.5, vTex.x); }
       else {
 #ifdef CARDS
       if (length(uv) * 2.0 > mix(0.75, 0.55 + 0.45 * vn2(uv * 6.0 + sd), kc) || vn2(uv * 14.0 + sd + 3.0) < 0.32 * kc) discard;
@@ -4559,7 +4599,7 @@ void main() {
   else if (uUnlit > 0.5) { float kD = uLitK;
     if (uNW > 0 && mode < 3.5) { vec2 dd = vWorld.xz - uPO, pp = vec2(dot(dd, uPU), -dot(dd, uPN)) + uPP; float F = 0.0;   // daylight through the windows of this room: form factor of each glazed opening (sky-lit), clipped to its room rect; rest = bounce
       for (int i = 0; i < 8; i++) { if (i >= uNW) break; vec4 R = uWR[i]; float wR = clamp(min(min(pp.x - R.x, R.z - pp.x), min(pp.y - R.y, R.w - pp.y)) / 0.04 + 0.5, 0.0, 1.0); if (wR > 0.0) F += wR * ffRect(vWorld + nrm * 0.01, nrm, uWo[i], uWa[i], uWb[i]); }
-      kD += uWD * (3.5 * min(F, 0.5) - 0.3); }
+      kD += uWD * (3.5 * min(F, 0.5) - 0.3) + uWD * (nrm.y < -0.5 ? 0.22 : nrm.y > 0.5 ? 0.04 : 0.1) * (1.0 - smoothstep(0.1, 0.5, F)); }   // r5: inter-reflected daylight (2nd bounce: ceiling lit by the floor most, back walls some) fills the deep end instead of a flat −0.3
     float mt = mode < 3.5 && vTex.w < -0.5 ? -vTex.w : 0.0; vec3 p3 = vWorld; float fw3 = length(fwidth(p3));   // furniture materials: 1 fabric, 2 wood, 3 satin
     if (mt > 0.5 && mt < 1.5) alb *= 0.92 + 0.12 * vn3(p3 * 110.0) * (1.0 - smoothstep(0.003, 0.01, fw3)) + 0.035 * (vn3(p3 * 7.0) - 0.5);   // weave + soft mottling
     else if (mt > 1.5 && mt < 2.5 && uTexOn > 0.5) alb *= mDet(7, vec2(dot(p3.xz, uPU), dot(p3.xz, uPN)) * 0.6 + vec2(0.0, p3.y * 0.6), 0.85);   // photo wood (UE5 pass)
@@ -4602,7 +4642,7 @@ void main() {
     float sa = clamp(uSun.y * 5.0 + 0.5, 0.0, 1.0) * (1.0 - abs(nrm.y)) * max(0.0, dot(nrm.xz, uSun.xz) / max(length(uSun.xz), 1e-3));   // brighter sky on the sun side
     vec3 hemi = mix(vec3(0.6, 0.58, 0.54) * (1.0 + 0.12 * uWarm), 0.82 + 0.34 * uSkyMid, 0.5 + 0.5 * nrm.y) + 0.12 * sa;   // sky dome above, warm ground bounce below
     vec3 al = toLin(alb); float ao = clamp(length(vNor), 0.25, 1.0), hz = step(0.7, nrm.y), wet = uWet * hz * (leaf ? 0.0 : 1.0); al *= 1.0 - 0.35 * wet;   // rain: horizontal surfaces darken (wet)
-    c = al * (uAmb * 0.3 * hemi * ao + d * tint) * SUNK + lit * vec3(1.0, 0.68, 0.27) * 0.75 + wroom;
+    c = al * (uAmb * 0.3 * hemi * ao + d * tint) * SUNK + lit * mix(vec3(1.0, 0.7, 0.32) * 1.0, vec3(0.95, 0.97, 1.0) * 1.3, ofc) + wroom;   /* offices: 4000 K panels, brighter (r5) */
     { vec3 hv = normalize(uSun - v); float nl = max(dot(nrm, uSun), 0.0), nh = max(dot(nrm, hv), 0.0), nv = max(dot(nrm, -v), 1e-3);   // GGX sun specular (realism M1): paint 0.65, roofs/paving 0.78, leaves 0.55, wet 0.15
       float ro = mix(leaf ? 0.55 : hz > 0.5 ? 0.78 : 0.65, 0.15, wet), a2 = ro * ro * ro * ro, dn = nh * nh * (a2 - 1.0) + 1.0, kk = (ro + 1.0) * (ro + 1.0) / 8.0;
       float sp = a2 / (3.14159 * dn * dn) / (4.0 * (nl * (1.0 - kk) + kk) * (nv * (1.0 - kk) + kk)) * (0.04 + 0.96 * pow(1.0 - max(dot(hv, -v), 0.0), 5.0));
@@ -4622,7 +4662,7 @@ void main() {
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
     if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && vWorld.y < 30.0 && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.435 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.41 && mode < 0.435) c = mix(c, toLin(alb) * 3.2, 0.9);   /* 0.42: coloured emissive (tunnel lane signals) */ if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
-  vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist * APK));   // haze blended in display space (as tuned for the 2D sky)
+  vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogColO(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist * APK));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
 }`;
@@ -4674,8 +4714,9 @@ void main() { vec2 q = gl_FragCoord.xy / uRes * 2.0 - 1.0; vec3 d = normalize(uF
   float t = d.y < -1e-5 ? min(uEye.y / -d.y, 40000.0) : 40000.0; vec2 w = uEye.xz + d.xz * t; float px = t * 2.0 / (uP.x * uRes.x * max(-d.y, 0.05));   // ground m per pixel (foreshortened)
   float n = 0.0, wt = 0.0; for (int i = 0; i < 4; i++) { float L = 60.0 / pow(3.2, float(i)), k = 1.0 - smoothstep(L * 0.25, L * 0.9, px); if (k > 0.0) n += (vn2(w / L + float(i) * 7.3) - 0.5) * k * (0.5 + 0.5 * float(i == 0)); wt += 0.5; }   /* faded octaves skipped (same result) */
   vec3 c = uColor.rgb; float a = uCls > 1.5 && uCls < 2.5 ? 0.5 : uCls < 1.5 ? 0.2 : 0.16; c *= 1.0 + a * n;
-  if (uCls > 1.5 && uCls < 2.5 && px < 60.0) c = mix(c, c * vec3(1.15, 1.05, 0.62), 0.5 * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches
-  float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.08 * m * m * m * m + 0.22 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);
+  if (((uCls > 1.5 && uCls < 2.5) || (uCls > 4.5 && uCls < 5.5)) && px < 60.0) c = mix(c, c * vec3(1.18, 1.06, 0.6), (uCls > 4.5 ? 0.75 : 0.5) * smoothstep(0.1, 0.35, vn2(w / 90.0 + 3.0) - 0.5) * (1.0 - smoothstep(20.0, 60.0, px)));   // dry/sunlit grass patches (reserve: stronger, rough vacant land)
+  if (uCls > 4.5 && uCls < 5.5) { float tr = smoothstep(0.47, 0.5, vn2(w / 140.0 + 9.0)) * (1.0 - smoothstep(0.5, 0.53, vn2(w / 140.0 + 9.0))); c = mix(c, vec3(0.6, 0.55, 0.45), 0.55 * tr * (1.0 - smoothstep(4.0, 12.0, px))); }   // worn earth tracks across vacant land
+  float m = max(0.0, dot(d, uSun)); vec3 fc = uFog + vec3(1.0, 0.86 - 0.2 * uWarm, 0.66 - 0.32 * uWarm) * (0.06 * m * m * m * m + 0.07 * pow(m, 24.0)) * uDirect * step(-0.05, uSun.y);   // = fogColO (objects)
   if (uCls > 2.5 && uCls < 3.5) { float g = smoothstep(0.44, 0.6, 0.7 * vn2(w / 38.0 + 11.0) + 0.3 * vn2(w / 11.0 + 5.0)); c = mix(pavAlb(c, w, px), lawnAlb(vec3(88.0, 120.0, 66.0) / 255.0 * (1.0 + 0.35 * n), w, px), g * 0.85); }   // residential grounds: landscaped lawn patches between paving (stage 3, 2026-10-31)
   if ((uCls > 1.5 && uCls < 2.5) || (uCls > 4.5 && uCls < 5.5)) c = lawnAlb(c, w, px); else if (uCls < 1.5) c = asphAlb(c, w, px); else if (uCls < 2.5 || uCls > 3.5) c = pavAlb(c, w, px);   // near-field materials (GL_GDET)
   if (uCls < 1.5 || uCls > 2.5) c *= 1.0 - 0.3 * uWet;   // rain: paving/asphalt darken
@@ -4759,7 +4800,7 @@ function glPrism(A, P) {
   // each prism grown 1–3 cm about its centroid (varies by prism): coplanar faces of adjacent/overlapping raster boxes (TRPF 0.5 m boxes) no longer z-fight or crack
   const e = P.kind === 'road' ? 0 : 0.01 + 0.002 * ((GPU.pid = (GPU.pid || 0) + 1) % 11), X = new Float64Array(P.n), Z = new Float64Array(P.n);
   for (let i = 0; i < P.n; i++) { const dx = P.xs[i] - P.cx, dz = P.zs[i] - P.cz, l = Math.hypot(dx, dz) || 1; X[i] = P.xs[i] + (dx / l) * e * 1.414; Z[i] = P.zs[i] + (dz / l) * e * 1.414; }
-  const al = (P.style ? (P.style === 'rf' ? P.alb : P.style === 'club' ? [150, 175, 190] : P.style === 'slim' ? (P.pal || [58, 60, 64]) : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
+  const al = (P.style ? (P.style === 'rf' ? P.alb : P.style === 'club' ? [150, 175, 190] : P.style === 'slim' ? (P.pal || [58, 60, 64]) : (P.pal || [222, 214, 198])) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0) + (P.kind === 'existing' && !P.glass && P.h >= 20 && P.h <= 160 && (P.res ?? (P.res = (luAt(P.cx, P.cz) || {}).c === 3)) ? 200 : 0);   // +200: residential (HDB/condo style in GL_FS mode 1)
   const b = P.base, t = P.h, sb = P.sb ?? b, vt = ((P.st ?? t) - sb - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
@@ -5003,7 +5044,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new' && !P.nogl) {   // nogl = physics-only (32A raster boxes spanning the corridor/slots, corridor boxes): drawing them filled the slots (TY 2026-10-31)
   const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
-  const ns = A.n; GPU.noAO = true; for (const S of CONDO_SITES) condoKit(A, S); GPU.noAO = false; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
+  const ns = A.n; GPU.noAO = true; for (const S of CONDO_SITES) condoKit(A, S); GPU.noAO = false; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.uc) craneKit(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
@@ -5126,12 +5167,24 @@ function gpuFlyer(A) { const ax = [Math.sin(60 * DEG), 0, Math.cos(60 * DEG)], o
   tube(W(0, 0, -9), W(0, 0, 9), 2.2, st, 10); tube(W(0, 0, -9.5), W(0, 0, -8.8), 6, wh, 12); tube(W(0, 0, 8.8), W(0, 0, 9.5), 6, wh, 12);   // spindle + hubs
   for (const sg of [-1, 1]) for (const a of [-1, 1]) { const g = [FLYER[0] + ax[0] * 36 * a + ox[0] * 16 * sg, 0, FLYER[1] + ax[2] * 36 * a + ox[2] * 16 * sg]; tube(g, W(0, 0, 9 * sg), 1.4, wh, 8); }   // A-frame legs
 }
+// construction kit (realism r5, 'Under construction' scenario; visual only, sizes estimates): orange climbing screens round the top 3 floors + a yellow tower crane
+// (2 m mast beside the tower to top + 18 m, 55 m jib on a hashed bearing, 15 m counter-jib + counterweight, cab)
+function craneKit(A, P) { const z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), Y = c([228, 178, 36]), G = c([120, 124, 128]), O = c([214, 112, 44]);
+  const bx = (x0, x1, y0, y1, z0, z1, col) => { const F = [[[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1]], [[x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1], [0, 0, 1]], [[x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [-1, 0, 0]], [[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0], [1, 0, 0]], [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0]]];
+    for (const [a, b, d, e, n] of F) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); A.v(a, n, col, z4); A.v(d, n, col, z4); A.v(e, n, col, z4); } };
+  for (let i = 0, j = P.n - 1; i < P.n; j = i++) { const p = k => { const dx = P.xs[k] - P.cx, dz = P.zs[k] - P.cz, l = Math.hypot(dx, dz) || 1; return [P.xs[k] + dx / l * 0.8, P.zs[k] + dz / l * 0.8]; }, a = p(j), b = p(i), ex = b[0] - a[0], ez = b[1] - a[1], L = Math.hypot(ex, ez) || 1, n = [ez / L, 0, -ex / L], y0 = P.h - 8.6, y1 = P.h + 1.6;
+    A.v([a[0], y0, a[1]], n, O, z4); A.v([b[0], y0, b[1]], n, O, z4); A.v([b[0], y1, b[1]], n, O, z4); A.v([a[0], y0, a[1]], n, O, z4); A.v([b[0], y1, b[1]], n, O, z4); A.v([a[0], y1, a[1]], n, O, z4); }
+  const mx = P.maxx + 3, mz = P.cz, top = P.h + 18, th = hash01(P.cx, P.cz, 103) * 2 * Math.PI, ux = Math.cos(th), uz = Math.sin(th);
+  bx(mx - 1, mx + 1, 0, top, mz - 1, mz + 1, Y); bx(mx - 1.6, mx + 1.6, top, top + 3, mz - 1.6, mz + 1.6, Y);
+  for (let s = -15; s < 55; s += 1.4) { const x = mx + ux * s, z = mz + uz * s; bx(x - 0.75, x + 0.75, top + 3, top + 4.5, z - 0.75, z + 0.75, Y); }
+  { const x = mx - ux * 13, z = mz - uz * 13; bx(x - 1.5, x + 1.5, top + 0.5, top + 3, z - 1.5, z + 1.5, G); } bx(mx - 0.8 + ux * 2, mx + 0.8 + ux * 2, top - 0.5, top + 1.5, mz - 0.8 + uz * 2, mz + 0.8 + uz * 2, c([236, 236, 230]));
+  bx(mx - 0.4, mx + 0.4, top + 4.5, top + 12, mz - 0.4, mz + 0.4, Y); }
 function gpuLandmarks(A) {   // curved landmark roofs (LM): National Stadium dome (roof open) + bowl/pitch, Singapore Indoor Stadium hipped roof, GBTB domes + Supertree canopies; plain shading (mode 0)
   const z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255), nrm = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); };
   const tri = (p, n, col) => { for (let k = 0; k < 3; k++) A.v(p[k], n[k], col, z4); }, quad = (p, n, col) => { tri([p[0], p[1], p[2]], [n[0], n[1], n[2]], col); tri([p[0], p[2], p[3]], [n[0], n[2], n[3]], col); };
   for (const { pts, c: [cx, cz], H } of LM_DOMES) { const K = 10, m = pts.length;   // ellipsoidal glass dome over the outline: point = c + (v − c)·cos φ, y = H·sin φ
     const V = (j, k) => { const f = (k / K) * Math.PI / 2, [x, z] = pts[j % m], dx = x - cx, dz = z - cz, R2 = dx * dx + dz * dz || 1; return [[cx + dx * Math.cos(f), H * Math.sin(f), cz + dz * Math.cos(f)], nrm([dx * Math.cos(f) / R2, Math.sin(f) / H, dz * Math.cos(f) / R2])]; };
-    for (let j = 0; j < m; j++) for (let k = 0; k < K; k++) { const a = V(j, k), b = V(j + 1, k), d = V(j + 1, k + 1), e = V(j, k + 1); quad([a[0], b[0], d[0], e[0]], [a[1], b[1], d[1], e[1]], c(j % 3 ? [204, 218, 224] : [178, 192, 200])); } }
+    for (let j = 0; j < m; j++) for (let k = 0; k < K; k++) { const a = V(j, k), b = V(j + 1, k), d = V(j + 1, k + 1), e = V(j, k + 1); quad([a[0], b[0], d[0], e[0]], [a[1], b[1], d[1], e[1]], c(j % 3 === 0 ? [222, 226, 228] : k < 4 ? [96, 122, 104] : [132, 152, 158])); } }   // glass (realism r5): see-through panels = planting inside (low) / tinted glass + gridshell (high), white steel ribs (was milky opaque)
   for (const [x, z, h, r] of LM_TREES) { const y0 = h * 0.72, R = 0.22 * h + 3, N = 16;   // Supertree canopy: flared steel funnel (inverted frustum) + rim
     for (let j = 0; j < N; j++) { const a0 = (j / N) * 2 * Math.PI, a1 = ((j + 1) / N) * 2 * Math.PI, P = (a, rr, y) => [x + rr * Math.cos(a), y, z + rr * Math.sin(a)], sl = (R - r) / (h - y0), n0 = nrm([-Math.cos(a0), sl, -Math.sin(a0)]), n1 = nrm([-Math.cos(a1), sl, -Math.sin(a1)]);
       quad([P(a0, r, y0), P(a1, r, y0), P(a1, R, h), P(a0, R, h)], [n0, n1, n1, n0], c(j % 2 ? [128, 72, 108] : [96, 58, 86]));
@@ -5443,7 +5496,7 @@ function gpuCam(pr, cam, near, far) {
 function gpuEnv(pr, env, unlit) {
   const gl = GPU.gl, u = pr.u, s = env.sunVec, k = c => c.map(v => v / 255), water = k(fogMix(mix(env.sky.sea, [20, 110, 150], 0.3), 800, env));
   gl.uniform3f(u.uSun, s[0], s[1], s[2]); gl.uniform3f(u.uSkyMid, ...k(env.sky.mid)); gl.uniform3f(u.uFog, ...k(env.sky.hor)); gl.uniform3f(u.uWater, ...water);
-  gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); gl.uniform1f(u.uUnlit, unlit ? 1 : 0); gl.uniform1f(u.uHQ, GPU.hq ? 1 : 0);
+  gl.uniform1f(u.uDirect, env.direct); gl.uniform1f(u.uAmb, env.ambient); gl.uniform1f(u.uWarm, env.warm); gl.uniform1f(u.uBeta, env.beta); gl.uniform1f(u.uNight, env.night ? 1 : 0); { const hr = state.hour, f = hr < 5 ? 0.12 : hr < 7 ? 0.25 : hr < 19 ? 0.65 : hr < 21 ? 0.55 : hr < 23 ? 0.38 : 0.2; gl.uniform1f(u.uOffice, f); } gl.uniform1f(u.uUnlit, unlit ? 1 : 0); gl.uniform1f(u.uHQ, GPU.hq ? 1 : 0);
   const lit = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9); gl.uniform1f(u.uLitK, lit); gl.uniform1f(u.uExtK, clamp(0.35 + env.ambient * 1.3, 0.15, 1)); gl.uniform1f(u.uAlpha, 1);
   gl.uniform3f(u.uGlass, ...k(mix(TRPF_PAL.glass, env.sky.hor, 0.18))); gl.uniform1f(u.uGroundSh, 0.42 * env.direct);
   texU(pr, env); if (u.uNOL) { gl.uniform1i(u.uNOL, unlit || !env.night ? 0 : GPU.olN || 0); if (GPU.olN && !unlit && env.night) gl.uniform4fv(u['uOL[0]'] || u.uOL, GPU.olL); } gl.uniform3f(u.uSkyTop, ...k(env.sky.top)); if (u.uCld) gl.uniform4f(u.uCld, ...cloudU(env)); gl.uniform1f(u.uWet, env.W.rain ? 1 : 0); gl.uniform1f(u.uTime, simT() % 3600); gl.uniform1f(u.uMirror, 0); gl.uniform1f(u.uSlab, slabY()); gl.uniform1f(u.uRoomH, UNIT_H);
@@ -5522,7 +5575,10 @@ function gpuRender(cam, env, pxW, pxH) {
   if (state.showRoads && GPU.markN) { gpuAttrib(M, GPU.mark); cityDraw(camCull(cam), GPU.markT); gpuAttrib(M, GPU.ground); }   // lane lines / kerb lines / crossings / arrows (roadKit; over the plan roads too)
   if (GPU.L) cityDraw(camCull(cam), GPU.recvT);   // building/tree shadows on the ground
   // solids with depth
-  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city); opaque();   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
+  const oAO = !!(state.walk && onGround() && state.ao && GPU.dep && !groundIndoor()); if (oAO) { gpuDepthOut(cam, NEAR, FAR, () => { cityDraw(cc, GPU.tiles, eye); for (const [P, s, c] of GPU.own) if (!P.wdoor && !P.wlift) gl.drawArrays(gl.TRIANGLES, s, c); }); gl.enable(gl.BLEND); }   // outdoor SSAO while walking on the ground (realism r5): city depth into the AO texture (same near/far as this pass)
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city);
+  if (oAO) { gl.uniform1f(M.u.uAO, 1); gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, NEAR, FAR); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
+  opaque(); if (oAO) gl.uniform1f(M.u.uAO, 0);   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
   if (state.showRoads && GPU.tunON) {   // tunnel troughs + interiors: below grade, so drawn only where the trough opening (y 0) is visible (stencil bit 8; the ground layer writes no depth)
     const zm = GPU.zm || GPU.dep; gl.enable(gl.STENCIL_TEST); gl.stencilMask(8); gl.clear(gl.STENCIL_BUFFER_BIT); gl.stencilFunc(gl.ALWAYS, 8, 8); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
@@ -5533,7 +5589,7 @@ function gpuRender(cam, env, pxW, pxH) {
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez); gpuGrass(cam);
   gl.enable(gl.BLEND); if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
     gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
-    gpuEdges(cam, env); }
+    if (state.xray || state.opacity < 0.99) gpuEdges(cam, env); }
   // traffic by day + wakes (opaque sprites), Flyer by day; then additive night lights (lamps, cars, landmarks, Flyer LEDs, Spectra), depth-tested, no depth write
   if (fx.opq) gpuSprites(cam, env, GPU.dyn.opq, fx.opq, false, 1e9); if (fx.lo) gpuLines(cam, env, GPU.dyn.lo, fx.lo, false);
   gl.depthMask(false); gl.blendFunc(gl.ONE, gl.ONE);
@@ -5588,6 +5644,12 @@ function gpuRenderInterior(cam, env, kIn) {
   gl.depthMask(true); if (HV) gpuHand(HV); GPU.hv = HV; return true;
 }
 // Interior depth prepass for SSAO (same camera/near/far as the room pass) into a depth texture; leaves the default framebuffer bound with depth cleared.
+function gpuDepthOut(cam, n, f, draw) { const gl = GPU.gl, w = GPU.cv.width, h = GPU.cv.height, pr = GPU.dep; gpuDepthTex(w, h);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.viewport(0, 0, w, h); gl.clear(gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.useProgram(pr.p); gpuCam(pr, cam, n, f); gpuAttrib(pr, GPU.city); draw();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); }
+function gpuDepthTex(w, h) { const gl = GPU.gl; if (GPU.depWH !== w + 'x' + h) { GPU.depWH = w + 'x' + h; gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.depFb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, GPU.depTx, 0); gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); gl.bindFramebuffer(gl.FRAMEBUFFER, null); } }
 function gpuDepth(cam, n) {
   const gl = GPU.gl, w = GPU.cv.width, h = GPU.cv.height, pr = GPU.dep; if (!pr || !state.ao) return false;
   if (GPU.depWH !== w + 'x' + h) { GPU.depWH = w + 'x' + h; gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
@@ -5682,7 +5744,8 @@ function bloomGrab(ctx, w, h, SUN) {
   const A = BLOOM.a || (BLOOM.a = mk()), B = BLOOM.b || (BLOOM.b = mk()); A.width = bw * 3; A.height = bh * 3; B.width = bw; B.height = bh;
   const ca = A.getContext('2d'), cb = B.getContext('2d', { willReadFrequently: true }); ca.drawImage(ctx.canvas, 0, 0, A.width, A.height); cb.drawImage(A, 0, 0, bw, bh);
   const im = cb.getImageData(0, 0, bw, bh), d = im.data, N = bw * bh, R = new Float32Array(N * 3); let any = 0;
-  for (let i = 0; i < N; i++) { const r = d[4 * i] / 255, g = d[4 * i + 1] / 255, b = d[4 * i + 2] / 255, Y = 0.3 * r + 0.59 * g + 0.11 * b, k = Y > 0.8 ? Math.min(1, (Y - 0.8) / 0.2) ** 1.5 : 0; R[3 * i] = r * k; R[3 * i + 1] = g * k; R[3 * i + 2] = b * k; any += k; }
+  let mY = 0; for (let i = 0; i < N; i++) mY += (0.3 * d[4 * i] + 0.59 * d[4 * i + 1] + 0.11 * d[4 * i + 2]) / 255; mY /= N; const th = Math.min(0.93, Math.max(0.8, 0.45 + 0.6 * mY));   // adaptive threshold (realism r5): a bright hazy frame (sun over MBS) no longer blooms as a whole
+  for (let i = 0; i < N; i++) { const r = d[4 * i] / 255, g = d[4 * i + 1] / 255, b = d[4 * i + 2] / 255, Y = 0.3 * r + 0.59 * g + 0.11 * b, k = Y > th ? Math.min(1, (Y - th) / (1 - th)) ** 1.5 : 0; R[3 * i] = r * k; R[3 * i + 1] = g * k; R[3 * i + 2] = b * k; any += k; }
   BLOOM.flare = null;
   if (SUN && SUN.k > 0.05) {   // sun shafts (realism 2026-10-31, UE-style light shafts): bright pixels weighted by closeness to the sun, radially blurred toward it (24 taps, decay 0.94)
     const sx = SUN.x / w * bw, sy = SUN.y / h * bh, sg = 0.4 * bw, M = new Float32Array(N), G = new Float32Array(N);
@@ -5831,11 +5894,13 @@ function gpuFx0(cam, env) {
   peopleGeo(Sh, cam); mscpLiftGeo(Sh); for (const q of mscpCarsNow()) if (cam.inWedge(q.wx - 3, q.wx + 3, q.wz - 3, q.wz + 3, 900)) carMesh(Sh, q.wx, q.y, q.wz, q.hx, q.hz, q.k, [0, 0, 0.3, 0], Math.hypot(q.wx - cam.ex, q.y - cam.hEye, q.wz - cam.ez) < CAR_LOD);   // carpark: parked cars by hour/day (view wedge, detailed ≤ CAR_LOD)   // stage 5 (2026-10-31): typed ship meshes
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
     shipMesh(Sh, x, z, len, dir, 20 + MOVERS.indexOf(Mv));
-    S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2); });
+    S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2);
+    const fo = [242 / 255, 246 / 255, 248 / 255], ca = Math.cos(19.5 * DEG), sa = Math.sin(19.5 * DEG); S(opq, x - dir * len * 0.62, 0.22, z, 1, 0, len * 0.22, len * 0.07, fo, 0.75, 2); S(opq, x + dir * len * 0.47, 0.22, z, 1, 0, len * 0.06, len * 0.09, fo, 0.6, 2);   // r5: stern churn + bow wave
+    for (const sg of [-1, 1]) { const L2 = len * 1.6, cx = x - dir * (len * 0.5 + L2 * 0.5 * ca), cz = z + sg * L2 * 0.5 * sa; S(opq, cx, 0.21, cz, dir * ca, -sg * sa, L2 * 0.5, len * 0.025, fo, 0.4, 2); } });   // Kelvin wake arms ±19.5° (realism r5)
   if (state.showRoads) { const cc = {};
     CAR_SINK = (x, y, z, hx, hz, k, dd) => { const dn = Math.hypot(x - cam.ex, z - cam.ez), near = dn < 700; if (y < -0.3) { if (near) carMesh(Tc, x, y, z, hx, hz, k, undefined, dn < CAR_LOD, true); return; }   // in a tunnel trough: own buffer, drawn through the trough mask
       if (near) carMesh(Sh, x, y, z, hx, hz, k, undefined, dn < CAR_LOD, true);   // ≤700 m: 3D car (realism 2026-10-31); beyond: sprite rect
-      if (night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0; S(add, x, y + 0.8, z, 0, 0, 0.8, 1.2, tow ? [1, 0.97, 0.88] : [1, 0.16, 0.12], tow ? 0.9 : 0.8, 1); }
+      if (night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0; S(add, x, y + 0.8, z, 0, 0, 0.8, 1.2, tow ? [1, 0.97, 0.88] : [1, 0.16, 0.12], tow ? 0.9 : 0.8, 1); if (env.W.rain) S(add, x, y + 0.03, z, 1, 0, 0.9, 0.7, tow ? [1, 0.95, 0.85] : [1, 0.2, 0.15], 0.3, 2); }   // wet road (realism r5): head/tail lights reflected as streaks toward the eye (type-2 pools are stretched by uWetR)
       else if (!near) { const i = k % CAR_COL.length, c = cc[i] || (cc[i] = shade(CAR_COL[i], [0, 1, 0], env).map(v => v / 255)); S(opq, x, y + 0.8, z, hx, hz, 2.25, 0.9, c, 1, 3); } };
     try { drawCars(null, cam, env); for (const P of DECKS) { if (P.name === 'Pier' || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2200 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 2300)) continue; deckCars(null, cam, env, P); } } finally { CAR_SINK = null; } }
   { const ax = Math.sin(60 * DEG), az = Math.cos(60 * DEG), P = t => [FLYER[0] + ax * 75 * Math.cos(t), 90 + 75 * Math.sin(t), FLYER[1] + az * 75 * Math.cos(t)], o = night ? la : lo, c = night ? [150 / 255, 200 / 255, 1] : [235 / 255, 235 / 255, 240 / 255];   // Flyer rim (+ 24 lit capsules at night)
@@ -5844,11 +5909,13 @@ function gpuFx0(cam, env) {
   gpuDyn('ship', Sh.a); gpuDyn('tcar', Tc.a); gpuDyn('opq', opq); gpuDyn('add', add); gpuDyn('la', la); gpuDyn('lo', lo);
   return { ship: Sh.n, tcar: Tc.n, opq: opq.length / 13, add: add.length / 13, la: la.length / 7, lo: lo.length / 7 };
 }
+const NIGHT_CROWNS = () => NIGHT_CROWNS.L || (NIGHT_CROWNS.L = EXISTING.filter(P => P.h >= 150 && !P.nogl && P.n <= 64 && Math.hypot(P.cx - MBS_AX.a[0], P.cz - MBS_AX.a[1]) < 2500 && !/SkyPark|Sands Tower/.test(P.name) && !EXISTING.some(Q => Q !== P && Q.base >= P.h - 0.5 && pointIn(Q, P.cx, P.cz))));
 function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, crown disc, glow; Garden Rhapsody colour cycle), dome glow, MBS SkyPark edge, Spectra beams
   const hr = state.hour, [yy, mm, dd] = state.dateStr.split('-').map(Number), dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(), rhapsody = inShow(hr, [19.75, 20.75]), spectra = inShow(hr, dow === 5 || dow === 6 ? [20, 21, 22] : [20, 21]);
   const hsl = h => { const a = 0.9 * 0.4, f = n => { const k = (n + h / 30) % 12; return 0.6 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); }; return [f(0), f(8), f(4)]; }, pu = [190 / 255, 120 / 255, 1], st = [150 / 255, 90 / 255, 220 / 255];
   for (const t of SUPERTREES) { la.push(t.x, 0, t.z, ...st, 0.6, t.x, t.h, t.z, ...st, 0.6); S(add, t.x, t.h, t.z, 1, 0, 9, 9, rhapsody ? hsl((t.hue + hr * 3600 * 20) % 360) : pu, 0.85, 4); S(add, t.x, t.h, t.z, 0, 0, 27, 4.5, rhapsody ? [1, 160 / 255, 240 / 255] : pu, 0.25, 0); }
   LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => S(add, l.x, l.h * 0.5, l.z, 0, 0, l.span * 0.7, 3, [170 / 255, 220 / 255, 1], 0.3, 0, l.span * 0.6));
+  if (hr >= 19 || hr < 0.5) for (const P of NIGHT_CROWNS()) { const c = P.h > 240 ? [0.85, 0.92, 1] : [1, 0.9, 0.72]; for (const y of [P.h - 0.5, P.h - 4]) for (let i = 0, j = P.n - 1; i < P.n; j = i++) la.push(P.xs[j], y, P.zs[j], ...c, y === P.h - 0.5 ? 0.8 : 0.35, P.xs[i], y, P.zs[i], ...c, y === P.h - 0.5 ? 0.8 : 0.35); }   // CBD crown lighting 19:00–00:30 (realism r5; towers ≥150 m within 2.5 km of MBS: top outline + a second band 4 m down, estimate)
   const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark'); if (!SP) return; const ec = [1, 235 / 255, 200 / 255];
   for (let i = 0, j = SP.n - 1; i < SP.n; j = i++) la.push(SP.xs[j], SP.base, SP.zs[j], ...ec, 0.85, SP.xs[i], SP.base, SP.zs[i], ...ec, 0.85);
   if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = MBS_AX.a[0] + (MBS_AX.b[0] - MBS_AX.a[0]) * f, z = MBS_AX.a[1] + (MBS_AX.b[1] - MBS_AX.a[1]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
@@ -6123,10 +6190,11 @@ const PRESETS = {
   low: { me: [20, 30], gpr: 3.5, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
   base: { me: [30, 44], on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
   tall: { me: [35, 50], gpr: 5.6, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
+  build: { me: [30, 44], date: '2032-06-15', build: true, on: { N: true, S: true, EA: true, RE: false, RS: false, RT: false, KB: false, KA: false, LI: false } },
   allres: { me: [30, 44], on: { N: true, S: true, EA: true, RE: true, RS: true, RT: true, KB: true, KA: true, LI: true } }
 };
 scenarioPreset.addEventListener('change', e => { const p = PRESETS[e.target.value]; if (!p) return;
-  Object.assign(state, { spacing: 95, showExisting: true, showRoads: true });
+  Object.assign(state, { spacing: 95, showExisting: true, showRoads: true, build: !!p.build });
   state.dateStr = p.date || todayISO();
   GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' || g.id === 'LI' || g.fixed ? { on: p.on[g.id] } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {})); regen(); });
 /* ===================== ON-VIEW CONTROLS (UX round 2): compass tape, floor strip, time scrubber + date popover, room plan menu, scenario cards ===================== */
@@ -6390,11 +6458,11 @@ const SCN_IMP = { key: '', v: {}, t: 0 };
 const scnImpKey = () => [perspectiveCanvas._w, perspectiveCanvas._h, state.vx, state.vz, state.obsFloor, state.heading, state.pitchDeg, state.focalLength, state.eyeOffset, state.footprint, state.seed, gap3132].join('|');
 function scnImpSchedule() { const key = scnImpKey(); if (key !== SCN_IMP.key) { SCN_IMP.key = key; SCN_IMP.v = {}; } clearTimeout(SCN_IMP.t); if (PNL.open.includes('future')) SCN_IMP.t = setTimeout(scnImpStep, 450); scnImpUI(); }
 function scnImpStep() { if (!PNL.open.includes('future') || SCN_IMP.key !== scnImpKey()) return; if (drag3D || TAPE.drag) { SCN_IMP.t = setTimeout(scnImpStep, 300); return; }
-  const v = Object.keys(PRESETS).find(k => !SCN_IMP.v[k]); if (!v) return; const p = PRESETS[v], sv = { towers, pools: CONDO_POOLS, sites: CONDO_SITES, groups: state.groups, spacing: state.spacing }; let o = null;
-  try { state.groups = JSON.parse(JSON.stringify(state.groups)); state.spacing = 95;   // same group settings as picking that scenario (presets handler)
+  const v = Object.keys(PRESETS).find(k => !SCN_IMP.v[k]); if (!v) return; const p = PRESETS[v], sv = { towers, pools: CONDO_POOLS, sites: CONDO_SITES, groups: state.groups, spacing: state.spacing, build: state.build }; let o = null;
+  try { state.groups = JSON.parse(JSON.stringify(state.groups)); state.spacing = 95; state.build = !!p.build;   // same group settings as picking that scenario (presets handler)
     GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' || g.id === 'LI' || g.fixed ? { on: p.on[g.id] } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {}));
     generateTowers(); o = computeOcclusionMask(perspectiveCanvas._w || 820, perspectiveCanvas._h || 360, EXISTING.concat(DECKS, TRPF, towers)); }
-  finally { towers = sv.towers; CONDO_POOLS = sv.pools; CONDO_SITES = sv.sites; state.groups = sv.groups; state.spacing = sv.spacing; }
+  finally { towers = sv.towers; CONDO_POOLS = sv.pools; CONDO_SITES = sv.sites; state.groups = sv.groups; state.spacing = sv.spacing; state.build = sv.build; }
   SCN_IMP.v[v] = { b: o.total, hz: o.horizonVisiblePct }; scnImpUI(); SCN_IMP.t = setTimeout(scnImpStep, 80); }
 function scnImpUI() { document.querySelectorAll('#scnCards .imp').forEach(el => { const r = SCN_IMP.v[el.dataset.v]; el.innerHTML = r ? `<span class="b" title="Frame blocked from this view">${r.b.toFixed(0)}% blocked</span><span class="hz" title="Sea horizon clear">${r.hz === null ? '—' : r.hz.toFixed(0) + '%'} sea</span>` : '<span class="wait shimmer" title="Working out blocked % / sea horizon for this view…"></span><span class="wait shimmer"></span>'; }); }
 /* ---------- Date popover: weather + compare day; date chip weather icon ---------- */
@@ -6454,10 +6522,10 @@ function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { W
   const get = wcDB().then(db => new Promise(res => { const q = db.transaction('w').objectStore('w').get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; db.close(); res(); }; q.onerror = () => { db.close(); res(); }; }));
   return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
 function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
-  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
 /* ===================== UX ROUND 4 (2026-10-31): scenario chip, hold-to-compare, pinch/wheel lens, double-tap face, haptics, phone dock, plan full screen, panel width + keys ===================== */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} };
-const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', allres: 'Full', custom: 'Custom' };
+const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', build: '2032', allres: 'Full', custom: 'Custom' };
 function scnPop(on) { const p = $('scnPop'), sel = scenarioPreset; if (!p) return;
   if (on) p.innerHTML = '<div class="sec-h">Scenario: what gets built</div>' + [...sel.options].filter(o => o.value !== 'custom' || sel.value === 'custom').map(o => `<button role="menuitemradio" aria-checked="${o.value === sel.value}" data-v="${o.value}"><span class="dot"></span><span class="lbl">${o.value === 'custom' ? '<b>Custom</b><small>edited in Future › More…</small>' : scnLbl(o.textContent)}</span></button>`).join('');
   p.style.display = on ? '' : 'none'; $('scnBtn').setAttribute('aria-expanded', String(on)); }
@@ -6504,7 +6572,7 @@ function initApp() {
   buildGroupRows(); generateTowers(); rebuildIndex(); wcLoad().then(() => { splStep('Drawing the first view…', 0.8); setTimeout(initApp2, 30); }); }
 function splStep(t, k) { const a = $('splStep'), b = $('splBar'); if (a) a.textContent = t; if (b) b.style.width = `${k * 100}%`; }
 function initApp2() { const E = WC.e;
-  if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees();
+  if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees(); TT_BASE = { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }; towerTrees();
   furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
   setInterval(viewSave, 2000); addEventListener('pagehide', viewSave); document.addEventListener('visibilitychange', () => { if (document.hidden) viewSave(); });
   const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); } BENCH.load = performance.now(); if (/[?&]bench/.test(location.search)) setTimeout(glBench, 1500);
