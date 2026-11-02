@@ -2318,7 +2318,7 @@ const GROUPS = [
 const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 50,
   profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
-  groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 26, towers: 3, slim: 1 }, E2: { floors: 26, towers: 3, off: 1 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 }, LI: { on: false, min: 20, max: 40, gpr: 3.0, net: 0.5, low: 10, step: false } },
+  groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 26, towers: 3, slim: 1 }, E2: { floors: 24, towers: 3, slim: 1 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 }, LI: { on: false, min: 20, max: 40, gpr: 3.0, net: 0.5, low: 10, step: false } },
   showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 0.92, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: false, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
 };
 const GROUP_DEFAULTS = JSON.parse(JSON.stringify(state.groups));   // presets restore these, then apply their own heights
@@ -2335,7 +2335,7 @@ let CONDO_POOLS = [];
 // Slim stepped towers (TY 2026-11-02 photo: charcoal facade, full-height glazing, white curved slab bands on every floor). E1 = URA Tanjong Rhu Road GLS site
 // (GPR 3.7, 1.22 ha; CDL consortium, ~520 units in 3 × 26-storey blocks, EdgeProp/99.co 2025–26). No published site plan → layout/plan estimates: per tower 2 staggered
 // slabs (main 24 × 15.5 m + wing 18 × 12.5 m set 3.5 m N, 1 m overlap; 587 m²/floor → 3 × 26F ≈ GPR 3.7), long faces N/S, 2 towers S row + 1 N row, 10 m setback, ≥20 m apart.
-const SLIM_LAYOUT = { E1: [[157, 17.5, 1], [219, 17.5, -1], [190, 62, 1]] };   // [x, z, wing side ±1]
+const SLIM_LAYOUT = { E1: [[157, 17.5, 1], [219, 17.5, -1], [190, 62, 1]], E2: [[157, -70, 1], [219, -70, -1], [190, -28, 1]] };   // E2 (TY 2026-11-02 "probably 3 such towers"): same type, 24F so GPR 3.5 holds (3 × 24 × 587 m² = GPR 3.44; 26F would be 3.73)   // [x, z, wing side ±1]
 const slimVols = (x, z, m) => [[x - 6 * m, z, 12, 7.75], [x + 14 * m, z + 3.5, 9, 6.25]];   // [cx, cz, hw, hd]
 function condoPlot(p, g, st, lo, hi, out, nextId) {
   if (((st.plots && st.plots[p.id]) || {}).off) return;   // E2 empty (TY 2026-11-02: only the 3 GLS blocks on E1; E2 was an unverified copy)
