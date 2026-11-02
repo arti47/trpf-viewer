@@ -3376,6 +3376,8 @@ function walkMapT(cv) {
 // oriented like the HDB storey plan (TY 2026-10-29): N up, E (#134) on the right (plan +X = W → screen left, +Y = N → up); portrait big map turned 90° cw (N right, W up)
 const walkMapP = (T, X, Y) => T.l === undefined ? [T.w - (X - T.ox) * T.sc, T.h - (Y - T.oy) * T.sc] : T.rot ? [T.l + (Y - T.Y0) * T.sc, T.t + (T.X1 - X) * T.sc] : [T.l + (T.X1 - X) * T.sc, T.t + (T.Y1 - Y) * T.sc];
 const walkMapInv = (T, x, y) => T.l === undefined ? [(T.w - x) / T.sc + T.ox, (T.h - y) / T.sc + T.oy] : T.rot ? [T.X1 - (y - T.t) / T.sc, (x - T.l) / T.sc + T.Y0] : [T.X1 - (x - T.l) / T.sc, T.Y1 - (y - T.t) / T.sc];
+// ghost click (TY 2026-11-02 "exit the map at ground floor → level 2"): closing the big map on pointerdown moves it away, so the touch's synthesized click lands on the button under the finger (✕ sits over Walk/Stop → setWalk(false) → 2F); swallow that one click
+const eatClick = () => { const f = e => { e.stopPropagation(); e.preventDefault(); }; window.addEventListener('click', f, { capture: true, once: true }); setTimeout(() => window.removeEventListener('click', f, true), 700); };
 function walkMapBig(on) {
   WALK_MAP.big = !!on && !!state.walk; const cv = $('walkMap'); if (WALK_MAP.big && cv.parentNode !== document.body) { WALK_MAP.home = [cv.parentNode, cv.nextSibling]; document.body.appendChild(cv); } else if (!WALK_MAP.big && WALK_MAP.home) { WALK_MAP.home[0].insertBefore(cv, WALK_MAP.home[1]); WALK_MAP.home = null; }   // body child while big: pane ancestors would clip / contain position:fixed
   cv.classList.toggle('big', WALK_MAP.big); cv.title = WALK_MAP.big ? 'Tap a spot to walk there' : 'Tap to expand the map'; drawWalkMap();
@@ -5758,9 +5760,9 @@ $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen
   ['touchend', 'touchcancel'].forEach(ev => window.addEventListener(ev, e => { if (J0.id === null) return; const r = J.getBoundingClientRect(), R = r.width * 1.6, cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     if (!e.touches.length || ![...e.touches].some(t => Math.hypot(t.clientX - cx, t.clientY - cy) < R + 120)) reset(); }, true));
   window.addEventListener('blur', reset); document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); }); }
-$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); const cv = $('walkMap'), T = WALK_MAP.T; if (!T) return; if (!WALK_MAP.big) { walkMapBig(true); return; }   // small map: tap expands
-  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (x > T.w - 48 && y < 44) { walkMapBig(false); return; }   // ✕
-  const [X, Y] = walkMapInv(T, x, y); if (walkFree(X, Y)) { WALK_MAP.miss = false; walkSet(X, Y); walkMapBig(false); renderAll(); } else { WALK_MAP.miss = true; drawWalkMap(); clearTimeout(WALK_MAP.mt); WALK_MAP.mt = setTimeout(() => { WALK_MAP.miss = false; if (WALK_MAP.big) drawWalkMap(); }, 1500); } });
+$('walkMap').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); const cv = $('walkMap'), T = WALK_MAP.T; if (!T) return; if (!WALK_MAP.big) { eatClick(); walkMapBig(true); return; }   // small map: tap expands
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (x > T.w - 48 && y < 44) { eatClick(); walkMapBig(false); return; }   // ✕
+  const [X, Y] = walkMapInv(T, x, y); if (walkFree(X, Y)) { WALK_MAP.miss = false; walkSet(X, Y); eatClick(); walkMapBig(false); renderAll(); } else { WALK_MAP.miss = true; drawWalkMap(); clearTimeout(WALK_MAP.mt); WALK_MAP.mt = setTimeout(() => { WALK_MAP.miss = false; if (WALK_MAP.big) drawWalkMap(); }, 1500); } });
 window.addEventListener('resize', () => { if (WALK_MAP.big) drawWalkMap(); });
 // Walk: open/close the internal door nearest in front of the eye (≤1.8 m; ahead weighted over behind); saved per door in the layout
 function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a = (state.heading - 350.3) * DEG, fx = -Math.sin(a), fy = Math.cos(a); let best = null, bs = 1e9;
