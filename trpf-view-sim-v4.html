@@ -2330,7 +2330,29 @@ function hash01(x, z, s) { const h = Math.sin(x * 12.9898 + z * 78.233 + s * 37.
 // ±1F skyline step, 10m boundary setback, ≥20m apart. 2-storey clubhouse (8m) + 40×12m pool on the open deck. Geometry is an estimate.
 const CONDO = { f2f: NEW_F2F, lobby: NEW_LOBBY, roof: NEW_ROOF, fpNom: 950, setback: 10, gap: 20, notch: 0.22 };   // storey heights shared with all new towers
 const condoRoof = newRoof;
-let CONDO_POOLS = [];
+let CONDO_POOLS = [], CONDO_SITES = [];
+// Condo estate per plot (TY 2026-11-02 "make it like real condo estates, now looks like one big estate"; typical SG private condo, render only, sizes/positions estimates):
+// gate on the side facing its access road (`CONDO_GATE`), guardhouse + barrier + gate piers + name wall, 6 m driveway to a drop-off loop + canopy at the nearest tower,
+// basement carpark ramp (covered), boundary fence (low wall + masonry piers + metal railing), lawn, paved paths, pool deck + pavilion, perimeter/lawn trees (generateTrees).
+const CONDO_GATE = { E1: [235, 100], E2: [300, -45] };   // E1: Tanjong Rhu Rd (N); E2: side road E (access unverified)
+function condoSite(p, placed, club, pool) {
+  const r = p.ring, R = []; for (let i = 0; i < r.length; i += 2) R.push([r[i], r[i + 1]]); let cx = 0, cz = 0; R.forEach(q => { cx += q[0]; cz += q[1]; }); cx /= R.length; cz /= R.length;
+  const GT = CONDO_GATE[p.id] || [cx, cz + 300]; let G = null, bd = Infinity;
+  for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length], ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1, t = Math.max(0.15, Math.min(0.85, ((GT[0] - a[0]) * ex + (GT[1] - a[1]) * ez) / L2)), x = a[0] + ex * t, z = a[1] + ez * t, d = Math.hypot(GT[0] - x, GT[1] - z);
+    if (d < bd) { bd = d; const L = Math.sqrt(L2); let nx = -ez / L, nz = ex / L; if ((cx - x) * nx + (cz - z) * nz < 0) { nx = -nx; nz = -nz; } G = { x, z, tx: ex / L, tz: ez / L, nx, nz, e: i, s: t * L, d }; } }
+  const tw = placed.filter(q => q !== club && q !== pool); let T = tw[0], td = Infinity; tw.forEach(q => { const d = Math.hypot(q.x - G.x, q.z - G.z); if (d < td) { td = d; T = q; } });
+  const ins = (x, z, m = 2) => ringIn(r, x, z) && [[m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => ringIn(r, x + a, z + b)), clr = (x, z, hw, hd, c) => placed.every(q => Math.abs(q.x - x) >= q.hw + hw + c || Math.abs(q.z - z) >= q.hd + hd + c);
+  let ux = G.x - T.x, uz = G.z - T.z; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul; let off = 0, D = null;   // drop-off loop (r 7.5) at the tower face nearest the gate, else turned toward a face with room
+  for (const da of [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.4, -2.4, Math.PI]) { const vx = ux * Math.cos(da) - uz * Math.sin(da), vz = ux * Math.sin(da) + uz * Math.cos(da), o = Math.abs(vx) * T.hw + Math.abs(vz) * T.hd, d = [T.x + vx * (o + 8), T.z + vz * (o + 8)];
+    if (ins(d[0], d[1], 8) && clr(d[0], d[1], 7.5, 7.5, 0.5)) { D = d; off = o; ux = vx; uz = vz; break; } }
+  if (!D) { off = Math.abs(ux) * T.hw + Math.abs(uz) * T.hd; D = [T.x + ux * (off + 8), T.z + uz * (off + 8)]; }
+  const S0 = [G.x - G.nx * Math.max(2, Math.min(18, G.d - 5)), G.z - G.nz * Math.max(2, Math.min(18, G.d - 5))], G1 = [G.x + G.nx * 12, G.z + G.nz * 12];
+  const site = { id: p.id, ring: r, R, G, T, D, u: [ux, uz], off, drive: [S0, [G.x, G.z], G1, D], club, pool, paths: [], gh: null, ramp: null, pav: null, pal: p.id === 'E2' ? 1 : 0 };
+  for (const q of placed) site.paths.push([D, [q.x, q.z]]);
+  const gh = [G.x + G.nx * 6 + G.tx * 7, G.z + G.nz * 6 + G.tz * 7]; if (ins(gh[0], gh[1], 3)) site.gh = gh;
+  for (const sg of [-1, 1]) { const rc = [G.x + G.nx * 20 + G.tx * 10 * sg, G.z + G.nz * 20 + G.tz * 10 * sg]; if (!site.ramp && ins(rc[0], rc[1], 9) && clr(rc[0], rc[1], 9, 9, 2)) site.ramp = { c: rc, sg }; }
+  if (pool) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const px = pool.x + a * (pool.hw + 7), pz = pool.z + b * (pool.hd + 7); if (!site.pav && ins(px, pz, 5) && clr(px, pz, 3.5, 3.5, 1)) site.pav = [px, pz]; }
+  return site; }
 // Per-plot override (owner, from tanjongrhucondos.com): E2 (front, S) 3 towers × 26F; E1 30F, tower count from GFA. floors 0 → use min/max sliders (default 26–30F, brackets the overrides).
 // Slim stepped towers (TY 2026-11-02 photo: charcoal facade, full-height glazing, white curved slab bands on every floor). E1 = URA Tanjong Rhu Road GLS site
 // (GPR 3.7, 1.22 ha; CDL consortium, ~520 units in 3 × 26-storey blocks, EdgeProp/99.co 2025–26). No published site plan → layout/plan estimates: per tower 2 staggered
@@ -2342,7 +2364,7 @@ function condoPlot(p, g, st, lo, hi, out, nextId) {
   { const ov = (st.plots && st.plots[p.id]) || {}, L = SLIM_LAYOUT[p.id]; if (ov.slim && L && ov.floors > 0 && ov.towers === L.length) { const placed = [];
     L.forEach(([x, z, m]) => { const [A, B] = slimVols(x, z, m), ax0 = A[0] - A[2], ax1 = A[0] + A[2], bx0 = B[0] - B[2], bx1 = B[0] + B[2], az0 = A[1] - A[3], az1 = A[1] + A[3], bz0 = B[1] - B[3], bz1 = B[1] + B[3];
       const r = m > 0 ? [ax0, az0, ax1, az0, ax1, bz0, bx1, bz0, bx1, bz1, bx0, bz1, bx0, az1, ax0, az1] : [bx0, bz0, ax0, bz0, ax0, az0, ax1, az0, ax1, az1, bx1, az1, bx1, bz1, bx0, bz1];
-      const P = makePrism(`${g.id}${nextId()}`, 'new', condoRoof(ov.floors), 0, r, 0); P.floors = ov.floors; P.group = g; P.style = 'slim'; P.vols = [A, B]; P.fp = 4 * (A[2] * A[3] + B[2] * B[3]) - 2 * (az1 - bz0) * Math.min(ax1 - bx0, bx1 - ax0) / 2; out.push(P);
+      const P = makePrism(`${g.id}${nextId()}`, 'new', condoRoof(ov.floors), 0, r, 0); P.floors = ov.floors; P.group = g; P.style = 'slim'; if (p.id === 'E2') P.pal = [178, 170, 156]; P.vols = [A, B]; P.fp = 4 * (A[2] * A[3] + B[2] * B[3]) - 2 * (az1 - bz0) * Math.min(ax1 - bx0, bx1 - ax0) / 2; out.push(P);
       const x0 = Math.min(ax0, bx0), x1 = Math.max(ax1, bx1), z0 = Math.min(az0, bz0), z1 = Math.max(az1, bz1); placed.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, hw: (x1 - x0) / 2, hd: (z1 - z0) / 2 }); });
     condoAmen(p, g, out, nextId, placed); return; } }
   const ov = (st.plots && st.plots[p.id]) || {}; if (ov.floors > 0) lo = hi = ov.floors;
@@ -2372,6 +2394,7 @@ function condoAmen(p, g, out, nextId, placed) {   // clubhouse + pool on the ope
     for (let x = minx; x <= maxx; x += 3) for (let z = minz; z <= maxz; z += 3) { const d = Math.hypot(x - cx, z - cz); if (d < bd && fits(x, z, hw, hd, 5) && clear(x, z, hw, hd, 6)) { bd = d; best = { x, z, hw, hd }; } } return best; };
   const club = spot(14, 7); if (club) { placed.push(club); const P = makePrism(`${g.id}${nextId()} clubhouse`, 'new', 8, 0, [club.x - 14, club.z - 7, club.x + 14, club.z - 7, club.x + 14, club.z + 7, club.x - 14, club.z + 7], 0); P.floors = 2; P.group = g; P.style = 'club'; out.push(P); }
   const pool = spot(20, 6); if (pool) { placed.push(pool); CONDO_POOLS.push([pool.x - 20, pool.z - 6, pool.x + 20, pool.z - 6, pool.x + 20, pool.z + 6, pool.x - 20, pool.z + 6]); }
+  if (placed.length) CONDO_SITES.push(condoSite(p, placed, club, pool));
 }
 // Kallang Alive masterplan (TY renderings 2026-10-29: Sport Singapore / ST graphics; Future row off by default): new 18,000-seat indoor arena on the
 // river SE of the Indoor Stadium, Home of TeamSG + Sports School N of Stadium Boulevard (oval block, hostel slabs, track, TeamSG block). Positions ±30 m, sizes/heights estimates.
@@ -2403,7 +2426,7 @@ function liBuild(g, st, out) {
   LI_GATES.forEach(([x, z], i) => add(`Long Island tidal gate ${i + 1}`, 12, 0, [x - 30, z - 10, x + 30, z - 10, x + 30, z + 10, x - 30, z + 10], [150, 156, 162], 0));
 }
 function generateTowers() {
-  const out = [], S = state.spacing, h = state.footprint / 2; CONDO_POOLS = [];
+  const out = [], S = state.spacing, h = state.footprint / 2; CONDO_POOLS = []; CONDO_SITES = [];
   for (const g of GROUPS) {
     const st = state.groups[g.id]; if (!st.on) continue;
     if (g.fixed) { kaBuild(g, out); continue; }
@@ -3260,6 +3283,8 @@ function generateTrees() {
     for (let t = 1; t < L2; t += 2.2) for (const sg of [1, -1]) { const x = ax + ux * t - uz * 1.2 * sg, z = az + uz * t + ux * 1.2 * sg; if (ringIn(tr, x, z) && free(x, z)) { X.push(x); Z.push(z); H.push(1.4 + hash01(x, z, 61) * 0.9); G.push(hash01(z, x, 63)); } } }
   for (const [x, z, h] of VD31_SHRUBS) { X.push(x); Z.push(z); H.push(h); G.push(hash01(z, x, 73)); }   // Blk 31A void-deck apron planters
   for (const [x, z, h, b] of mscpRoofPlants()) { X.push(x); Z.push(z); H.push(h); G.push(Math.floor(b) + hash01(z, x, 71) * 0.999); }   // MSCP roof garden (base in the integer part)
+  if (CONDO_SITES.length) { const inS = (x, z) => CONDO_SITES.some(S => ringIn(S.ring, x, z)); for (let i = X.length - 1; i >= 0; i--) if (inS(X[i], Z[i])) { X.splice(i, 1); Z.splice(i, 1); H.splice(i, 1); G.splice(i, 1); }   // condo plots: designed planting only
+    for (const [x, z, h] of condoTrees()) { X.push(x); Z.push(z); H.push(h); G.push(hash01(z, x, 73)); } }
   TREES.n = X.length; TREES.x = Float64Array.from(X); TREES.z = Float64Array.from(Z); TREES.h = Float64Array.from(H); TREES.g = Float64Array.from(G);
 }
 // Walk mode (owner request 2026-10-25): free eye in UNIT_PLAN metres (state.walk = {X, Y}); 0.2 m body radius vs walls below 1.2 m (lintels pass, parapets/doors block).
@@ -4578,7 +4603,7 @@ function glPrism(A, P) {
   // each prism grown 1–3 cm about its centroid (varies by prism): coplanar faces of adjacent/overlapping raster boxes (TRPF 0.5 m boxes) no longer z-fight or crack
   const e = P.kind === 'road' ? 0 : 0.01 + 0.002 * ((GPU.pid = (GPU.pid || 0) + 1) % 11), X = new Float64Array(P.n), Z = new Float64Array(P.n);
   for (let i = 0; i < P.n; i++) { const dx = P.xs[i] - P.cx, dz = P.zs[i] - P.cz, l = Math.hypot(dx, dz) || 1; X[i] = P.xs[i] + (dx / l) * e * 1.414; Z[i] = P.zs[i] + (dz / l) * e * 1.414; }
-  const al = (P.style ? (P.style === 'rf' ? P.alb : P.style === 'club' ? [150, 175, 190] : P.style === 'slim' ? [58, 60, 64] : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
+  const al = (P.style ? (P.style === 'rf' ? P.alb : P.style === 'club' ? [150, 175, 190] : P.style === 'slim' ? (P.pal || [58, 60, 64]) : [222, 214, 198]) : P.kind === 'road' ? ALB.road : P.kind === 'trpf' && P.name.startsWith('MSCP') ? TRPF_PAL.screen : P.kind === 'trpf' && !P.tank ? TRPF_PAL.greige : facadeAlb(P)).map(c => c / 255);
   const top = (P.topc || (P.kind === 'trpf' && P.name.startsWith('MSCP') ? [214, 204, 186] : [160, 165, 170])).map(c => c / 255), bot = P.botc ? P.botc.map(c => c / 255) : top;
   const [fh, y0] = P.kind === 'existing' ? [3.2, 3.5] : P.kind === 'new' ? [NEW_F2F, NEW_LOBBY] : [FLOOR_HEIGHT, VOID_DECK_HEIGHT], mode = P.lamp ? 0.45 : P.cov ? 0.3 : P.kind === 'road' || P.tank || P.plain || P.h < 8 ? 0 : P.glass ? 3 : 1, seed = hash01(P.cx, P.cz, 11) * 50 + (P.h > 120 ? 100 : 0) + (P.kind === 'existing' && !P.glass && P.h >= 20 && P.h <= 160 && (P.res ?? (P.res = (luAt(P.cx, P.cz) || {}).c === 3)) ? 200 : 0);   // +200: residential (HDB/condo style in GL_FS mode 1)
   const b = P.base, t = P.h, sb = P.sb ?? b, vt = ((P.st ?? t) - sb - y0) / fh, trpf = P.kind === 'trpf' && P.B && !P.tank && P.h >= 8, mscp = trpf && P.name.startsWith('MSCP');
@@ -4818,13 +4843,14 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new' && !P.nogl) {   // nogl = physics-only (32A raster boxes spanning the corridor/slots, corridor boxes): drawing them filled the slots (TY 2026-10-31)
   const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
-  const ns = A.n; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
+  const ns = A.n; GPU.noAO = true; for (const S of CONDO_SITES) condoKit(A, S); GPU.noAO = false; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
   GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
+  condoGrounds(X);
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
   if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
@@ -4841,6 +4867,60 @@ function linkPave() { if (linkPave.L) return linkPave.L; const aps = []; for (co
     let best = null, bd = 15; for (let r = 1; r <= 15; r += 1) for (let k = 0; k < 48; k++) { const a = k / 48 * 2 * Math.PI, x = p[0] + r * Math.cos(a), z = p[1] + r * Math.sin(a); if (Math.cos(a) * ux + Math.sin(a) * uz < -0.2 || !paved(x, z)) continue; const d = r * (1.4 - 0.4 * (Math.cos(a) * ux + Math.sin(a) * uz)); if (d < bd) { bd = d; best = [x + Math.cos(a) * 0.6, z + Math.sin(a) * 0.6]; } }
     if (!best) return []; const D = Math.hypot(best[0] - p[0], best[1] - p[1]), m = [p[0] + ux * D * 0.5, p[1] + uz * D * 0.5], out = []; for (let j = 1; j <= 8; j++) { const t = j / 8; out.push([(1 - t) * (1 - t) * p[0] + 2 * t * (1 - t) * m[0] + t * t * best[0], (1 - t) * (1 - t) * p[1] + 2 * t * (1 - t) * m[1] + t * t * best[1]]); } return out; };
   let cur = null; return (linkPave.L = VD_LINKS.map(l => { const n = l.length; cur = l; return [...ext(l[0], l[1]).reverse(), ...l, ...ext(l[n - 1], l[n - 2])]; })); }
+// condo estates (see CONDO_SITES): segment distance helper, ground painter quads (gx), 3D kit (new-tower range: hidden by Compare/X-ray like the towers), trees
+const segP = (x, z, a, b) => { const ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / L2)); return Math.hypot(x - a[0] - ex * t, z - a[1] - ez * t); };
+function condoBusy(S, x, z, c) { const P = S.drive; for (let i = 0; i + 1 < P.length; i++) if (segP(x, z, P[i], P[i + 1]) < 3 + c) return true; if (Math.hypot(x - S.D[0], z - S.D[1]) < 7.5 + c) return true;
+  if (S.paths.some(([a, b]) => segP(x, z, a, b) < 1.1 + c)) return true; if (S.pool && Math.abs(x - S.pool.x) < S.pool.hw + 3 + c && Math.abs(z - S.pool.z) < S.pool.hd + 3 + c) return true;
+  if (S.club && Math.abs(x - S.club.x) < S.club.hw + 2 + c && Math.abs(z - S.club.z) < S.club.hd + 2 + c) return true;
+  if (S.ramp && Math.hypot(x - S.ramp.c[0], z - S.ramp.c[1]) < 10 + c) return true; if (S.pav && Math.hypot(x - S.pav[0], z - S.pav[1]) < 4 + c) return true; if (S.gh && Math.hypot(x - S.gh[0], z - S.gh[1]) < 4 + c) return true; return false; }
+const condoTwr = (x, z, c) => towers.some(P => P.kind === 'new' && (P.vols ? P.vols.some(([cx, cz, hw, hd]) => Math.abs(x - cx) < hw + c && Math.abs(z - cz) < hd + c) : pointIn(P, x, z)));
+function condoTrees() { const T = [];
+  for (const S of CONDO_SITES) { const R = S.R;
+    for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); for (let s = 3; s < L - 2; s += 9) { const t = s / L; let x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;   // perimeter row 3 m inside the fence
+      let nx = -(b[1] - a[1]) / L, nz = (b[0] - a[0]) / L; if (!ringIn(S.ring, x + nx * 3, z + nz * 3)) { nx = -nx; nz = -nz; } x += nx * 3; z += nz * 3;
+      if (i === S.G.e && Math.abs(s - S.G.s) < 9) continue; if (!ringIn(S.ring, x, z) || condoBusy(S, x, z, 0.5) || condoTwr(x, z, 3)) continue; T.push([x, z, 6 + hash01(x, z, 31) * 3]); } }
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; R.forEach(([x, z]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); });
+    for (let x = x0 + 8; x < x1 - 4; x += 16) for (let z = z0 + 8; z < z1 - 4; z += 16) { const jx = x + (hash01(x, z, 33) - 0.5) * 6, jz = z + (hash01(z, x, 35) - 0.5) * 6;   // lawn trees between the blocks
+      if (hash01(jx, jz, 37) < 0.5 || [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]].some(([a, b]) => !ringIn(S.ring, jx + a, jz + b)) || condoBusy(S, jx, jz, 1.5) || condoTwr(jx, jz, 5)) continue;
+      T.push([jx, jz, 5 + hash01(jx, jz, 39) * 4]); }
+    if (S.pool) for (const sg of [-1, 1]) for (let k = -1; k <= 1; k++) { const x = S.pool.x + k * 14, z = S.pool.z + sg * (S.pool.hd + 4.5); if (ringIn(S.ring, x, z) && !condoTwr(x, z, 2)) T.push([x, z, 8 + hash01(x, z, 41) * 2]); } }   // trees lining the pool deck
+  return T; }
+function condoGrounds(X) { const up = [0, 1, 0], c = v => v.map(q => q / 255), TL = [0, 0, 0, 50], TP = [0, 0, 0, 51], TA = [0, 0, 0, 52];
+  const poly = (pts, y, col, t) => { const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), t); };
+  const seg = (a, b, w, y, col, t) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L * w / 2, nz = (b[0] - a[0]) / L * w / 2, ex = (b[0] - a[0]) / L * w * 0.25, ez = (b[1] - a[1]) / L * w * 0.25;
+    X.quad([a[0] + nx - ex, y, a[1] + nz - ez], [b[0] + nx + ex, y, b[1] + nz + ez], [b[0] - nx + ex, y, b[1] - nz + ez], [a[0] - nx - ex, y, a[1] - nz - ez], up, c(col), t, t, t, t); };
+  const disc = (x, z, r, y, col, t) => { const P = []; for (let i = 0; i < 24; i++) P.push([x + r * Math.cos(i / 24 * 2 * Math.PI), z + r * Math.sin(i / 24 * 2 * Math.PI)]); poly(P, y, col, t); };
+  for (const S of CONDO_SITES) { poly(S.R, 0.14, [92, 140, 74], TL);   // landscaped lawn (was the land-use fill)
+    for (const [a, b] of S.paths) seg(a, b, 2.2, 0.17, S.pal ? [206, 196, 180] : [196, 196, 192], TP);   // paved footpaths drop-off → blocks/clubhouse/pool
+    if (S.pool) { const q = S.pool; poly([[q.x - q.hw - 3, q.z - q.hd - 3], [q.x + q.hw + 3, q.z - q.hd - 3], [q.x + q.hw + 3, q.z + q.hd + 3], [q.x - q.hw - 3, q.z + q.hd + 3]], 0.2, S.pal ? [214, 200, 178] : [204, 200, 194], TP); }   // pool deck
+    if (S.pav) poly([[S.pav[0] - 4, S.pav[1] - 4], [S.pav[0] + 4, S.pav[1] - 4], [S.pav[0] + 4, S.pav[1] + 4], [S.pav[0] - 4, S.pav[1] + 4]], 0.2, [204, 200, 194], TP);
+    for (let i = 0; i + 1 < S.drive.length; i++) seg(S.drive[i], S.drive[i + 1], 6, 0.22, [96, 98, 102], TA);   // driveway (asphalt)
+    disc(S.D[0], S.D[1], 7.5, 0.23, [96, 98, 102], TA); disc(S.D[0] + S.u[0] * 1.5, S.D[1] + S.u[1] * 1.5, 2.6, 0.24, [92, 140, 74], TL);   // drop-off loop + planted island
+    if (S.ramp) { const rc = S.ramp.c, n = [S.G.nx, S.G.nz]; seg([rc[0] - n[0] * 9, rc[1] - n[1] * 9], [rc[0] + n[0] * 9, rc[1] + n[1] * 9], 6.5, 0.22, [80, 82, 86], TA); seg([rc[0] - n[0] * 9, rc[1] - n[1] * 9], S.drive[2], 6, 0.22, [96, 98, 102], TA); } } }
+function condoKit(A, S) {   // 3D estate parts (plain prisms, mode 0)
+  const box = (cx, cz, ux, uz, a0, a1, b0, b1, y0, y1, alb, topc) => { const vx = -uz, vz = ux, xs = [], zs = []; for (const [a, b] of [[a0, b0], [a1, b0], [a1, b1], [a0, b1]]) { xs.push(cx + ux * a + vx * b); zs.push(cz + uz * a + vz * b); }
+      let ar = 0; for (let i = 0, j = 3; i < 4; j = i++) ar += xs[j] * zs[i] - xs[i] * zs[j]; if (ar < 0) { xs.reverse(); zs.reverse(); }
+      glPrism(A, { n: 4, xs, zs, cx, cz, base: y0, h: y1, kind: 'existing', name: 'condo kit', plain: true, alb, topc: topc || alb }); };
+  const G = S.G, wl = S.pal ? [222, 210, 188] : [216, 214, 208], pier = S.pal ? [200, 184, 160] : [92, 94, 98], rail = [42, 44, 48], near = Math.hypot(G.x - UNIT134[0], G.z - UNIT134[1]) < 800, R = S.R;
+  for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.5) continue; const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;   // boundary fence: 0.6 m wall, piers every 3 m (2.0 m), railing bars (1.8 m)
+    const runs = i === G.e ? [[0, G.s - 4.5], [G.s + 4.5, L]] : [[0, L]];
+    for (const [s0, s1] of runs) { if (s1 - s0 < 0.3) continue; box(a[0], a[1], ux, uz, s0, s1, -0.12, 0.12, 0, 0.6, wl);
+      box(a[0], a[1], ux, uz, s0, s1, -0.03, 0.03, 1.72, 1.78, rail); for (let s = s0; s <= s1 + 0.01; s += 3) box(a[0], a[1], ux, uz, s - 0.2, s + 0.2, -0.2, 0.2, 0, 2.0, pier, wl);
+      if (near) for (let s = s0 + 0.2; s < s1; s += 0.3) if ((s - s0) % 3 > 0.25 && (s - s0) % 3 < 2.75) box(a[0], a[1], ux, uz, s - 0.015, s + 0.015, -0.015, 0.015, 0.6, 1.72, rail); } }
+  const t = [G.tx, G.tz], n = [G.nx, G.nz];
+  for (const sg of [-1, 1]) box(G.x + t[0] * 4.5 * sg + n[0] * 0.2, G.z + t[1] * 4.5 * sg + n[1] * 0.2, G.tx, G.tz, -0.45, 0.45, -0.45, 0.45, 0, 2.6, pier, wl);   // gate piers
+  box(G.x - t[0] * 9 - n[0] * 1.5, G.z - t[1] * 9 - n[1] * 1.5, G.tx, G.tz, -3, 3, -0.25, 0.25, 0, 1.6, S.pal ? [120, 96, 72] : [58, 60, 64]);   // name wall outside the gate
+  box(G.x - t[0] * 9 - n[0] * 1.5, G.z - t[1] * 9 - n[1] * 1.5, G.tx, G.tz, -1.8, 1.8, -0.27, 0.27, 0.9, 1.15, [230, 226, 214]);   // name plate
+  if (S.gh) { const [x, z] = S.gh; box(x, z, G.tx, G.tz, -2, 2, -1.75, 1.75, 0, 3.0, [236, 232, 222]); box(x, z, G.tx, G.tz, -2.04, 2.04, -1.2, 1.2, 1.0, 2.3, [52, 64, 70]);   // guardhouse + glazing band
+    box(x, z, G.tx, G.tz, -2.8, 2.8, -2.5, 2.5, 3.0, 3.3, [244, 244, 240]); }   // roof overhang
+  { const px = G.x + n[0] * 5 + t[0] * 3.3, pz = G.z + n[1] * 5 + t[1] * 3.3; box(px, pz, G.tx, G.tz, -0.2, 0.2, -0.2, 0.2, 0, 1.1, [230, 200, 40]); for (let k = 0; k < 6; k++) box(px, pz, G.tx, G.tz, -0.5 - k - 0.98, -0.5 - k, -0.04, 0.04, 0.98, 1.06, k % 2 ? [236, 236, 236] : [196, 40, 36]); }   // barrier arm (inbound lane)
+  { const [ux, uz] = S.u, off = S.off;   // drop-off canopy from the tower face, 2 columns at the outer end
+    box(S.T.x + ux * (off + 2.5), S.T.z + uz * (off + 2.5), ux, uz, -3.5, 3.5, -6, 6, 4.5, 4.85, [242, 242, 238], [190, 190, 186]); for (const b of [-5.6, 5.6]) box(S.T.x + ux * (off + 5.6) - uz * b, S.T.z + uz * (off + 5.6) + ux * b, ux, uz, -0.2, 0.2, -0.2, 0.2, 0, 4.5, [220, 220, 216]); }
+  if (S.ramp) { const rc = S.ramp.c;   // basement carpark ramp: side walls + covered last 9 m (green roof)
+    for (const b of [-3.4, 3.4]) box(rc[0], rc[1], n[0], n[1], -9, 9, b - 0.15, b + 0.15, 0, 1.2, wl); box(rc[0], rc[1], n[0], n[1], 0, 9, -3.6, 3.6, 3.4, 3.8, wl, [110, 148, 84]);
+    for (const b of [-3.4, 3.4]) box(rc[0], rc[1], n[0], n[1], 0, 9, b - 0.15, b + 0.15, 1.2, 3.4, wl); box(rc[0], rc[1], n[0], n[1], 8.6, 9, -3.4, 3.4, 0, 3.4, [40, 42, 46]); }   // dark ramp mouth
+  if (S.pav) { const [x, z] = S.pav; for (const a of [-2.6, 2.6]) for (const b of [-2.6, 2.6]) box(x + a, z + b, 1, 0, -0.12, 0.12, -0.12, 0.12, 0, 2.9, [120, 92, 66]); box(x, z, 1, 0, -3.3, 3.3, -3.3, 3.3, 2.9, 3.3, [128, 98, 70], [70, 74, 78]); }   // pool pavilion (timber posts, flat roof)
+}
 function gpuGrounds(X) {   // TRPF grounds (painter order, no depth): void-deck paving, driveways, plazas (wavy stripes), court, pads, jogging loop (white edges + centre line)
   const up = [0, 1, 0], z4 = [0, 0, 0, 0], TL = [0, 0, 0, 50], TP = [0, 0, 0, 51], TA = [0, 0, 0, 52], c = v => v.map(q => q / 255), poly = (r, y, col, t = z4) => { const pts = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), t); };
   const rib = (P, w, y, col, closed, t = z4) => { const n = P.length; for (let i = 0; i < (closed ? n : n - 1); i++) { const a = P[i], b = P[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / L * w / 2, nz = (b[0] - a[0]) / L * w / 2, ex = (b[0] - a[0]) / L * w * 0.25, ez = (b[1] - a[1]) / L * w * 0.25;
@@ -6144,11 +6224,11 @@ const SCN_IMP = { key: '', v: {}, t: 0 };
 const scnImpKey = () => [perspectiveCanvas._w, perspectiveCanvas._h, state.vx, state.vz, state.obsFloor, state.heading, state.pitchDeg, state.focalLength, state.eyeOffset, state.footprint, state.seed, gap3132].join('|');
 function scnImpSchedule() { const key = scnImpKey(); if (key !== SCN_IMP.key) { SCN_IMP.key = key; SCN_IMP.v = {}; } clearTimeout(SCN_IMP.t); if (PNL.open.includes('future')) SCN_IMP.t = setTimeout(scnImpStep, 450); scnImpUI(); }
 function scnImpStep() { if (!PNL.open.includes('future') || SCN_IMP.key !== scnImpKey()) return; if (drag3D || TAPE.drag) { SCN_IMP.t = setTimeout(scnImpStep, 300); return; }
-  const v = Object.keys(PRESETS).find(k => !SCN_IMP.v[k]); if (!v) return; const p = PRESETS[v], sv = { towers, pools: CONDO_POOLS, groups: state.groups, spacing: state.spacing }; let o = null;
+  const v = Object.keys(PRESETS).find(k => !SCN_IMP.v[k]); if (!v) return; const p = PRESETS[v], sv = { towers, pools: CONDO_POOLS, sites: CONDO_SITES, groups: state.groups, spacing: state.spacing }; let o = null;
   try { state.groups = JSON.parse(JSON.stringify(state.groups)); state.spacing = 95;   // same group settings as picking that scenario (presets handler)
     GROUPS.forEach(g => Object.assign(state.groups[g.id], JSON.parse(JSON.stringify(GROUP_DEFAULTS[g.id])), g.id === 'EA' || g.id === 'LI' || g.fixed ? { on: p.on[g.id] } : { on: p.on[g.id], min: p.me[0], max: p.me[1] }, (g.id === 'N' || g.id === 'S') && p.gpr ? { gpr: p.gpr } : {}));
     generateTowers(); o = computeOcclusionMask(perspectiveCanvas._w || 820, perspectiveCanvas._h || 360, EXISTING.concat(DECKS, TRPF, towers)); }
-  finally { towers = sv.towers; CONDO_POOLS = sv.pools; state.groups = sv.groups; state.spacing = sv.spacing; }
+  finally { towers = sv.towers; CONDO_POOLS = sv.pools; CONDO_SITES = sv.sites; state.groups = sv.groups; state.spacing = sv.spacing; }
   SCN_IMP.v[v] = { b: o.total, hz: o.horizonVisiblePct }; scnImpUI(); SCN_IMP.t = setTimeout(scnImpStep, 80); }
 function scnImpUI() { document.querySelectorAll('#scnCards .imp').forEach(el => { const r = SCN_IMP.v[el.dataset.v]; el.innerHTML = r ? `<span class="b" title="Frame blocked from this view">${r.b.toFixed(0)}% blocked</span><span class="hz" title="Sea horizon clear">${r.hz === null ? '—' : r.hz.toFixed(0) + '%'} sea</span>` : '<span class="wait shimmer" title="Working out blocked % / sea horizon for this view…"></span><span class="wait shimmer"></span>'; }); }
 /* ---------- Date popover: weather + compare day; date chip weather icon ---------- */
