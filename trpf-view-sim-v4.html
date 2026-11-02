@@ -1334,7 +1334,8 @@ let MSCP_OBS = [], MSCP_LOTS = [], MSCP_RAMPS = [];
 const MSCP_FONT = { B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'], L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'], K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'], 1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'], 2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
   3: ['11110', '00001', '00001', '01110', '00001', '00001', '11110'], 4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'], 5: ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
-  6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'], 7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'], A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'], R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'] };
+  6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'], 7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'], A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'], R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  0: ['01110', '10001', '10011', '10101', '11001', '10001', '01110'], 9: ['01110', '10001', '10001', '01111', '00001', '00010', '01100'] };   // 0/9: Riverfront Blk 30 / 29 numbers
 // smooth glyphs (realism r5, "blocky pixel letters"): each 5×7 bitmap is turned into strokes (on-cell centres joined to their on neighbours, diagonals where no orthogonal path),
 // width 1 cell with round ends, rasterised at 4 sub-cells per cell; put() gets the merged runs in the same cell units as before (fractional), so every caller is unchanged
 const GLYPH_RUNS = {}; function glyphRuns(ch) { if (GLYPH_RUNS[ch]) return GLYPH_RUNS[ch]; const B = MSCP_FONT[ch] || [], on = (q, r) => r >= 0 && r < 7 && q >= 0 && q < 5 && B[r] && B[r][q] === '1', seg = [];
@@ -1344,6 +1345,99 @@ const GLYPH_RUNS = {}; function glyphRuns(ch) { if (GLYPH_RUNS[ch]) return GLYPH
   for (let j = 0; j < 7 * R; j++) { let st = -1; for (let i = 0; i <= 5 * R; i++) { const h = i < 5 * R && hit((i + 0.5) / R - 0.5, (j + 0.5) / R - 0.5); if (h && st < 0) st = i; if (!h && st >= 0) { out.push([st / R, i / R, j / R, (j + 1) / R]); st = -1; } } }
   return GLYPH_RUNS[ch] = out; }
 const mscpGlyphs = (s, put) => [...s].forEach((ch, k) => glyphRuns(ch).forEach(([u0, u1, v0, v1]) => put(k * 6 + u0, k * 6 + u1, v0, v1)));
+// Tanjong Rhu Riverfront W corner (TY 2026-11-02 site-plan markup "this whole portion is not rendered properly" + HDB scale-model photo): Blk 30 bin centre + ESS,
+// Blk 29, covered walkway + canopy (7) from the Blk 29A lobby, service drive / aprons. Was: 2 OSM 5.2 m est boxes (bin centre + ESS L-shape, Blk 29) on lawn, no drive.
+// Plan registration: colour site plan px → world, 3.95 px/m, N up, anchored on the OSM bin-centre corner (checked on the 28B SW corner, ±1 m): RFPX. Bin centre frame = OSM L-shape
+// edges (4° off E). Modern BTO bin centre with pneumatic waste conveyance (PWCS): chutes → underground pipes → sealed containers in a central bin centre, trucks swap the
+// containers, conveying air leaves through dust/odour filters and a roof exhaust (99.co / MND) → enclosed double-height box (10 m, est), charcoal frame + light grey vertical
+// louvre screens in 5 bays × 2 rows (model photo), 2 roller-shutter truck bays on the S apron, staff door W, filter/fan housing + exhaust stack on the roof. Sizes estimates.
+const RFPX = (px, py) => [30 + (px - 366) / 3.95, 116.5 + (953 - py) / 3.95];
+const RF30 = { O: [30, 116.5], U: [0.9976, 0.0696], V: [-0.0696, 0.9976], A: 21.5, B: 22.1 };
+const rf30L = (a, b) => [RF30.O[0] + RF30.U[0] * a + RF30.V[0] * b, RF30.O[1] + RF30.U[1] * a + RF30.V[1] * b];
+const rf30Rect = (a0, a1, b0, b1) => [rf30L(a0, b0), rf30L(a1, b0), rf30L(a1, b1), rf30L(a0, b1)].flat();
+const RF29 = [-6.5, 167.5, 3.5, 168, 8, 164.5, 11, 164, 11.5, 155.5, -5.5, 154];   // Blk 29 = OSM outline (plan: brown roof (6) with the "29" label, model: low block with a white roof slab; use not on the plan)
+const RF_PX = {   // site plan px (colour plan, 1284 px crop)
+  road: [[228, 1042], [316, 1042], [316, 812], [228, 812]], fore: [[304, 808], [470, 808], [470, 764], [304, 764]], wap: [[338, 808], [357, 808], [357, 992], [338, 992]], verge: [[316, 812], [338, 812], [338, 1000], [316, 1000]],
+  sap: [[357, 953], [462, 953], [462, 992], [357, 992]], isl: [[254, 1028], [290, 1028], [290, 848], [254, 848]], plant: [[357, 860], [364, 860], [364, 953], [357, 953]],
+  plaza: [[240, 722], [262, 714], [300, 712], [334, 718], [344, 740], [344, 764], [304, 764], [304, 752], [240, 752]],
+  lobe: [[262, 702], [270, 680], [298, 666], [336, 667], [362, 680], [370, 700], [346, 713], [300, 719], [272, 716]],
+  walk: [[352, 706], [320, 694], [285, 691], [250, 694], [226, 706], [213, 725], [211, 745], [220, 760]],
+  trees: [[320, 843], [328, 900], [327, 942], [332, 983], [350, 1007], [383, 1008], [403, 1003], [452, 1000], [228, 712], [226, 735], [370, 760], [440, 760]] };
+const RF_W = k => RF_PX[k].map(([x, y]) => RFPX(x, y));
+// physics: replace the OSM boxes (unnamed, 5.2 m) with bin centre 10 m, ESS 6 m, fan room 4.2 m, Blk 29 4.6 m (estimates)
+{ const near = (x, z) => EXISTING.findIndex(P => !P.name && P.h === 5.2 && Math.hypot(P.cx - x, P.cz - z) < 6);
+  for (const [x, z] of [[38, 136.8], [3.7, 162.3]]) { const i = near(x, z); if (i >= 0) EXISTING.splice(i, 1); }
+  const add = (n, h, f, alb, topc) => { const P = makePrism(n, 'existing', h, 0, f, 2); Object.assign(P, { plain: true, alb, topc: topc || alb, rf30: true }); EXISTING.push(P); return P; };
+  add('Riverfront bin centre (Blk 30)', 10.25, rf30Rect(0, RF30.A, 0, RF30.B), [74, 76, 80], [140, 142, 140]);
+  add('Riverfront ESS', 6, rf30Rect(0, 6.6, 22.4, 36.2), [220, 210, 192], [128, 130, 128]);
+  add('Riverfront bin centre fan room', 4.2, rf30Rect(6.6, 18.5, RF30.B, 29.4), [84, 86, 90], [132, 134, 132]);
+  add('Riverfront Blk 29 (1-storey)', 4.6, RF29, [214, 210, 202], [196, 192, 186]); }
+// render-only kit (cached): louvre screens, shutters, doors, roof plant, "30"/"29" numbers, Blk 29 roof slab + glazing, covered walkway + canopy (7)
+function rf30Kit() { if (rf30Kit.L) return rf30Kit.L; const out = [], mk = (f, y0, y1, alb, topc, botc) => { const P = makePrism('Riverfront corner kit', 'existing', y1, y0, f, 2); Object.assign(P, { plain: true, alb, topc: topc || alb, botc: botc || alb }); out.push(P); };
+  const box = (a0, a1, b0, b1, y0, y1, alb, topc, botc) => { if (Math.abs(a1 - a0) < 1e-3 || Math.abs(b1 - b0) < 1e-3) return; mk(rf30Rect(Math.min(a0, a1), Math.max(a0, a1), Math.min(b0, b1), Math.max(b0, b1)), y0, y1, alb, topc, botc); };
+  const { A, B } = RF30, FR = [62, 64, 68], PN = [170, 172, 170], BL = [214, 216, 212], CP = [204, 204, 200], SH = [158, 162, 164], YL = [232, 190, 40];
+  // face(side): (t along the face, d outward) → local (a, b)
+  const F = { s: (t, d) => [t, -d], n: (t, d) => [t, B + d], w: (t, d) => [-d, t], e: (t, d) => [A + d, t] };
+  const fb = (s, t0, t1, d0, d1, y0, y1, alb, topc) => { const p = F[s](t0, d0), q = F[s](t1, d1); box(p[0], q[0], p[1], q[1], y0, y1, alb, topc); };
+  const louvre = (s, t0, t1, y0, y1) => { fb(s, t0, t1, -0.02, 0.05, y0, y1, PN); for (let t = t0 + 0.12; t < t1 - 0.06; t += 0.3) fb(s, t, t + 0.07, 0.05, 0.22, y0, y1, BL); };
+  const shutter = (s, t0, t1, y1) => { fb(s, t0 - 0.25, t1 + 0.25, -0.02, 0.3, y1, y1 + 0.55, FR); fb(s, t0, t1, -0.02, 0.06, 0, y1, SH);   // hood + curtain
+    for (let y = 0.25; y < y1 - 0.05; y += 0.3) fb(s, t0, t1, 0.06, 0.1, y, y + 0.05, [182, 186, 188]); fb(s, t0, t1, 0.06, 0.12, 0, 0.18, [60, 62, 64]);   // slats + bottom rail
+    for (const t of [t0 - 0.7, t1 + 0.7]) { for (let k = 0; k < 4; k++) fb(s, t - 0.11, t + 0.11, 0.6, 0.82, k * 0.3, k * 0.3 + 0.15, k % 2 ? [30, 30, 30] : YL); fb(s, t - 0.11, t + 0.11, 0.6, 0.82, 1.2, 1.25, YL); } };   // hazard bollards
+  const faces = { s: [0, A, [1, 3]], n: [6.6, A, []], w: [0, B, []], e: [0, B, []] };
+  for (const s in faces) { const [t0, t1, bays] = faces[s], n = Math.max(2, Math.round((t1 - t0) / 4.3)), w = (t1 - t0) / n, lo = s === 'n' ? 4.6 : 3.4;
+    for (let i = 0; i <= n; i++) { const t = t0 + w * i; fb(s, t - 0.2, t + 0.2, -0.01, 0.35, 0, 10, FR); }   // charcoal frame columns
+    fb(s, t0, t1, -0.01, 0.3, 6.3, 6.55, FR); fb(s, t0, t1, -0.01, 0.3, 9.45, 10.0, FR); fb(s, t0 - 0.06, t1 + 0.06, -0.06, 0.4, 10.0, 10.25, CP);   // mid + head bands, coping
+    if (s !== 'n') fb(s, t0, t1, -0.01, 0.3, lo - 0.25, lo, FR);
+    for (let i = 0; i < n; i++) { const a = t0 + w * i + 0.2, b = t0 + w * (i + 1) - 0.2, tb = bays.includes(i);
+      if (s === 's' && i === n - 1) { fb(s, a, b, -0.02, 0.06, 6.55, 9.45, [52, 54, 58]); mscpGlyphs('30', (u0, u1, v0, v1) => { const c = 0.24, m = (a + b) / 2 - 11 * c / 2; fb(s, m + u0 * c, m + u1 * c, 0.06, 0.1, 8.75 - v1 * c, 8.75 - v0 * c, [240, 240, 236]); }); }   // block number plate
+      else louvre(s, a, b, 6.55, 9.45);
+      if (tb) shutter(s, a + 0.1, b - 0.1, 5.8); else louvre(s, a, b, lo, 6.3); } }
+  fb('w', 3.0, 4.1, -0.02, 0.08, 0, 2.3, [92, 98, 100]); fb('w', 2.85, 4.25, -0.02, 0.06, 2.3, 2.45, FR); fb('w', 3.8, 3.9, 0.08, 0.14, 1.0, 1.2, [200, 202, 204]);   // staff door
+  fb('w', 2.2, 2.6, -0.02, 0.1, 1.4, 1.9, [200, 40, 36]);   // fire alarm / hose cabinet
+  // roof: filter + fan housing (louvred), exhaust stack (PWCS conveying air out through filters), access hatch
+  box(11, 18.5, 8, 13.5, 10, 12.6, [176, 178, 176], [150, 152, 150]); for (let y = 10.4; y < 12.3; y += 0.22) box(10.96, 18.54, 7.96, 13.54, y, y + 0.08, [120, 124, 126]);
+  { const [cx, cz] = rf30L(17, 17.5), r = 0.8, ring = (rr, y0, y1, c) => { const f = []; for (let k = 0; k < 12; k++) f.push(cx + rr * Math.cos(k / 12 * 2 * Math.PI), cz + rr * Math.sin(k / 12 * 2 * Math.PI)); mk(f, y0, y1, c, c, c); };
+    ring(r, 10, 16.5, [190, 192, 194]); ring(r + 0.12, 16.5, 16.9, [70, 72, 76]); ring(r + 0.25, 10, 10.6, [150, 152, 150]); }
+  box(3, 5, 3, 5, 10, 10.9, [150, 152, 150]);
+  // ESS (S of the ESS = annex roof; W face: 2 double steel doors + louvres, as the TRPF ESS)
+  { const lou = (b0, b1, y0, y1) => { box(-0.05, 0.02, b0, b1, y0, y1, [52, 56, 58]); for (let y = y0 + 0.1; y < y1 - 0.05; y += 0.16) box(-0.1, -0.03, b0, b1, y, y + 0.05, [120, 128, 128]); };
+    box(-0.1, 6.7, 22.3, 36.3, 0, 0.4, [150, 150, 146]); box(-0.06, 6.66, 22.34, 36.26, 5.4, 5.95, [240, 239, 234]); box(-0.1, 6.7, 22.3, 36.3, 5.95, 6.05, [210, 210, 206]);
+    for (const c of [26, 32]) { box(-0.1, 0.05, c - 1.42, c + 1.42, 0.4, 3.42, [240, 239, 234]); box(-0.12, 0.04, c - 1.3, c - 0.01, 0.4, 3.3, [86, 98, 96]); box(-0.12, 0.04, c + 0.01, c + 1.3, 0.4, 3.3, [86, 98, 96]); lou(c - 1.2, c + 1.2, 3.9, 5.2); box(-0.1, 0, c - 0.3, c + 0.3, 3.5, 3.82, YL); }
+    for (const c of [3.3]) { box(c - 1.6, c + 1.6, 36.2, 36.3, 3.9, 5.2, [52, 56, 58]); } }
+  for (const [b0, b1] of [[23, 25.6], [26.6, 29.2]]) box(17, 18.6, b0, b1, 1.2, 3.6, [120, 126, 128]);   // fan-room intake louvres (E face)
+  // Blk 29: rounded white roof slab (0.9 m overhang), dark glazing band with mullions, "29"
+  { const n = RF29.length / 2, X = [], Z = []; for (let i = 0; i < n; i++) { X.push(RF29[2 * i]); Z.push(RF29[2 * i + 1]); }
+    const P0 = makePrism('t', 'existing', 1, 0, RF29, 0), xs = P0.xs, zs = P0.zs, off = [], OV = 0.9;
+    const nrm = (i, j) => { const ex = xs[j] - xs[i], ez = zs[j] - zs[i], L = Math.hypot(ex, ez) || 1; let nx = ez / L, nz = -ex / L; if (pointIn(P0, (xs[i] + xs[j]) / 2 + nx * 0.05, (zs[i] + zs[j]) / 2 + nz * 0.05)) { nx = -nx; nz = -nz; } return [nx, nz]; };
+    for (let i = 0; i < n; i++) { const p = (i + n - 1) % n, q = (i + 1) % n, n1 = nrm(p, i), n2 = nrm(i, q); let a1 = Math.atan2(n1[1], n1[0]), a2 = Math.atan2(n2[1], n2[0]); let da = a2 - a1; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+      const k = Math.max(1, Math.ceil(Math.abs(da) / 0.3)); for (let s = 0; s <= k; s++) { const a = a1 + da * s / k; off.push(xs[i] + Math.cos(a) * OV, zs[i] + Math.sin(a) * OV); } }
+    mk(off, 4.6, 5.0, [238, 238, 234], [204, 200, 194], [232, 232, 228]);
+    for (let i = 0; i < n; i++) { const q = (i + 1) % n, [nx, nz] = nrm(i, q), ex = xs[q] - xs[i], ez = zs[q] - zs[i], L = Math.hypot(ex, ez); if (L < 1.5) continue; const ux = ex / L, uz = ez / L;
+      const strip = (t0, t1, d0, d1, y0, y1, c) => mk([xs[i] + ux * t0 + nx * d0, zs[i] + uz * t0 + nz * d0, xs[i] + ux * t1 + nx * d0, zs[i] + uz * t1 + nz * d0, xs[i] + ux * t1 + nx * d1, zs[i] + uz * t1 + nz * d1, xs[i] + ux * t0 + nx * d1, zs[i] + uz * t0 + nz * d1], y0, y1, c);
+      strip(0.4, L - 0.4, -0.02, 0.04, 0.6, 3.4, [64, 76, 84]); for (let t = 0.4; t <= L - 0.39; t += (L - 0.8) / Math.max(1, Math.round((L - 0.8) / 1.5))) strip(t - 0.04, t + 0.04, 0.04, 0.1, 0.6, 3.4, [200, 202, 204]);
+      strip(0.4, L - 0.4, 0.04, 0.12, 3.4, 3.6, [200, 202, 204]);
+      if (nz < -0.9) mscpGlyphs('29', (u0, u1, v0, v1) => { const c = 0.18, m = L / 2 - 11 * c / 2, tt = u => ux > 0 ? m + u * c : L - m - u * c; strip(Math.min(tt(u0), tt(u1)), Math.max(tt(u0), tt(u1)), 0.04, 0.08, 4.4 - v1 * c, 4.4 - v0 * c, [60, 62, 66]); }); } }
+  // covered walkway (plan brown band, 4 m) from the Blk 29A lobby round to Blk 29 + canopy lobe (7); roof 3.2 / 3.9 m, posts
+  const RF = [176, 178, 180], UN = [300, 302, 300], PO = [92, 96, 100], post = (x, z, h) => mk([x - 0.11, z - 0.11, x + 0.11, z - 0.11, x + 0.11, z + 0.11, x - 0.11, z + 0.11], 0, h, PO);
+  { const W = RF_W('walk'); for (let i = 0; i + 1 < W.length; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = 2, e = i + 2 < W.length ? 1 : 0;
+      mk([ax - uz * w, az + ux * w, bx - uz * w + ux * e, bz + ux * w + uz * e, bx + uz * w + ux * e, bz - ux * w + uz * e, ax + uz * w, az - ux * w], 2.95, 3.2, RF, RF, UN);
+      for (let t = 0; t < L; t += 6) for (const sg of [-1, 1]) post(ax + ux * t - uz * (w - 0.3) * sg, az + uz * t + ux * (w - 0.3) * sg, 2.95); } }
+  { const Lb = RF_W('lobe'); mk(Lb.flat(), 3.6, 3.95, RF, RF, UN); let cx = 0, cz = 0; Lb.forEach(([x, z]) => { cx += x; cz += z; }); cx /= Lb.length; cz /= Lb.length;
+    for (const [x, z] of Lb) post(cx + (x - cx) * 0.8, cz + (z - cz) * 0.8, 3.6); }
+  return rf30Kit.L = out; }
+// ground (gx painter): drive + aprons asphalt, island/planter lawn, plaza + walkway paving
+function rf30Grounds(X) { const up = [0, 1, 0], c = v => v.map(q => q / 255), TL = [0, 0, 0, 50], TP = [0, 0, 0, 51], TA = [0, 0, 0, 52];
+  const poly = (pts, y, col, t) => { const tri = earClip(pts); for (let k = 0; k < tri.length; k++) X.v([pts[tri[k]][0], y, pts[tri[k]][1]], up, c(col), t); };
+  for (const k of ['road', 'fore', 'wap', 'sap']) poly(RF_W(k), 0.22, [96, 98, 102], TA);
+  for (const k of ['isl', 'plant', 'verge']) poly(RF_W(k), 0.24, [92, 140, 74], TL);
+  poly(RF_W('plaza'), 0.2, [204, 200, 194], TP); poly(RF_W('lobe'), 0.205, [204, 200, 194], TP);
+  { const W = RF_W('walk'); for (let i = 0; i + 1 < W.length; i++) { const [ax, az] = W[i], [bx, bz] = W[i + 1], L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, w = 1.9, e = 1;
+    poly([[ax - uz * w - ux * e, az + ux * w - uz * e], [bx - uz * w + ux * e, bz + ux * w + uz * e], [bx + uz * w + ux * e, bz - ux * w + uz * e], [ax + uz * w - ux * e, az - ux * w - uz * e]], 0.206, [204, 200, 194], TP); } }
+  { const dash = (p, q, y) => { const L2 = Math.hypot(q[0] - p[0], q[1] - p[1]), ux = (q[0] - p[0]) / L2, uz = (q[1] - p[1]) / L2;
+      for (let t = 1; t + 2 < L2; t += 6) poly([[p[0] + ux * t - uz * 0.06, p[1] + uz * t + ux * 0.06], [p[0] + ux * (t + 2) - uz * 0.06, p[1] + uz * (t + 2) + ux * 0.06], [p[0] + ux * (t + 2) + uz * 0.06, p[1] + uz * (t + 2) - ux * 0.06], [p[0] + ux * t + uz * 0.06, p[1] + uz * t - ux * 0.06]], y, [232, 232, 226], TA); };
+    for (const s of [-1, 1]) dash(RFPX(272 + s * 33, 1036), RFPX(272 + s * 33, 818), 0.23); } }   // lane lines either side of the island
+// ground rings where generic trees are dropped (paved / built); designed boundary trees from the plan circles are added instead
+const RF30_CLEAR = () => RF30_CLEAR.L || (RF30_CLEAR.L = [...['road', 'fore', 'wap', 'sap', 'plaza', 'lobe'].map(k => RF_W(k).flat()), rf30Rect(-1.5, RF30.A + 1.5, -1.5, 36.8), (() => { const n = RF29.length / 2; let cx = 0, cz = 0; for (let i = 0; i < n; i++) { cx += RF29[2 * i]; cz += RF29[2 * i + 1]; } cx /= n; cz /= n; return RF29.map((v, i) => i % 2 ? cz + (v - cz) * 1.3 : cx + (v - cx) * 1.3); })(), ...RF_W('walk').slice(0, -1).map((p, i) => { const q = RF_W('walk')[i + 1], L = Math.hypot(q[0] - p[0], q[1] - p[1]), ux = (q[0] - p[0]) / L, uz = (q[1] - p[1]) / L, w = 2.6; return [p[0] - uz * w - ux, p[1] + ux * w - uz, q[0] - uz * w + ux, q[1] + ux * w + uz, q[0] + uz * w + ux, q[1] - ux * w + uz, p[0] + uz * w - ux, p[1] - ux * w - uz]; })]);
 const rectMinus = (r, H) => { const xs = [r[0], r[2]], zs = [r[1], r[3]];   // axis-aligned rect minus holes → rects (grid cells merged along x)
   for (const h of H) { if (h[2] <= r[0] || h[0] >= r[2] || h[3] <= r[1] || h[1] >= r[3]) continue; xs.push(Math.max(r[0], h[0]), Math.min(r[2], h[2])); zs.push(Math.max(r[1], h[1]), Math.min(r[3], h[3])); }
   const X = [...new Set(xs)].sort((a, b) => a - b), Z = [...new Set(zs)].sort((a, b) => a - b), out = [];
@@ -3531,6 +3625,8 @@ function generateTrees() {
   for (const [x, z, h, b] of mscpRoofPlants()) { X.push(x); Z.push(z); H.push(h); G.push(Math.floor(b) + hash01(z, x, 71) * 0.999); }   // MSCP roof garden (base in the integer part)
   if (CONDO_SITES.length) { const inS = (x, z) => CONDO_SITES.some(S => ringIn(S.ring, x, z)); for (let i = X.length - 1; i >= 0; i--) if (inS(X[i], Z[i])) { X.splice(i, 1); Z.splice(i, 1); H.splice(i, 1); G.splice(i, 1); }   // condo plots: designed planting only
     for (const [x, z, h] of condoTrees()) { X.push(x); Z.push(z); H.push(h); G.push(hash01(z, x, 73)); } }
+  if (state.showExisting) { const R = RF30_CLEAR(); for (let i = X.length - 1; i >= 0; i--) if (R.some(r => ringIn(r, X[i], Z[i]))) { X.splice(i, 1); Z.splice(i, 1); H.splice(i, 1); G.splice(i, 1); }   // Riverfront W corner: no trees on the drive/aprons/buildings
+    for (const [x, z] of RF_W('trees')) { X.push(x); Z.push(z); H.push(8 + hash01(x, z, 91) * 4); G.push(hash01(z, x, 93)); } }   // site-plan tree circles
   for (let i = X.length - 1; i >= 0; i--) if (H[i] >= 4 && RF_LINK.some((p, k) => k && segD(X[i], Z[i], RF_LINK[k - 1][0], RF_LINK[k - 1][1], p[0], p[1]) < 2.6)) { X.splice(i, 1); Z.splice(i, 1); H.splice(i, 1); G.splice(i, 1); }   // keep trees out of the Riverfront linkway
   TREES.n = X.length; TREES.x = Float64Array.from(X); TREES.z = Float64Array.from(Z); TREES.h = Float64Array.from(H); TREES.g = Float64Array.from(G);
 }
@@ -5033,7 +5129,7 @@ function massOf(P) { if (P.mass !== undefined) return P.mass; P.mass = null;
   pc(P.h, ct, (hp ? s : 1) * (P.h >= 150 ? 0.95 : 1) * 0.92, { plain: true, alb: al.map(v => v * 0.82), st: P.h }); P.massTop = M[M.length - 1];
   return (P.mass = M); }
 function gpuRoofKit(A) { const al = [150, 152, 150], tp = [128, 130, 130];
-  for (const P of ALL) { if (P.kind !== 'existing' || P.h < 10 || P.nogl || P.glass && P.h > 150 || Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) > 2500) continue;
+  for (const P of ALL) { if (P.kind !== 'existing' || P.h < 10 || P.nogl || P.rf30 || P.glass && P.h > 150 || Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) > 2500) continue;
     let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; ar = Math.abs(ar) / 2; if (ar < 300) continue;
     const k = 1 + Math.floor(hash01(P.cx, P.cz, 71) * Math.min(3, ar / 400));
     for (let q = 0; q < k; q++) { const r = Math.sqrt(ar) * 0.28, x = P.cx + (hash01(P.cx, q, 73) - 0.5) * r, z = P.cz + (hash01(q, P.cz, 79) - 0.5) * r, w = 3 + hash01(x, z, 83) * Math.min(6, Math.sqrt(ar) * 0.12), d = 3 + hash01(z, x, 89) * Math.min(6, Math.sqrt(ar) * 0.12), hh = 2 + hash01(x, q, 97) * 2.5;
@@ -5053,7 +5149,7 @@ function shoreKit() { if (shoreKit.L) return shoreKit.L; const out = [], wet = (
       const c = makePrism('Seawall coping', 'existing', 0.35, 0, seg(-0.45, 0), 2); c.plain = true; c.alb = [204, 202, 194]; c.topc = [214, 212, 204]; out.push(c);
       const w = makePrism('Seawall face', 'existing', 0.3, 0, seg(0, 0.15), 2); w.plain = true; w.alb = [64, 72, 66]; w.topc = [96, 100, 92]; out.push(w); } } }
   return (shoreKit.L = out); }
-function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.h >= 10 && P.n >= 3 && P.n <= 64 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000).sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]));
+function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && !P.rf30 && P.h >= 10 && P.n >= 3 && P.n <= 64 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000).sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]));
   const n0 = A.n, wl = [236, 234, 228], cp = [205, 205, 200];
   for (const P0 of L) { if (A.n - n0 > 4e5) break; const P = P0.massTop ? Object.assign(Object.create(P0), { xs: P0.massTop.xs, zs: P0.massTop.zs, n: P0.massTop.n }) : P0, fa = facadeAlb(P0), pa = fa.map(c => Math.min(255, c * 1.05 + 6)), dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), ledge = P.res === true && dd < 600;
     let ar = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) ar += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; const sg = ar > 0 ? 1 : -1;   // outward normal sign for either winding
@@ -5105,7 +5201,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of rf30Kit()) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A); gpuEstate(A);
   if (state.showRoads) { gpuBridges(A); gpuTunnel(A); }
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
@@ -5120,6 +5216,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   condoGrounds(X);
+  if (state.showExisting) rf30Grounds(X);   // Riverfront W corner: drive, aprons, plaza
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
   if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
