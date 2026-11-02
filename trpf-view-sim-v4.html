@@ -5972,10 +5972,30 @@ function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, c
   for (const t of SUPERTREES) { la.push(t.x, 0, t.z, ...st, 0.6, t.x, t.h, t.z, ...st, 0.6); S(add, t.x, t.h, t.z, 1, 0, 9, 9, rhapsody ? hsl((t.hue + hr * 3600 * 20) % 360) : pu, 0.85, 4); S(add, t.x, t.h, t.z, 0, 0, 27, 4.5, rhapsody ? [1, 160 / 255, 240 / 255] : pu, 0.25, 0); }
   LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => S(add, l.x, l.h * 0.5, l.z, 0, 0, l.span * 0.7, 3, [170 / 255, 220 / 255, 1], 0.3, 0, l.span * 0.6));
   if (hr >= 19 || hr < 0.5) for (const P of NIGHT_CROWNS()) { const c = P.h > 240 ? [0.85, 0.92, 1] : [1, 0.9, 0.72]; for (const y of [P.h - 0.5, P.h - 4]) for (let i = 0, j = P.n - 1; i < P.n; j = i++) la.push(P.xs[j], y, P.zs[j], ...c, y === P.h - 0.5 ? 0.8 : 0.35, P.xs[i], y, P.zs[i], ...c, y === P.h - 0.5 ? 0.8 : 0.35); }   // CBD crown lighting 19:00–00:30 (realism r5; towers ≥150 m within 2.5 km of MBS: top outline + a second band 4 m down, estimate)
+  eventFx(hr, yy, mm, dd, add, la, S);
   const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark'); if (!SP) return; const ec = [1, 235 / 255, 200 / 255];
   for (let i = 0, j = SP.n - 1; i < SP.n; j = i++) la.push(SP.xs[j], SP.base, SP.zs[j], ...ec, 0.85, SP.xs[i], SP.base, SP.zs[i], ...ec, 0.85);
   if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = MBS_AX.a[0] + (MBS_AX.b[0] - MBS_AX.a[0]) * f, z = MBS_AX.a[1] + (MBS_AX.b[1] - MBS_AX.a[1]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
     la.push(x, SP.h, z, ...c, 0.55, x + 1500 * Math.sin(sw + 0.4) * 0.5, SP.h + 1500, z + 1500 * Math.cos(sw + 0.4) * 0.5, ...c, 0); } }
+}
+// Events (round 6; visual only, times/positions estimates): fireworks over Marina Bay (bay centre ≈(−2277, −1329)) on National Day (9 Aug 20:12–20:27) and New Year
+// (1 Jan 00:00–00:12): a burst every 0.8 s, each alive 3 s (60 sparks on an expanding, drooping shell + glow); frozen frame unless ▶ Animate runs (simT).
+// F1 Singapore GP night race weekend (F1_DATES, Fri–Sun 18:00–23:30): circuit floodlights = white line + light pools along an approximate Marina Bay street circuit
+// (F1_LL, lat/lon from memory, ±100 m; not the exact track).
+const F1_DATES = { 2026: [10, 9] }, F1_LL = [[1.2900, 103.8635], [1.2915, 103.8610], [1.2935, 103.8585], [1.2965, 103.8575], [1.2935, 103.8545], [1.2915, 103.8525], [1.2870, 103.8530], [1.2885, 103.8545], [1.2895, 103.8565], [1.2880, 103.8595], [1.2885, 103.8625]];
+function eventFx(hr, yy, mm, dd, add, la, S) {
+  const fw = (mm === 8 && dd === 9 && hr >= 20.2 && hr < 20.45) || (mm === 1 && dd === 1 && hr < 0.2);
+  if (fw) { const t = simT(), B = [-2277, -1329], h = (k, i) => { const v = Math.sin(k * 127.1 + i * 311.7) * 43758.5453; return v - Math.floor(v); }, PAL = [[1, 0.35, 0.3], [1, 0.85, 0.4], [0.5, 0.8, 1], [0.7, 1, 0.5], [1, 0.5, 0.9], [1, 1, 1]];
+    for (let k = Math.floor(t / 0.8) - 3; k <= Math.floor(t / 0.8); k++) { const age = t - k * 0.8; if (age < 0 || age > 3) continue;
+      const cx = B[0] + (h(k, 1) - 0.5) * 360, cz = B[1] + (h(k, 2) - 0.5) * 240, cy = 150 + h(k, 3) * 150, R = (40 + h(k, 4) * 50) * (1 - Math.exp(-age * 2.2)), fade = Math.max(0, 1 - age / 3), c = PAL[Math.floor(h(k, 5) * PAL.length)];
+      S(add, cx, cy, cz, 0, 0, R * 1.1, 6, c, 0.3 * fade, 0);
+      for (let i = 0; i < 60; i++) { const u = h(k, 10 + i) * 2 - 1, ph = h(k, 80 + i) * 6.2832, r = Math.sqrt(1 - u * u), dx = r * Math.cos(ph), dz = r * Math.sin(ph), sag = 9 * age * age;
+        const px = cx + dx * R, py = cy + u * R - sag, pz = cz + dz * R; S(add, px, py, pz, 0, 0, 4.5, 2.2, c, fade, 0); S(add, px, py, pz, 0, 0, 1.2, 1.0, [1, 1, 0.95], fade, 1);
+        la.push(cx + dx * R * 0.55, cy + u * R * 0.55 - sag * 0.7, cz + dz * R * 0.55, ...c, 0, px, py, pz, ...c, 0.7 * fade); } } }   // spark + white core + trail
+  const F = F1_DATES[yy], day = F ? Date.UTC(yy, mm - 1, dd) - Date.UTC(yy, F[0] - 1, F[1]) : -1;
+  if (F && day >= 0 && day <= 2 * 864e5 && hr >= 18 && hr < 23.5) { const P = F1_LL.map(([la_, lo]) => [(lo - 103.87826) * 111291, (la_ - 1.29682) * 110574]), w = [1, 0.97, 0.9];
+    for (let i = 0; i < P.length; i++) { const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], L = Math.hypot(x1 - x0, z1 - z0); la.push(x0, 1, z0, ...w, 0.95, x1, 1, z1, ...w, 0.95);
+      for (let t = 0; t < L; t += 18) { const x = x0 + (x1 - x0) * t / L, z = z0 + (z1 - z0) * t / L; S(add, x, 0.3, z, (x1 - x0) / L, (z1 - z0) / L, 14, 9, w, 0.35, 2); S(add, x, 10, z, 0, 0, 1.4, 1.0, w, 0.3, 0); } } }
 }
 function gpuSprites(cam, env, buf, n, additive, range) {
   const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
