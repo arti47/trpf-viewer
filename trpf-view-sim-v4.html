@@ -2334,11 +2334,11 @@ let CONDO_POOLS = [], CONDO_SITES = [];
 // Condo estate per plot (TY 2026-11-02 "make it like real condo estates, now looks like one big estate"; typical SG private condo, render only, sizes/positions estimates):
 // gate on the side facing its access road (`CONDO_GATE`), guardhouse + barrier + gate piers + name wall, 6 m driveway to a drop-off loop + canopy at the nearest tower,
 // basement carpark ramp (covered), boundary fence (low wall + masonry piers + metal railing), lawn, paved paths, pool deck + pavilion, perimeter/lawn trees (generateTrees).
-const CONDO_GATE = { E1: [235, 100], E2: [300, -45] };   // E1: Tanjong Rhu Rd (N); E2: side road E (access unverified)
+const CONDO_GATE = { E1: [118, 32.5], E2: [118, -10.5] };   // TY 2026-11-02 site plan markup: both estates enter/exit only from Tanjong Rhu Close (W edge); kerb openings site px (1215, 323) / (1215, 514), ≈10 m wide
 function condoSite(p, placed, club, pool) {
   const r = p.ring, R = []; for (let i = 0; i < r.length; i += 2) R.push([r[i], r[i + 1]]); let cx = 0, cz = 0; R.forEach(q => { cx += q[0]; cz += q[1]; }); cx /= R.length; cz /= R.length;
   const GT = CONDO_GATE[p.id] || [cx, cz + 300]; let G = null, bd = Infinity;
-  for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length], ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1, t = Math.max(0.15, Math.min(0.85, ((GT[0] - a[0]) * ex + (GT[1] - a[1]) * ez) / L2)), x = a[0] + ex * t, z = a[1] + ez * t, d = Math.hypot(GT[0] - x, GT[1] - z);
+  for (let i = 0; i < R.length; i++) { const a = R[i], b = R[(i + 1) % R.length], ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1, t = Math.max(0.05, Math.min(0.95, ((GT[0] - a[0]) * ex + (GT[1] - a[1]) * ez) / L2)), x = a[0] + ex * t, z = a[1] + ez * t, d = Math.hypot(GT[0] - x, GT[1] - z);
     if (d < bd) { bd = d; const L = Math.sqrt(L2); let nx = -ez / L, nz = ex / L; if ((cx - x) * nx + (cz - z) * nz < 0) { nx = -nx; nz = -nz; } G = { x, z, tx: ex / L, tz: ez / L, nx, nz, e: i, s: t * L, d }; } }
   const tw = placed.filter(q => q !== club && q !== pool); let T = tw[0], td = Infinity; tw.forEach(q => { const d = Math.hypot(q.x - G.x, q.z - G.z); if (d < td) { td = d; T = q; } });
   const ins = (x, z, m = 2) => ringIn(r, x, z) && [[m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => ringIn(r, x + a, z + b)), clr = (x, z, hw, hd, c) => placed.every(q => Math.abs(q.x - x) >= q.hw + hw + c || Math.abs(q.z - z) >= q.hd + hd + c);
