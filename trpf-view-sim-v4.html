@@ -775,7 +775,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <details class="more" data-more="future"><summary></summary><div class="more-b">
 <div class="text-[11px] text-slate-500">Fine-tune each site group (the scenario sets these).</div>
 <label class="flex items-center gap-1.5 text-[12px] text-slate-300"><input type="checkbox" id="existingToggle" checked class="accent-sky-500">Existing buildings (OSM + MP2025 HDB)</label>
-<label class="flex items-center gap-1.5 text-[12px] text-slate-300"><input type="checkbox" id="roadsToggle" checked class="accent-amber-500">Roads + flyovers/bridges (OSM; tunnels hidden)</label>
+<label class="flex items-center gap-1.5 text-[12px] text-slate-300"><input type="checkbox" id="roadsToggle" checked class="accent-amber-500">Roads + flyovers/bridges + tunnel portals (OSM)</label>
 <div id="groupRows" class="space-y-1.5"></div>
 <div class="grid grid-cols-2 gap-2">
 <div><div class="flex justify-between text-[11px] text-slate-400"><span>Tower spacing (reserve sites)</span><span id="spacingVal" class="mono"></span></div><input type="range" id="spacingSlider" min="50" max="200" step="5" value="95" data-unit=" m"></div>
@@ -847,7 +847,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <div id="physicsReadout" class="text-[11px] mono-raw leading-relaxed bg-slate-950/70 border border-slate-800 text-slate-400 rounded-lg p-2 mb-2.5"></div>
 <div class="text-[11px] text-slate-500 mt-2 leading-snug">
 Geo frame: URA Master Plan 2025 land use (data.gov.sg), OSM buildings, MP2025 HDB footprints. Origin = TRPF parcel centroid (1.29682N, 103.87826E).
-Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: cumulus field drifting ≈4°/h, count/greyness per Weather preset (visual only). Realism (visual only): facade/roof cast shadows, foot-of-wall contact shading, Fresnel sky reflection + mirrored buildings + sun glitter on water, glass-tower sky reflection + sun glint, traffic on roads/decks, ships under way, room exposure (outside washes out, window bloom). Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE) omitted. Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
+Trees: parks/open space (22m grid), roadside (16m both sides), TRPF lawn (procedural, not occluders). Clouds: cumulus field drifting ≈4°/h, count/greyness per Weather preset (visual only). Realism (visual only): facade/roof cast shadows, foot-of-wall contact shading, Fresnel sky reflection + mirrored buildings + sun glitter on water, glass-tower sky reflection + sun glint, traffic on roads/decks, ships under way, room exposure (outside washes out, window bloom). Room interior: whole unit traced from the HDB 4-Room Type 1 plan (walls, doors, baths, kitchen, shelter; floor finishes estimated), 2.6m ceiling, W1 0.55m parapet to 2.2m head, charcoal casement frames, clear glass. Roads: OSM motorway–tertiary; bridges/viaducts as decks (≈7.5m per OSM layer; Benjamin Sheares Bridge 16m approach / 28m main span), piers every 35m; tunnels (KPE, MCE): open approach troughs + portals (≈90 m of lit tunnel inside, visual only; bored sections not modelled). Heights: OSM height/levels where tagged; known CBD towers overridden; untagged estimated from parcel GPR (marked est.). New HDB from MP2025 footprints, storeys ≈ GPR×8.
 TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the URA parcel (0.225 m/px). Marina East parcels are “subject to detailed planning” (no published GPR or height): base case GPR 4.0 on ~70% net site (estimate 3.5–4.5), 30–44F stepping down toward Founders' Memorial, 10-storey frontage; GPR 5.6 (Marina South GLS, Marina Gardens Lane) is an upside scenario. Built floor area never exceeds GPR × net site. New towers: 3.15 m/storey + 4.5 m lobby + 3 m roof. Heights are above ground; URA height controls are in m SHD (add ~4 m site level). Layout synthetic, all sliders unclamped.
 </div>
 </div></details>
@@ -1076,6 +1076,40 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
 }
 // OSM roads: at-grade ribbons + elevated decks (bridge/viaduct; height from layer, Sheares Bridge 16/28m) + piers. Tunnels omitted.
 const ROADS = (GEO.roads || []).map(([c, w, ...pts]) => { let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity; for (let i = 0; i < pts.length; i += 2) { minx = Math.min(minx, pts[i]); maxx = Math.max(maxx, pts[i]); minz = Math.min(minz, pts[i + 1]); maxz = Math.max(maxz, pts[i + 1]); } return { c, w, pts, minx: minx - w, maxx: maxx + w, minz: minz - w, maxz: maxz + w }; });
+// Tunnel portals (TY 2026-11-02 "expressway, entrance and exit out of the tunnels… as close to real life as possible"; positions traced from OneMap satellite tiles, sizes estimates):
+// the OSM data has no tunnel sections, so these ramps just stopped at grade. Each portal = the dangling end of an OSM way (TUN_PORTALS: x, z of that end, id, strut beams).
+// A–E: MCE/ECP/KPE interchange 100–300 m S of TRPF (A: ramp from the W dives E under the slip roads; B: ramp out of the tunnel under the ECP, 5 strut beams across the trough;
+// C: loop ramp dives N under the ECP; E: loop end dives NE); S1/S2: MCE at Marina East; N1–N3: KPE ramps near Kallang. Render only (physics/sightlines unchanged).
+// Last L ≤ 140 m of the way = open U-trough: road drops to TUN_D below grade (y = −D·u²(2 − u), u = 1 − s/L: 5% at the portal), concrete walls 1.05 m above ground;
+// portal headwall (lintel 5.3 m above the road, name plaque, green lane-control signals), then 90 m of tunnel (cream wall panels, dark dado/ceiling, light rows, jet fans, fading dark).
+// Below-grade parts are drawn only through the trough opening (stencil mask in gpuRender: the ground writes no depth); above-grade walls/railings/headwall are in the city range.
+const TUN_PORTALS = [[-257.7, -84.0, 'A'], [-276.3, -123.9, 'B', 1], [-197.8, -184.5, 'C'], [-308.1, -282.8, 'E'], [-1220.2, -2315.7, 'S1'], [-1158.2, -2354.5, 'S2'], [-265.8, 1192.8, 'N1'], [-140.3, 1155.0, 'N2'], [-293.2, 1537.5, 'N3']];
+const TUN_SHAFTS = [[-252.5, -126.3, 4.0, 4.6], [-196.0, -108.5, 4.3, 4.8], [-267.6, -316.7, 4.3, 5.4]];   // oval vent / escape shafts beside the portals (satellite; rx, rz; 1.5 m walls, grating top)
+const GANTRY_HAND = [[-672.5, -151, 1], [-174, -163, 1], [207, -104, 1], [-330, -329, 1]];   // ECP / ramp gantry pairs traced from satellite (centre on the carriageway, pair = sign + camera gantry 15 m apart; type unverified)
+const TUN_D = 7.2, TUN_H = 5.3, TUN_LT = 90, TUN_WT = 0.6, TUN_YT = 1.05, tunG = u => u * u * (2 - u);
+const TUNNELS = (() => { const out = [];
+  for (const [px, pz, id, st] of TUN_PORTALS) { let best = null, bd = 3;
+    for (const R of ROADS) { const p = R.pts, n = p.length / 2; for (const e of [0, 1]) { const d = Math.hypot(p[e ? 2 * n - 2 : 0] - px, p[e ? 2 * n - 1 : 1] - pz); if (d < bd) { bd = d; best = [R, e]; } } }
+    if (!best) continue; const [R, e] = best, p = R.pts, q = []; let n = p.length / 2;
+    for (let i = 0; i < n; i++) { const k = e ? n - 1 - i : i; q.push([p[2 * k], p[2 * k + 1]]); }   // q[0] = portal
+    const ch = [[R, e, 0]], arc = () => { let a = 0; for (let i = 1; i < q.length; i++) a += Math.hypot(q[i][0] - q[i - 1][0], q[i][1] - q[i - 1][1]); return a; };
+    while (arc() < 150 && ch.length < 4) { const [lx, lz] = q[q.length - 1], [bx, bz] = q[q.length - 2], tl = Math.hypot(lx - bx, lz - bz) || 1; let nx = null;   // short way: continue onto the way that carries on from its far end
+      for (const R2 of ROADS) { if (ch.some(c => c[0] === R2)) continue; const p2 = R2.pts, m = p2.length / 2; for (const e2 of [0, 1]) { const ex = p2[e2 ? 2 * m - 2 : 0], ez = p2[e2 ? 2 * m - 1 : 1], fx = p2[e2 ? 2 * m - 4 : 2], fz = p2[e2 ? 2 * m - 3 : 3];
+        if (Math.hypot(ex - lx, ez - lz) < 1 && ((fx - ex) * (lx - bx) + (fz - ez) * (lz - bz)) / (tl * (Math.hypot(fx - ex, fz - ez) || 1)) > 0.7) nx = [R2, e2]; } }
+      if (!nx) break; const [R2, e2] = nx, p2 = R2.pts, m = p2.length / 2; ch.push([R2, e2 ? 1 : 0, arc()]); for (let i = 1; i < m; i++) { const k = e2 ? m - 1 - i : i; q.push([p2[2 * k], p2[2 * k + 1]]); } }
+    n = q.length; const A = [0]; for (let i = 1; i < n; i++) A.push(A[i - 1] + Math.hypot(q[i][0] - q[i - 1][0], q[i][1] - q[i - 1][1]));
+    const len = A[n - 1], L = Math.min(140, len - 4); if (L < 40) continue; for (const [Rc] of ch) Rc.w = Math.max(R.w, Rc.w, 7.4);   // 2-lane ramps (satellite ≈ 7.5 m; OSM had 1 lane on some)
+    const at = s => { s = clamp(s, 0, len); let i = 1; while (i < n - 1 && A[i] < s) i++; const f = (s - A[i - 1]) / ((A[i] - A[i - 1]) || 1e-6); return [q[i - 1][0] + (q[i][0] - q[i - 1][0]) * f, q[i - 1][1] + (q[i][1] - q[i - 1][1]) * f]; };
+    const hw = R.w / 2, hi = hw + 1.0, N = Math.ceil(L / 2), S = [];
+    for (let k = 0; k <= N; k++) { const s = L * k / N, c = at(s), a = at(s - 3), b = at(s + 3); let tx = a[0] - b[0], tz = a[1] - b[1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l; const u = 1 - s / L;
+      S.push({ s, x: c[0], z: c[1], tx, tz, nx: -tz, nz: tx, y: -TUN_D * tunG(u) }); }   // t = into the tunnel, n = left of t
+    const edge = o => S.map(Q => [Q.x + Q.nx * o, Q.z + Q.nz * o]), ring = [...edge(hi + TUN_WT), ...edge(-hi - TUN_WT).reverse()].flat(), inner = [...edge(hi), ...edge(-hi).reverse()].flat();
+    const bb = [Infinity, -Infinity, Infinity, -Infinity]; for (let i = 0; i < ring.length; i += 2) { bb[0] = Math.min(bb[0], ring[i]); bb[1] = Math.max(bb[1], ring[i]); bb[2] = Math.min(bb[2], ring[i + 1]); bb[3] = Math.max(bb[3], ring[i + 1]); }
+    for (const [Rc, ec, off] of ch) { const pc = Rc.pts; let lc = 0; for (let i = 0; i + 3 < pc.length; i += 2) lc += Math.hypot(pc[i + 2] - pc[i], pc[i + 3] - pc[i + 1]); Rc.tun = { e: ec, L, len: lc, off }; }
+    out.push({ id, R, S, hw, hi, L, st: !!st, ring, inner, bb }); }
+  return out; })();
+const tunAt = (x, z, m = 0) => TUNNELS.some(T => x > T.bb[0] - m && x < T.bb[1] + m && z > T.bb[2] - m && z < T.bb[3] + m && (ringIn(T.ring, x, z) || (m > 0 && polyD(T.ring, x, z) < m)));
+const tunY = (R, s) => { const T = R.tun; if (!T) return 0; const sp = (T.e ? T.len - s : s) + T.off; if (sp >= T.L) return 0; return -TUN_D * tunG(1 - Math.max(0, sp) / T.L); };   // road height on a trough way at arc s (cars)
 const DECKS = (GEO.decks || []).map(([n, base, top, ...q]) => makePrism(n, 'road', top, base, q, 0)).concat((GEO.piers || []).map(([hb, ...q]) => makePrism('Pier', 'road', hb, 0, q, 0)));
 // Deck render profile (TY 2026-10-31 "render the bridge properly", ref. 3D map of Tanjong Rhu Bridge: low flat slab deck on rows of slim round columns): OSM deck quads [p0 p1 p2 p3]
 // chain end edge p1p2 → next start edge p0p3 (1149 of 1216 joins). Node top = mean of the touching segments' flat tops; a chain end with no other deck end within 12 m meets
@@ -1709,7 +1743,7 @@ let ROAD_KIT = null;
 function roadKit() {
   if (ROAD_KIT) return ROAD_KIT; const [ux, uz] = UNIT134, cc = v => v.map(q => q / 255), M = glArr(), T = [], lamps = [], lit = new Set(), up = [0, 1, 0], z4 = [0, 0, 0, 0];
   const WH = cc([228, 228, 222]), YE = cc([228, 180, 46]), KB = cc([186, 184, 176]), CON = cc([200, 198, 190]), STL = cc([172, 176, 180]), POLE = cc([150, 154, 158]), GRN = cc([16, 110, 70]), GRY = cc([118, 122, 126]);
-  const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, tri = (a, b, d, n, col) => T.push([a, b, d, n, col]), quad = (a, b, d, e, n, col) => { tri(a, b, d, n, col); tri(a, d, e, n, col); };
+  let curT = null; const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, tri = (a, b, d, n, col) => T.push(curT ? [a, b, d, n, col, curT] : [a, b, d, n, col]), quad = (a, b, d, e, n, col) => { tri(a, b, d, n, col); tri(a, d, e, n, col); };
   const box = (cx, cz, y0, y1, ux, uz, hu, hv, col, fc) => { const V = [-uz, ux], p = (su, sv, y) => [cx + ux * su * hu + V[0] * sv * hv, y, cz + uz * su * hu + V[1] * sv * hv], R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];   // oriented box (U along, V across); fc = colour of the −U face
     for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2], n = nz([ux * m[0] + V[0] * m[1], 0, uz * m[0] + V[1] * m[1]]); quad(p(a0, b0, y0), p(a1, b1, y0), p(a1, b1, y1), p(a0, b0, y1), n, fc && m[0] < -0.5 ? fc : col); }
     quad(...R.map(([a, b]) => p(a, b, y1)), [0, 1, 0], col); if (y0 > 0.05) quad(...R.map(([a, b]) => p(a, b, y0)), [0, -1, 0], col); };
@@ -1760,10 +1794,42 @@ function roadKit() {
       for (let q = 0; q < Lc.length; q += 2) { const wj = Lc[q], v = W[wj]; if (wj === wi || (v.c === 0) !== (w.c === 0) || Math.abs(v.c - w.c) > 1) continue; const j = Lc[q + 1], o = v.sn[j]; if (o[2] * tx + o[3] * tz > -0.94) continue;
         const d = (v.p[2 * j] - mx) * nx + (v.p[2 * j + 1] - mz) * nzz, lat = Math.abs(d); if (lat > w.hw + v.hw - 1 && lat < w.hw + v.hw + 22 && segD(mx, mz, v.p[2 * j], v.p[2 * j + 1], v.p[2 * j + 2], v.p[2 * j + 3]) < lat + 2) { if (d > 0) L++; else R++; break; } } }
     return L + R >= Math.max(1, k * 0.4) ? (L >= R ? 1 : -1) : 0; };
+  // gore areas (TY 2026-11-02, satellite: long chevron-hatched islands where expressway / slip-road lanes split or join): two arms of cls ≤ 1 ways leaving (or entering) one OSM node at < 25°,
+  // inner ribbon edges followed while they are 0.25–9 m apart (≤ 300 m): asphalt fill, white border lines, chevrons every 8 m pointing in the direction of travel (sizes estimates). Kerbs / barriers / trees skip them.
+  const GORE = []; { const AF = cc([70, 72, 78]), gl = [0, 0, 0, 52];
+    for (const e of node.values()) { const ar = e.arms.filter(q => W[q[0]].c <= 1); if (ar.length < 3 || !near(e.x, e.z, RK_R)) continue;
+      for (let p = 0; p < ar.length; p++) for (let q = p + 1; q < ar.length; q++) { const [w1i, i1, d1] = ar[p], [w2i, i2, d2] = ar[q]; if (d1 !== d2 || w1i === w2i) continue; const w1 = W[w1i], w2 = W[w2i], s1 = w1.sn[d1 > 0 ? i1 : i1 - 1], s2 = w2.sn[d2 > 0 ? i2 : i2 - 1];
+        if (!s1 || !s2 || s1[2] * s2[2] + s1[3] * s2[3] < Math.cos(25 * DEG)) continue; const S = [];
+        for (let u = 1; u < 300; u += 1.5) { const a1 = w1.A[i1] + d1 * u, a2 = w2.A[i2] + d2 * u; if (a1 < 0 || a1 > w1.len || a2 < 0 || a2 > w2.len) break; const P1 = posAt(w1, a1, 0), P2 = posAt(w2, a2, 0), dx = P2[0] - P1[0], dz = P2[1] - P1[1], d = Math.hypot(dx, dz) || 1e-6, gap = d - w1.hw - w2.hw;
+          if (gap > 9) break; if (gap < 0.25) { if (S.length) break; continue; } const E1 = [P1[0] + dx / d * w1.hw, P1[1] + dz / d * w1.hw], E2 = [P2[0] - dx / d * w2.hw, P2[1] - dz / d * w2.hw], mid = [(E1[0] + E2[0]) / 2, (E1[1] + E2[1]) / 2];
+          S.push({ u, E1, E2, gap, mid }); }
+        if (S.length < 4) continue; const ring = [...S.map(o => o.E1), ...S.map(o => o.E2).reverse()].flat(); GORE.push(ring);
+        const P = (x, z, y = 0.032) => [x, y, z], tvx = (k) => { const a = S[Math.max(0, k - 1)].mid, b = S[Math.min(S.length - 1, k + 1)].mid, l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+        for (let k = 0; k + 1 < S.length; k++) { const A0 = S[k], B0 = S[k + 1]; M.quad(P(...A0.E1, 0.012), P(...B0.E1, 0.012), P(...B0.E2, 0.012), P(...A0.E2, 0.012), up, AF, gl, gl, gl, gl);
+          for (const [ea, eb, o] of [[A0.E1, B0.E1, A0.E2], [A0.E2, B0.E2, A0.E1]]) { const dx = o[0] - ea[0], dz = o[1] - ea[1], l = Math.hypot(dx, dz) || 1, ox = dx / l * 0.1, oz = dz / l * 0.1, wx = dx / l * 0.2, wz = dz / l * 0.2;   // border lines 0.2 m, 0.1 m inside the edge
+            M.quad(P(ea[0] + ox, ea[1] + oz), P(eb[0] + ox, eb[1] + oz), P(eb[0] + ox + wx, eb[1] + oz + wz), P(ea[0] + ox + wx, ea[1] + oz + wz), up, WH, z4, z4, z4, z4); } }
+        for (let k = 0; k < S.length; k++) { const o = S[k]; if (o.gap < 1.2 || Math.round(o.u / 1.5) % 5) continue; const [tx, tz] = tvx(k), sgn = d1 > 0 ? 1 : -1, L = Math.min(4, o.gap * 0.7), ap = [o.mid[0] + tx * sgn * L, o.mid[1] + tz * sgn * L];   // chevron: apex downstream
+          for (const ed of [o.E1, o.E2]) { const bx = ed[0] + (o.mid[0] - ed[0]) * 0.08, bz = ed[1] + (o.mid[1] - ed[1]) * 0.08, dx = ap[0] - bx, dz = ap[1] - bz, l = Math.hypot(dx, dz) || 1, nx = -dz / l * 0.25, nzz = dx / l * 0.25;
+            M.quad(P(bx - nx, bz - nzz), P(ap[0] - nx, ap[1] - nzz), P(ap[0] + nx, ap[1] + nzz), P(bx + nx, bz + nzz), up, WH, z4, z4, z4, z4); } } } } }
+  const inGore = (x, z) => GORE.some(r => ringIn(r, x, z));
+  // planted median (satellite: ECP median here is a 4–7 m kerbed strip with a tree row and twin-arm lamp posts every ~40 m): gap to the opposite carriageway probed per 3 m;
+  // ≥ 3 m → kerb + lawn strip + twin-arm lamps on the median centre (F-shape barrier only where the gap is narrower). Trees: generateTrees (median row).
+  const MPOST = [], gapAt = (w, wi, a, sg) => { for (let d = 0.5; d <= 14; d += 0.5) { const [x, z] = posAt(w, a, sg * (w.hw + d)); if (other(wi, x, z, 0)) return d; } return 0; };
+  // sign gantry: 2 posts, truss beam 6.6–7.3 m, green board(s) facing oncoming traffic (kind 0); camera / EMAS gantry (kind 1: box beam, 3 cameras, black VMS board with amber text)
+  const gantry = (w, wi, a, kind) => { const hw = w.hw, [x, z, i] = posAt(w, a, 0), [tx, tz] = [w.sn[i][2], w.sn[i][3]], [nx, nzz] = [w.sn[i][0], w.sn[i][1]], pl = posAt(w, a, hw + 1.1), pr = posAt(w, a, -hw - 1.1);
+    if (!near(x, z, RK_X) || ringIn(SITE_IMG, x, z) || tunAt(x, z, 1) || other(wi, pl[0], pl[1], 0.5) || other(wi, pr[0], pr[1], 0.5)) return;
+    for (const q of [pl, pr]) { box(q[0], q[1], 0, 7.4, tx, tz, 0.25, 0.25, GRY); box(q[0], q[1], 0, 0.4, tx, tz, 0.45, 0.45, CON); }
+    if (kind) { box(x, z, 6.3, 6.95, nx, nzz, hw + 1.1, 0.32, cc([196, 198, 200])); for (const s of [-hw * 0.6, 0, hw * 0.6]) { const q = posAt(w, a - 0.45, s); box(q[0], q[1], 5.9, 6.3, tx, tz, 0.22, 0.14, cc([40, 42, 44])); }
+      const bw = Math.min(6, hw), q = posAt(w, a - 0.4, -(hw - 0.4 - bw / 2)); box(q[0], q[1], 7.0, 8.4, tx, tz, 0.12, bw / 2, cc([20, 20, 22]));
+      curT = [0, 0, 0.42, 0]; for (const [yy, f] of [[7.95, 0.8], [7.55, 0.6], [7.15, 0.75]]) { const r = posAt(w, a - 0.54, -(hw - 0.4 - bw / 2) - bw * (1 - f) / 2 + bw * 0.04); box(r[0], r[1], yy, yy + 0.22, tx, tz, 0.02, bw * f / 2 - bw * 0.06, cc([255, 170, 40])); } curT = null; return; }
+    for (const dy of [6.6, 7.2]) box(x, z, dy, dy + 0.12, nx, nzz, hw + 1.1, 0.06, GRY); for (let s = -hw; s <= hw; s += 1.2) { const q = posAt(w, a, s); box(q[0], q[1], 6.72, 7.2, tx, tz, 0.04, 0.04, GRY); }
+    const bw = Math.min(9, hw * 1.1), boards = [[hw - 0.4 - bw / 2, bw]]; if (w.R.w >= 14) boards.push([-(hw - 0.4 - 2.6), 5.2]);
+    for (const [sc, wb] of boards) { const q = posAt(w, a - 0.25, sc); box(q[0], q[1], 5.0, 7.7, tx, tz, 0.07, wb / 2, GRY, GRN);
+      for (const [yy, f] of [[7.1, 0.7], [6.4, 0.55], [5.6, 0.8]]) { const r = posAt(w, a - 0.33, sc - wb * (1 - f) / 2 + wb * 0.04); box(r[0], r[1], yy, yy + 0.32, tx, tz, 0.02, wb * f / 2 - wb * 0.06, WH); } } };
   W.forEach((w, wi) => {
     if (w.R.minx > ux + RK_R || w.R.maxx < ux - RK_R || w.R.minz > uz + RK_R || w.R.maxz < uz - RK_R) { if (w.c !== 0) return; }
     const hw = w.hw, e = Math.max(1, hw - 0.6), med = w.med = partner(w, wi), one = w.c === 0 || med !== 0, ph = hash01(w.p[0], w.p[1], 3) * 6;
-    const inS = (x, z, i) => w.sIn[i] || ringIn(SITE_IMG, x, z), mOK = (x, z, i) => near(x, z, RK_R) && !other(wi, x, z, 1.0) && !nearJ(wi, x, z) && !inS(x, z, i);   // inside the plan image: lines from the plan's own centre-lines (below)
+    const inS = (x, z, i) => w.sIn[i] || ringIn(SITE_IMG, x, z) || tunAt(x, z, w.R.tun ? 1 : 0.3), inSG = (x, z, i) => inS(x, z, i) || inGore(x, z), mOK = (x, z, i) => near(x, z, RK_R) && !other(wi, x, z, 1.0) && !nearJ(wi, x, z) && !inS(x, z, i);   // inside the plan image: lines from the plan's own centre-lines (below)
     const eOK = m => (x, z, i) => near(x, z, RK_R) && !inS(x, z, i) && !other(wi, x, z, m);
     if ((w.c <= 3 || w.lanes >= 2) && midNear(w, RK_R + w.len)) {   // cls 4 (minor/unclassified, e.g. Tanjong Rhu Rd) with ≥ 2 lanes: as cls 3
       const D = w.c === 0 ? [4, 8, ph] : [2, 4, ph], lw = w.c === 0 ? 0.075 : 0.06, n = w.lanes;
@@ -1772,29 +1838,38 @@ function roadKit() {
         for (let k = 1; k < ns; k++) for (const sg of [-1, 1]) line(w, sg * k * e / ns, mOK, lw, WH, D); }
       if (w.c === 0) for (const sg of [-1, 1]) line(w, sg * (hw - 0.45), eOK(0.5), 0.075, WH);
       else if (w.lanes >= 1) for (const sg of [-1, 1]) { if (w.c <= 2) { line(w, sg * (hw - 0.3), eOK(0.4), 0.05, YE); line(w, sg * (hw - 0.5), eOK(0.6), 0.05, YE); } else line(w, sg * (hw - 0.3), eOK(0.4), 0.05, YE); } }
-    if (w.c !== 0) { const kOK = (x, z, i) => near(x, z, RK_K) && !inS(x, z, i) && !other(wi, x, z, 0.2);   // kerbs
+    if (w.c !== 0) { const kOK = (x, z, i) => near(x, z, RK_K) && !inSG(x, z, i) && !other(wi, x, z, 0.2);   // kerbs
       for (const sg of [-1, 1]) for (const [a, b] of runs(w, sg * (hw + 0.1), kOK)) extrude(w, a, b, [[sg * hw, 0], [sg * hw, 0.15], [sg * (hw + 0.2), 0.15], [sg * (hw + 0.2), 0]], KB);
       // lamp posts: at the old night-lamp spacing (35 m, both sides cls ≤ 2 at 10 m, else one side at 8 m) on the footpath, arm 1.8 m over the road
       if (midNear(w, RK_K + w.len / 2)) { lit.add(w.R); const ph2 = hash01(w.p[0], w.p[1], 5) * 35, hp = w.c <= 2 ? 10 : 8;
         for (let a = ph2; a < w.len; a += 35) for (const sg of w.c <= 2 ? [-1, 1] : [1]) { const [x, z, i] = posAt(w, a, sg * (hw + 0.9)); if (other(wi, x, z, 0.6) || (inS(x, z, i) && mk(x, z))) continue;
           const [hx, hz] = posAt(w, a, sg * (hw - 0.9)), [tx, tz] = [w.sn[i][2], w.sn[i][3]]; lamps.push([hx, hp - 0.22, hz, 0]); if (!near(x, z, RK_L)) continue; box(x, z, 0, hp, tx, tz, 0.09, 0.09, POLE); box((x + hx) / 2, (z + hz) / 2, hp - 0.12, hp, -w.sn[i][0], -w.sn[i][1], 0.9, 0.04, POLE); box(hx, hz, hp - 0.22, hp - 0.05, tx, tz, 0.16, 0.3, POLE); } } }
     else {   // expressway
-      const xOK = (m, r) => (x, z, i) => near(x, z, r) && !inS(x, z, i) && !other(wi, x, z, m);
+      const xOK = (m, r) => (x, z, i) => near(x, z, r) && !inSG(x, z, i) && !other(wi, x, z, m), GP = [];
+      if (med) for (let a = 0; a <= w.len; a += 3) { const g = gapAt(w, wi, a, med), [x, z, i] = posAt(w, a, med * (w.hw + 1)); GP.push(g >= 3 && near(x, z, RK_X) && !inSG(x, z, i) ? g : 0); }
+      const gpA = a => GP[Math.min(GP.length - 1, Math.round(a / 3))] || 0;
       for (const sg of [-1, 1]) { const isMed = med === sg;
-        if (isMed) for (const [a, b] of runs(w, sg * (hw + 0.6), xOK(0.8, RK_X))) extrude(w, a, b, [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.81], [0.38, 0.81], [0.44, 0.33], [0.57, 0.08], [0.62, 0]].map(([u, y]) => [sg * (hw + 0.3 + u), y]), CON);
+        if (isMed) { for (const [a, b] of runs(w, sg * (hw + 0.6), xOK(0.8, RK_X))) { let r0 = -1; for (let q = a; q <= b + 1e-6; q += 3) { const pl = gpA(q) > 0, last = q + 3 > b;   // F-shape barrier where the median is narrow
+              if (!pl && r0 < 0) r0 = q; if ((pl || last) && r0 >= 0) { const r1 = pl ? q : b; if (r1 > r0 + 1) extrude(w, r0, r1, [[0, 0], [0.05, 0.08], [0.18, 0.33], [0.24, 0.81], [0.38, 0.81], [0.44, 0.33], [0.57, 0.08], [0.62, 0]].map(([u, y]) => [sg * (hw + 0.3 + u), y]), CON); r0 = -1; } } }
+          for (let k = 0; k + 1 < GP.length; k++) { const g0 = GP[k], g1 = GP[k + 1]; if (!g0 || !g1) continue; const a = k * 3, b = Math.min(w.len, a + 3), h0 = g0 / 2 + 0.05, h1 = g1 / 2 + 0.05;   // planted: kerb + lawn to the median centre
+            if (near(...posAt(w, a, 0).slice(0, 2), RK_K * 2)) extrude(w, a, b, [[sg * (hw + 0.2), 0], [sg * (hw + 0.2), 0.18], [sg * (hw + 0.45), 0.18], [sg * (hw + 0.45), 0]], KB);
+            const p0 = posAt(w, a, sg * (hw + 0.45)), p1 = posAt(w, b, sg * (hw + 0.45)), q0 = posAt(w, a, sg * (hw + h0)), q1 = posAt(w, b, sg * (hw + h1)), y = 0.04, tg = [0, 0, 0, 50], LW = cc([88, 118, 62]);
+            M.quad([p0[0], y, p0[1]], [p1[0], y, p1[1]], [q1[0], y, q1[1]], [q0[0], y, q0[1]], up, LW, tg, tg, tg, tg); } }
         else for (const [a, b] of runs(w, sg * (hw + 0.6), xOK(0.8, 1500))) { extrude(w, a, b, [[sg * (hw + 0.55), 0.45], [sg * (hw + 0.55), 0.75], [sg * (hw + 0.63), 0.75], [sg * (hw + 0.63), 0.45]], STL);
           for (let s = Math.ceil(a / 4) * 4; s <= b; s += 4) { const [x, z, i] = posAt(w, s, sg * (hw + 0.72)); if (near(x, z, 300)) box(x, z, 0, 0.72, w.sn[i][2], w.sn[i][3], 0.05, 0.075, STL); } } }
-      if (midNear(w, RK_X + w.len / 2)) { lit.add(w.R); const ls = med || 1, off = med ? hw + 0.61 : hw + 1.2, ph3 = hash01(w.p[0], w.p[1], 7) * 40;   // lamp posts (median barrier top, or verge)
-        for (let a = ph3; a < w.len; a += 40) { const [x, z, i] = posAt(w, a, ls * off); if (inS(x, z, i) || other(wi, x, z, 0.8)) continue; const [hx, hz] = posAt(w, a, ls * (off - 2.6)), y0 = med ? 0.81 : 0; lamps.push([hx, 11.74, hz, 0]); if (!near(x, z, 1000)) continue;
-          cyl(x, z, y0, 12, 0.12, POLE); box((x + hx) / 2, (z + hz) / 2, 11.86, 12, -ls * w.sn[i][0], -ls * w.sn[i][1], 1.3, 0.05, POLE); box(hx, hz, 11.74, 11.92, w.sn[i][2], w.sn[i][3], 0.18, 0.34, POLE); } }
-      if (w.R.w >= 8) for (let a = 150 + hash01(w.p[0], w.p[1], 9) * 500; a < w.len - 30; a += 700) {   // sign gantry: 2 posts, truss beam 6.6–7.3 m, green board(s) facing oncoming traffic
-        const [x, z, i] = posAt(w, a, 0), [tx, tz] = [w.sn[i][2], w.sn[i][3]], [nx, nzz] = [w.sn[i][0], w.sn[i][1]], pl = posAt(w, a, hw + 1.1), pr = posAt(w, a, -hw - 1.1); if (!near(x, z, RK_X) || inS(x, z, i) || other(wi, pl[0], pl[1], 0.5) || other(wi, pr[0], pr[1], 0.5)) continue;
-        for (const q of [pl, pr]) { box(q[0], q[1], 0, 7.4, tx, tz, 0.25, 0.25, GRY); box(q[0], q[1], 0, 0.4, tx, tz, 0.45, 0.45, CON); }
-        for (const dy of [6.6, 7.2]) box(x, z, dy, dy + 0.12, nx, nzz, hw + 1.1, 0.06, GRY); for (let s = -hw; s <= hw; s += 1.2) { const q = posAt(w, a, s); box(q[0], q[1], 6.72, 7.2, tx, tz, 0.04, 0.04, GRY); }
-        const bw = Math.min(9, hw * 1.1), boards = [[hw - 0.4 - bw / 2, bw]]; if (w.R.w >= 14) boards.push([-(hw - 0.4 - 2.6), 5.2]);
-        for (const [sc, wb] of boards) { const q = posAt(w, a - 0.25, sc); box(q[0], q[1], 5.0, 7.7, tx, tz, 0.07, wb / 2, GRY, GRN);
-          for (const [yy, f] of [[7.1, 0.7], [6.4, 0.55], [5.6, 0.8]]) { const r = posAt(w, a - 0.33, sc - wb * (1 - f) / 2 + wb * 0.04); box(r[0], r[1], yy, yy + 0.32, tx, tz, 0.02, wb * f / 2 - wb * 0.06, WH); } } } }
+      if (midNear(w, RK_X + w.len / 2)) { lit.add(w.R); const ls = med || 1, off = med ? hw + 0.61 : hw + 1.2, ph3 = hash01(w.p[0], w.p[1], 7) * 40;   // lamp posts (median barrier top / planted median centre (twin arm) / verge)
+        for (let a = ph3; a < w.len; a += 40) { const g = med ? gpA(a) : 0;
+          if (g) { const [cx, cz, i] = posAt(w, a, ls * (hw + g / 2)), L = g / 2 + 2.4, dx = -ls * w.sn[i][0], dz = -ls * w.sn[i][1]; let P = MPOST.find(o => Math.hypot(o.x - cx, o.z - cz) < 24); if (!P) MPOST.push(P = { x: cx, z: cz, arms: [] }); P.arms.push([dx, dz, L, w.sn[i][2], w.sn[i][3]]); continue; }
+          let ls2 = ls, [x, z, i] = posAt(w, a, ls * off); if (!med && (inSG(x, z, i) || other(wi, x, z, 0.8))) { ls2 = -ls; [x, z, i] = posAt(w, a, ls2 * off); }   // verge blocked (slip road / gore): other verge
+          if (inSG(x, z, i) || other(wi, x, z, 0.8)) continue; const [hx, hz] = posAt(w, a, ls2 * (off - 2.6)), y0 = med ? 0.81 : 0; lamps.push([hx, 11.74, hz, 0]); if (!near(x, z, 1000)) continue;
+          cyl(x, z, y0, 12, 0.12, POLE); box((x + hx) / 2, (z + hz) / 2, 11.86, 12, -ls2 * w.sn[i][0], -ls2 * w.sn[i][1], 1.3, 0.05, POLE); box(hx, hz, 11.74, 11.92, w.sn[i][2], w.sn[i][3], 0.18, 0.34, POLE); } }
+      if (w.R.w >= 8) for (let a = 150 + hash01(w.p[0], w.p[1], 9) * 500; a < w.len - 30; a += 700) { const [x, z] = posAt(w, a, 0); if (!near(x, z, 1500)) gantry(w, wi, a, 0); } }   // generic sign gantries beyond 1.5 km (nearer: GANTRY_HAND, real positions)
   });
+  for (const P of MPOST) { for (const [dx, dz, L, tx, tz] of P.arms) { const hx = P.x + dx * L, hz = P.z + dz * L; lamps.push([hx, 11.74, hz, 0]); if (!near(P.x, P.z, 1000)) continue;   // twin-arm median lamps (one arm per carriageway)
+      box(P.x + dx * L / 2, P.z + dz * L / 2, 11.86, 12, dx, dz, L / 2, 0.05, POLE); box(hx, hz, 11.74, 11.92, tx, tz, 0.18, 0.34, POLE); }
+    if (near(P.x, P.z, 1000)) { cyl(P.x, P.z, 0.18, 12.1, 0.14, POLE); cyl(P.x, P.z, 0.18, 1.0, 0.24, POLE); } }
+  for (const [gx, gz, pair] of GANTRY_HAND) { let bi = -1, bd = 12, ba = 0; W.forEach((w, wi) => { if (w.c !== 0) return; for (let i = 0; i + 1 < w.n; i++) { const p = w.p, d = segD(gx, gz, p[2 * i], p[2 * i + 1], p[2 * i + 2], p[2 * i + 3]); if (d < bd) { bd = d; bi = wi; const ex = p[2 * i + 2] - p[2 * i], ez = p[2 * i + 3] - p[2 * i + 1]; ba = w.A[i] + clamp(((gx - p[2 * i]) * ex + (gz - p[2 * i + 1]) * ez) / (ex * ex + ez * ez || 1), 0, 1) * Math.hypot(ex, ez); } } });
+    if (bi < 0) continue; gantry(W[bi], bi, ba, 0); if (pair && ba + 15 < W[bi].len) gantry(W[bi], bi, ba + 15, 1); }   // real gantry positions near #134 (sign gantry + camera / EMAS gantry 15 m downstream)
   // junction arms: zebra crossing (3 m), stop line over the inbound half, lane arrows (cls ≤ 2)
   for (const e of J) for (const [wi, i, dir] of e.arms) { const w = W[wi]; if (w.c === 0 || w.c > 3 || !near(e.x, e.z, RK_R)) continue; const rr = Math.max(0, ...e.arms.filter(q => q[0] !== wi).map(q => W[q[0]].hw)); if (!rr) continue;
     const r = rr + 1, an = w.A[i], avail = dir > 0 ? w.len - an : an; if (avail < r + 14) continue; const at = (u, s) => posAt(w, an + dir * u, s), hw = w.hw, ea = Math.max(1, hw - 0.6);
@@ -1840,7 +1915,72 @@ function roadKit() {
       const di = xw ? 0.45 : 0.3, hh = xw ? 0.075 : 0.05, cx = mx - ox * di, cz = mz - oz * di, h2 = L / 2 + 0.02; M.quad([cx - tx * h2 - ox * hh, 0.03, cz - tz * h2 - oz * hh], [cx + tx * h2 - ox * hh, 0.03, cz + tz * h2 - oz * hh], [cx + tx * h2 + ox * hh, 0.03, cz + tz * h2 + oz * hh], [cx - tx * h2 + ox * hh, 0.03, cz - tz * h2 + oz * hh], up, xw ? WH : YE, z4, z4, z4, z4); } }
   return (ROAD_KIT = { M, T, lamps, lit });
 }
-function gpuRoadKit(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of roadKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
+function gpuRoadKit(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col, t = z4] of roadKit().T) { A.v(a, n, col, t); A.v(b, n, col, t); A.v(d, n, col, t); } }
+// Tunnel kit (see TUN_PORTALS): B = below-grade geometry (trough floor/walls/markings, portal face, tunnel interior; drawn through the opening mask), O = opening (trough inner region at y 0),
+// U = above-grade parts (wall tops + caps, railings, hazard noses, headwall, strut beams, vent shafts) → city range.
+let TUN_KIT = null;
+function tunnelKit() {
+  if (TUN_KIT) return TUN_KIT; const B = glArr(), O = glArr(), U = glArr(), cc = v => v.map(q => q / 255), z4 = [0, 0, 0, 0], t52 = [0, 0, 0, 52], tL = [0, 0, 0.45, 0], tS = [0, 0, 0.42, 0], up = [0, 1, 0];
+  const nz = v => { const l = Math.hypot(...v) || 1; return v.map(q => q / l); }, mul = (c, k) => c.map(v => v * k);
+  const AS = cc([70, 72, 78]), SH = cc([112, 112, 110]), WH = cc([228, 228, 222]), YE = cc([228, 180, 46]), CON = cc([184, 182, 176]), CAP = cc([206, 204, 198]), LIN = cc([196, 194, 188]), RAIL = cc([84, 92, 88]), BK = cc([22, 22, 24]);
+  const qd = (G, a, b, c, d, n, col, t = z4) => G.quad(a, b, c, d, n, col, t, t, t, t);
+  const box = (G, cx, cy, cz, ux, uz, hu, hv, hy, col, t = z4) => { const vx = -uz, vz = ux, p = (a, b, y) => [cx + ux * a * hu + vx * b * hv, cy + y * hy, cz + uz * a * hu + vz * b * hv], R = [[-1, -1], [1, -1], [1, 1], [-1, 1]];   // oriented box, half sizes hu (along u), hv (across), hy (up)
+    for (let k = 0; k < 4; k++) { const [a0, b0] = R[k], [a1, b1] = R[(k + 1) % 4], m = [(a0 + a1) / 2, (b0 + b1) / 2]; qd(G, p(a0, b0, -1), p(a1, b1, -1), p(a1, b1, 1), p(a0, b0, 1), nz([ux * m[0] + vx * m[1], 0, uz * m[0] + vz * m[1]]), col, t); }
+    qd(G, ...R.map(([a, b]) => p(a, b, 1)), up, col, t); qd(G, ...R.map(([a, b]) => p(a, b, -1)), [0, -1, 0], col, t); };
+  const [ux0, uz0] = UNIT134;
+  for (const T of TUNNELS) { const S = T.S, hw = T.hw, hi = T.hi, near = Math.hypot(S[0].x - ux0, S[0].z - uz0) < 1500, lanes = Math.max(1, Math.round((T.R.w - 1.2) / 3.4)), ea = hw - 0.6;
+    const P = (Q, o, y) => [Q.x + Q.nx * o, y, Q.z + Q.nz * o];
+    for (let k = 0; k + 1 < S.length; k++) { const a = S[k], b = S[k + 1], ya = a.y, yb = b.y, nf = nz([0, 1, 0]);
+      qd(B, P(a, -hw, ya), P(b, -hw, yb), P(b, hw, yb), P(a, hw, ya), nf, AS, t52);   // trough road
+      for (const sg of [-1, 1]) { qd(B, P(a, sg * hw, ya), P(b, sg * hw, yb), P(b, sg * hi, yb), P(a, sg * hi, ya), nf, SH);   // shoulder
+        qd(B, P(a, sg * (hw - 0.38), ya + 0.03), P(b, sg * (hw - 0.38), yb + 0.03), P(b, sg * (hw - 0.22), yb + 0.03), P(a, sg * (hw - 0.22), ya + 0.03), up, WH);   // edge lines
+        const ni = [-sg * a.nx, 0, -sg * a.nz]; qd(B, P(a, sg * hi, ya), P(b, sg * hi, yb), P(b, sg * hi, 0), P(a, sg * hi, 0), ni, CON);   // inner wall below grade
+        qd(B, P(a, sg * hi, ya), P(b, sg * hi, yb), P(b, sg * hi, Math.min(0, yb + 1.0)), P(a, sg * hi, Math.min(0, ya + 1.0)), ni, mul(CON, 0.82));   // darker splash band (road grime)
+        qd(U, P(a, sg * hi, 0), P(b, sg * hi, 0), P(b, sg * hi, TUN_YT), P(a, sg * hi, TUN_YT), ni, CON);   // above grade: inner face, cap, outer face
+        qd(U, P(a, sg * hi, TUN_YT), P(b, sg * hi, TUN_YT), P(b, sg * (hi + TUN_WT), TUN_YT), P(a, sg * (hi + TUN_WT), TUN_YT), up, CAP);
+        qd(U, P(a, sg * (hi + TUN_WT), 0), P(b, sg * (hi + TUN_WT), 0), P(b, sg * (hi + TUN_WT), TUN_YT), P(a, sg * (hi + TUN_WT), TUN_YT), [sg * a.nx, 0, sg * a.nz], CON);
+        if (near) { qd(U, P(a, sg * (hi + 0.3), TUN_YT + 1.05), P(b, sg * (hi + 0.3), TUN_YT + 1.05), P(b, sg * (hi + 0.3), TUN_YT + 1.1), P(a, sg * (hi + 0.3), TUN_YT + 1.1), [sg * a.nx, 0, sg * a.nz], RAIL);   // railing: top + mid rail, posts
+          qd(U, P(a, sg * (hi + 0.3), TUN_YT + 0.52), P(b, sg * (hi + 0.3), TUN_YT + 0.52), P(b, sg * (hi + 0.3), TUN_YT + 0.56), P(a, sg * (hi + 0.3), TUN_YT + 0.56), [sg * a.nx, 0, sg * a.nz], RAIL);
+          if (k % 1 === 0) { const c = P(a, sg * (hi + 0.3), 0); box(U, c[0], TUN_YT + 0.55, c[2], a.tx, a.tz, 0.03, 0.03, 0.55, RAIL); } } }
+      for (let j = 1; j < lanes; j++) { const o = -ea + j * 2 * ea / lanes, sm = (a.s + b.s) / 2; if ((((sm / 12) % 1) + 1) % 1 > 0.34) continue;   // lane dividers 4 m dash / 8 m gap
+        qd(B, P(a, o - 0.07, ya + 0.03), P(b, o - 0.07, yb + 0.03), P(b, o + 0.07, yb + 0.03), P(a, o + 0.07, ya + 0.03), up, WH); }
+      qd(O, P(a, -hi, 0), P(b, -hi, 0), P(b, hi, 0), P(a, hi, 0), up, BK); }   // opening (mask)
+    { const Q = S[S.length - 1], ux = -Q.tx, uz = -Q.tz;   // hazard noses at the trough start (yellow/black bands, seen from above as on the satellite)
+      for (const sg of [-1, 1]) for (let i = 0; i < 6; i++) { const c = P(Q, sg * (hi + TUN_WT / 2), 0); box(U, c[0] + ux * (0.1 + i * 0.2), 0.5, c[2] + uz * (0.1 + i * 0.2), ux, uz, 0.1, TUN_WT / 2, 0.5, i % 2 ? BK : YE); } }
+    if (T.st) for (let s = 6; s < Math.min(40, T.L - 10); s += 7.5) { const Q = S[Math.round(s / 2)]; box(U, Q.x, 0.05 + (TUN_YT - 0.05) / 2, Q.z, Q.tx, Q.tz, 0.4, hi + TUN_WT, (TUN_YT - 0.05) / 2, CAP); }   // strut beams across the trough (B)
+    // portal face (below grade: lintel, plaque, lane signals) + headwall above grade
+    const Q = S[0], tx = Q.tx, tz = Q.tz, fn = [-tx, 0, -tz], yf = Q.y, ys = yf + TUN_H, F = (o, y, d = 0) => [Q.x + Q.nx * o - tx * d, y, Q.z + Q.nz * o - tz * d];
+    qd(B, F(-hi, ys), F(hi, ys), F(hi, 0), F(-hi, 0), fn, LIN);
+    { const w = Math.min(6, hi * 2 - 1.5); qd(B, F(-w / 2, -1.35, 0.03), F(w / 2, -1.35, 0.03), F(w / 2, -0.45, 0.03), F(-w / 2, -0.45, 0.03), fn, cc([28, 70, 52]));   // name plaque (green), white lettering bars
+      for (let i = 0; i < 3; i++) { const x0 = -w / 2 + 0.5 + i * (w - 1) / 3; qd(B, F(x0, -1.1, 0.05), F(x0 + (w - 1) / 3 - 0.35, -1.1, 0.05), F(x0 + (w - 1) / 3 - 0.35, -0.7, 0.05), F(x0, -0.7, 0.05), fn, WH); } }
+    for (let j = 0; j < lanes; j++) { const o = -ea + (j + 0.5) * 2 * ea / lanes, c = F(o, 0, 0.12); box(B, c[0], ys + 0.55, c[2], tx, tz, 0.12, 0.38, 0.38, BK);   // lane-control signal: housing + green arrow lens
+      qd(B, F(o - 0.2, ys + 0.38, 0.25), F(o + 0.2, ys + 0.38, 0.25), F(o + 0.2, ys + 0.75, 0.25), F(o - 0.2, ys + 0.75, 0.25), fn, cc([40, 230, 110]), tS); }
+    { const W = hi + TUN_WT + 2.5, c = F(0, 0, -0.4); box(U, c[0], 0.7, c[2], tx, tz, 0.4, W, 0.7, LIN); box(U, c[0], 1.46, c[2], tx, tz, 0.5, W + 0.1, 0.06, CAP);   // headwall above grade + coping, railing
+      if (near) { const r = F(0, 0, -0.1); box(U, r[0], 1.52 + 1.08, r[2], tx, tz, 0.03, W, 0.03, RAIL); for (let o = -W; o <= W; o += 2) { const p = F(o, 0, -0.1); box(U, p[0], 1.52 + 0.55, p[2], tx, tz, 0.03, 0.03, 0.55, RAIL); } } }
+    // tunnel interior: straight along the portal tangent, grade continues, fades dark
+    const gr = Math.min(0.06, TUN_D / T.L), I = (d, o, y) => [Q.x + tx * d + Q.nx * o, y, Q.z + tz * d + Q.nz * o], DS = 3;
+    for (let d = 0; d < TUN_LT; d += DS) { const d1 = d + DS, f0 = yf - gr * d, f1 = yf - gr * d1, kd = 0.15 + 0.85 * Math.exp(-(d + 1.5) / 22);
+      qd(B, I(d, -hw, f0), I(d1, -hw, f1), I(d1, hw, f1), I(d, hw, f0), up, mul(AS, kd), t52);
+      for (const sg of [-1, 1]) { qd(B, I(d, sg * hw, f0 + 0.2), I(d1, sg * hw, f1 + 0.2), I(d1, sg * hi, f1 + 0.2), I(d, sg * hi, f0 + 0.2), up, mul(SH, kd));   // raised walkway + kerb
+        qd(B, I(d, sg * hw, f0), I(d1, sg * hw, f1), I(d1, sg * hw, f1 + 0.2), I(d, sg * hw, f0 + 0.2), [-sg * Q.nx, 0, -sg * Q.nz], mul(SH, kd * 0.9));
+        qd(B, I(d, sg * (hw - 0.38), f0 + 0.03), I(d1, sg * (hw - 0.38), f1 + 0.03), I(d1, sg * (hw - 0.22), f1 + 0.03), I(d, sg * (hw - 0.22), f0 + 0.03), up, mul(WH, kd));
+        const ni = [-sg * Q.nx, 0, -sg * Q.nz]; qd(B, I(d, sg * hi, f0 + 0.2), I(d1, sg * hi, f1 + 0.2), I(d1, sg * hi, f1 + 1.2), I(d, sg * hi, f0 + 1.2), ni, cc([84, 86, 88]).map(v => v * kd));   // dark dado
+        qd(B, I(d, sg * hi, f0 + 1.2), I(d1, sg * hi, f1 + 1.2), I(d1, sg * hi, f1 + 4.3), I(d, sg * hi, f0 + 4.3), ni, cc([214, 210, 196]).map(v => v * kd));   // cream panels
+        qd(B, I(d, sg * hi, f0 + 4.3), I(d1, sg * hi, f1 + 4.3), I(d1, sg * hi, f1 + TUN_H), I(d, sg * hi, f0 + TUN_H), ni, cc([70, 72, 74]).map(v => v * kd));
+        for (let q = d; q < d1; q += q < 36 ? 1.5 : 4.5) { const c = I(q + 0.5, sg * (hi - 0.12), 0); box(B, c[0], f0 - gr * (q - d) + 4.55, c[2], tx, tz, 0.6, 0.08, 0.06, cc([250, 248, 240]), tL); } }   // luminaire rows (entrance zone denser)
+      qd(B, I(d, -hi, f0 + TUN_H), I(d1, -hi, f1 + TUN_H), I(d1, hi, f1 + TUN_H), I(d, hi, f0 + TUN_H), [0, -1, 0], cc([58, 60, 62]).map(v => v * kd));   // ceiling
+      for (let j = 1; j < lanes; j++) { if (d % 12 >= 4) continue; const o = -ea + j * 2 * ea / lanes; qd(B, I(d, o - 0.07, f0 + 0.03), I(d + 4, o - 0.07, f0 - gr * 4 + 0.03), I(d + 4, o + 0.07, f0 - gr * 4 + 0.03), I(d, o + 0.07, f0 + 0.03), up, mul(WH, kd)); } }
+    for (const d of [24, 60]) for (const o of [-hw * 0.45, hw * 0.45]) { const c = I(d, o, 0), kd = 0.15 + 0.85 * Math.exp(-d / 22); box(B, c[0], yf - gr * d + TUN_H - 0.75, c[2], tx, tz, 1.9, 0.55, 0.55, cc([150, 152, 154]).map(v => v * kd)); }   // jet fans
+    { const fe = yf - gr * TUN_LT; qd(B, I(TUN_LT, -hi, fe), I(TUN_LT, hi, fe), I(TUN_LT, hi, fe + TUN_H), I(TUN_LT, -hi, fe + TUN_H), fn, cc([5, 5, 6])); }
+    qd(B, I(0, -hi - TUN_WT, -0.03), I(TUN_LT, -hi - TUN_WT, -0.03), I(TUN_LT, hi + TUN_WT, -0.03), I(0, hi + TUN_WT, -0.03), up, cc([90, 110, 70]));   // roof slab top (shadow caster: keeps the interior out of the sun)
+  }
+  for (const [x, z, rx, rz] of TUN_SHAFTS) { const N = 24, P2 = (k, f) => [x + rx * f * Math.cos(2 * Math.PI * k / N), z + rz * f * Math.sin(2 * Math.PI * k / N)];   // vent shafts: oval concrete wall + dark grating top
+    for (let k = 0; k < N; k++) { const a = P2(k, 1), b = P2(k + 1, 1), ai = P2(k, 0.93), bi = P2(k + 1, 0.93), m = 2 * Math.PI * (k + 0.5) / N, n = nz([Math.cos(m) / rx, 0, Math.sin(m) / rz]);
+      qd(U, [a[0], 0, a[1]], [b[0], 0, b[1]], [b[0], 1.5, b[1]], [a[0], 1.5, a[1]], n, CON); qd(U, [a[0], 1.5, a[1]], [b[0], 1.5, b[1]], [bi[0], 1.5, bi[1]], [ai[0], 1.5, ai[1]], up, CAP);
+      U.v([x, 1.25, z], up, cc([52, 55, 56]), z4); U.v([ai[0], 1.25, ai[1]], up, cc([52, 55, 56]), z4); U.v([bi[0], 1.25, bi[1]], up, cc([52, 55, 56]), z4); } }
+  return (TUN_KIT = { B, O, U });
+}
+function gpuTunnel(A) { const U = tunnelKit().U, a = U.a; for (let i = 0; i < a.length; i += 13) A.v([a[i], a[i + 1], a[i + 2]], [a[i + 3], a[i + 4], a[i + 5]], [a[i + 6], a[i + 7], a[i + 8]], [a[i + 9], a[i + 10], a[i + 11], a[i + 12]]); }
 function gpuPlay(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] of playKit().T) { A.v(a, n, col, z4); A.v(b, n, col, z4); A.v(d, n, col, z4); } }
 // Estate lights (TY 2026-10-31 "at night very dark, no street lamps around the estate"; typical HDB estate LED lighting, positions/sizes estimates): 8 m single-arm road lamps along the internal drives / drop-off loops (every 24 m, 1 m off the kerb), 4.5 m post-top lanterns along the jogging loops (every 20 m, alternating sides, 3 m off the centre line) and the site edge (every 26 m, 4.5 m inside), LED downlights under the covered linkways (every 6 m). Geometry (grey poles, lens mode 0.48 = lit at night only) in the opaque city range; night glow = sprites (core + halo + ground pool, 4000 K, `GPU.elamps`). Posts block walking (`ELAMP.posts`). Rebuilt per TRPF (31A gap slider).
 let ELAMP = null;
@@ -3170,7 +3310,7 @@ function drawCars(ctx, cam, env) {
     for (let s0 = ((ph + dir * v * t) % sp + sp) % sp, k = 0; s0 < R.len; s0 += sp, k++) {
       const s = dir > 0 ? s0 : R.len - s0; let i = 1; while (i < R.cum.length - 1 && R.cum[i] < s) i++; const a = (s - R.cum[i - 1]) / Math.max(1e-6, R.cum[i] - R.cum[i - 1]), ax = R.pts[2 * i - 2], az = R.pts[2 * i - 1], bx = R.pts[2 * i], bz = R.pts[2 * i + 1], Ls = Math.hypot(bx - ax, bz - az) || 1, hx = ((bx - ax) / Ls) * dir, hz = ((bz - az) / Ls) * dir;
       const x = ax + (bx - ax) * a - hz * off, z = az + (bz - az) * a + hx * off, dd = Math.hypot(x - cam.ex, z - cam.ez); if (dd > 2200) continue;
-      carAt(ctx, cam, env, x, 0.1, z, hx, hz, Math.floor(hash01(R.minx + k + j * 31, dir, 5) * 97), dd); } } }
+      carAt(ctx, cam, env, x, 0.1 + (R.tun ? tunY(R, s) : 0), z, hx, hz, Math.floor(hash01(R.minx + k + j * 31, dir, 5) * 97), dd); } } }
 }
 function deckCars(ctx, cam, env, P) {
   const day = trafDay(state.dateStr); if (day === 'off') return;
@@ -3255,7 +3395,7 @@ function shPaveRuns() {   // 4 m rows of park cells inside SH_PAVE, ≥1.5 m off
 }
 function generateTrees() {
   const X = [], Z = [], H = [], G = [], R2 = 3600, blocked = (x, z) => { const i = Math.floor((x - GX0) / CELL), j = Math.floor((z - GZ0) / CELL); if (i < 0 || j < 0 || i >= NI || j >= NJ) return false; const c = GRID[i * NJ + j]; return !!(c && c.some(P => pointIn(P, x, z))); };
-  const add = (x, z, k) => { if (Math.hypot(x, z) > R2 || blocked(x, z)) return; X.push(x); Z.push(z); H.push(8 + hash01(x, z, k) * 9); G.push(hash01(z, x, k)); };
+  const add = (x, z, k, h) => { if (Math.hypot(x, z) > R2 || blocked(x, z) || tunAt(x, z, 2)) return; X.push(x); Z.push(z); H.push(h || 8 + hash01(x, z, k) * 9); G.push(hash01(z, x, k)); };
   for (const L of LU) { if (L.c !== 2 || L.maxx < -R2 || L.minx > R2 || L.maxz < -R2 || L.minz > R2) continue;
     for (let x = Math.floor(L.minx / 22) * 22; x <= L.maxx; x += 22) for (let z = Math.floor(L.minz / 22) * 22; z <= L.maxz; z += 22) {
       const jx = x + (hash01(x, z, 3) - 0.5) * 14, jz = z + (hash01(z, x, 5) - 0.5) * 14;
@@ -3267,9 +3407,19 @@ function generateTrees() {
       if ([[4, 0], [-4, 0], [0, 4], [0, -4]].some(([a, b]) => blocked(jx + a, jz + b))) continue; add(jx, jz, 5); } }
   for (let x = -760; x <= -186; x += 12) for (let z = 320; z < 1040; z += 12) { const jx = x + (hash01(x, z, 23) - 0.5) * 3, jz = z + (hash01(z, x, 29) - 0.5) * 3;
     if (ringIn(SH_PAVE, jx, jz) && groundName(jx, jz) === 'Park / open space' && nearWaterSH(jx, jz, 14)) add(jx, jz, 4); }
-  for (const Rd of ROADS) { if (Rd.c > 3 || Rd.maxx < -R2 || Rd.minx > R2 || Rd.maxz < -R2 || Rd.minz > R2) continue; const p = Rd.pts; let carry = 0;
-    for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L2 = Math.hypot(bx - ax, bz - az); if (L2 < 0.1) continue; const ux = (bx - ax) / L2, uz = (bz - az) / L2, off = Rd.w / 2 + 2.5;
-      for (let t = 16 - carry; t < L2; t += 16) { const x = ax + ux * t, z = az + uz * t; if (ringIn(SITE_IMG, x, z)) continue; add(x - uz * off, z + ux * off, 2); add(x + uz * off, z - ux * off, 2); } carry = (carry + L2) % 16; } }   // inside the site plan: its own trees (below)
+  const RG = new Map(), RC = 20, rk = (i, j) => i * 100003 + j;   // road ribbons grid: roadside trees never stand on a carriageway (TY 2026-11-02: ECP median trees had rows on the lanes)
+  ROADS.forEach(Rd => { const p = Rd.pts; for (let i = 0; i + 3 < p.length; i += 2) { const r = Rd.w / 2 + 2; for (let a = Math.floor((Math.min(p[i], p[i + 2]) - r) / RC); a <= Math.floor((Math.max(p[i], p[i + 2]) + r) / RC); a++) for (let b = Math.floor((Math.min(p[i + 1], p[i + 3]) - r) / RC); b <= Math.floor((Math.max(p[i + 1], p[i + 3]) + r) / RC); b++) { const k = rk(a, b); (RG.get(k) || RG.set(k, []).get(k)).push(Rd, i); } } });
+  const onRd = (x, z, m, cls) => { const L = RG.get(rk(Math.floor(x / RC), Math.floor(z / RC))) || []; for (let q = 0; q < L.length; q += 2) { const Rd = L[q], i = L[q + 1], p = Rd.pts; if (cls != null && Rd.c !== cls) continue; if (segD(x, z, p[i], p[i + 1], p[i + 2], p[i + 3]) < Rd.w / 2 + m) return Rd; } return null; };
+  const MED = new Set(), addR = (x, z, k) => { if (!onRd(x, z, 1.2) && !GANTRY_HAND.some(g => Math.hypot(x - g[0], z - g[1]) < 26)) add(x, z, k); };
+  for (const Rd of ROADS) { if (Rd.c > 3 || Rd.maxx < -R2 || Rd.minx > R2 || Rd.maxz < -R2 || Rd.minz > R2) continue; const p = Rd.pts; let carry = 0, cm = 0;
+    for (let i = 0; i + 3 < p.length; i += 2) { const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L2 = Math.hypot(bx - ax, bz - az); if (L2 < 0.1) continue; const ux = (bx - ax) / L2, uz = (bz - az) / L2, hw = Rd.w / 2, off = hw + 2.5;
+      for (let t = 16 - carry; t < L2; t += 16) { const x = ax + ux * t, z = az + uz * t; if (ringIn(SITE_IMG, x, z)) continue;
+        for (const sg of [1, -1]) { if (Rd.c === 0) { let g = 0; for (let d = 0.5; d <= 14; d += 0.5) { const R2d = onRd(x - uz * sg * (hw + d), z + ux * sg * (hw + d), 0, 0); if (R2d && R2d !== Rd) { g = d; break; } } if (g) continue; }   // expressway median side: median row below
+          addR(x - uz * sg * off, z + ux * sg * off, 2); } }
+      if (Rd.c === 0 && Math.hypot(ax - UNIT134[0], az - UNIT134[1]) < 3000) for (let t = 9 - cm; t < L2; t += 9) { const x = ax + ux * t, z = az + uz * t;   // ECP planted median: one tree row on the median centre every 9 m (satellite), where the gap is ≥ 3 m
+        for (const sg of [1, -1]) { let g = 0; for (let d = 0.5; d <= 14; d += 0.5) { const R2d = onRd(x - uz * sg * (hw + d), z + ux * sg * (hw + d), 0, 0); if (R2d && R2d !== Rd) { g = d; break; } } if (g < 3) continue;
+          const mx = x - uz * sg * (hw + g / 2), mz = z + ux * sg * (hw + g / 2), key = Math.round(mx / 6) + ',' + Math.round(mz / 6); if (MED.has(key) || ringIn(SITE_IMG, mx, mz)) continue; MED.add(key); if (!onRd(mx, mz, 0.6) && !GANTRY_HAND.some(q => Math.hypot(mx - q[0], mz - q[1]) < 26)) add(mx, mz, 6, Math.min(6 + hash01(mx, mz, 6) * 4, 4 + g * 1.1)); } }   // median trees 6–10 m (kept under the 11.7 m twin-arm lamp heads, canopy over the median)
+      carry = (carry + L2) % 16; cm = (cm + L2) % 9; } }   // inside the site plan: its own trees (below)
   const tr = GEO.trpf; let mnx = Infinity, mxx = -Infinity, mnz = Infinity, mxz = -Infinity; for (let i = 0; i < tr.length; i += 2) { mnx = Math.min(mnx, tr[i]); mxx = Math.max(mxx, tr[i]); mnz = Math.min(mnz, tr[i + 1]); mxz = Math.max(mxz, tr[i + 1]); }
   const onRoad = (x, z) => SITE_ROADS.some(r => ringIn(r, x, z)), inBld = (x, z) => TRPF.some(P => pointIn(P, x, z) || Math.hypot(P.cx - x, P.cz - z) < 4), free = (x, z) => !groundBusy(x, z) && !onRoad(x, z) && !inBld(x, z);
   for (const [px, py] of GEO.siteTrees || []) { const [x, z] = SITE_PX(px, py); if (free(x, z)) add(x, z, 3); }   // site-plan canopy circles (incl. verges outside the boundary)
@@ -3281,6 +3431,7 @@ function generateTrees() {
     if (TRPF.some(P => pointIn(P, jx, jz) || Math.hypot(P.cx - jx, P.cz - jz) < 4)) continue; add(jx, jz, 3); }
   for (let i = 0, n = tr.length / 2; i < n; i++) { const ax = tr[2 * i], az = tr[2 * i + 1], bx = tr[(2 * i + 2) % tr.length], bz = tr[(2 * i + 3) % tr.length], L2 = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L2, uz = (bz - az) / L2;   // shrub hedge 1.2 m inside the boundary (realism G2, estimate)
     for (let t = 1; t < L2; t += 2.2) for (const sg of [1, -1]) { const x = ax + ux * t - uz * 1.2 * sg, z = az + uz * t + ux * 1.2 * sg; if (ringIn(tr, x, z) && free(x, z)) { X.push(x); Z.push(z); H.push(1.4 + hash01(x, z, 61) * 0.9); G.push(hash01(z, x, 63)); } } }
+  for (const T of TUNNELS) for (const Q of T.S) for (const sg of [-1, 1]) { if (hash01(Q.x, Q.z, 81 + sg) < 0.15) continue; const o = sg * (T.hi + TUN_WT + 0.9), x = Q.x + Q.nx * o, z = Q.z + Q.nz * o; if (tunAt(x, z, 0.3)) continue; X.push(x); Z.push(z); H.push(1.2 + hash01(x, z, 83) * 0.8); G.push(hash01(z, x, 85)); }   // shrub hedges along the tunnel trough walls (satellite)
   for (const [x, z, h] of VD31_SHRUBS) { X.push(x); Z.push(z); H.push(h); G.push(hash01(z, x, 73)); }   // Blk 31A void-deck apron planters
   for (const [x, z, h, b] of mscpRoofPlants()) { X.push(x); Z.push(z); H.push(h); G.push(Math.floor(b) + hash01(z, x, 71) * 0.999); }   // MSCP roof garden (base in the integer part)
   if (CONDO_SITES.length) { const inS = (x, z) => CONDO_SITES.some(S => ringIn(S.ring, x, z)); for (let i = X.length - 1; i >= 0; i--) if (inS(X[i], Z[i])) { X.splice(i, 1); Z.splice(i, 1); H.splice(i, 1); G.splice(i, 1); }   // condo plots: designed planting only
@@ -4465,7 +4616,7 @@ void main() {
       c = mix(c, untone(skyRefl(r)), 0.22 + 0.55 * F); c += vec3(1.0, 0.96, 0.86) * pow(max(dot(r, uSun), 0.0), 900.0) * uDirect * vis * 3.0 * SUNK; }
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
-    if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && vWorld.y < 30.0 && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.4 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
+    if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && vWorld.y < 30.0 && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.435 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.41 && mode < 0.435) c = mix(c, toLin(alb) * 3.2, 0.9);   /* 0.42: coloured emissive (tunnel lane signals) */ if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
   vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogCol(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist * APK));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
@@ -4658,8 +4809,10 @@ function gpuInit() {
           for (; s < Lg; s += SP) for (const sd of sides) { const x = ax + ux * s - uz * hw * sd, z = az + uz * s + ux * hw * sd;
             GPU.lampPts.push(x, ph, z); L.push(x, 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, ph, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, ph, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6); }   // halo/core pulled 6 m toward the eye (canopies of roadside trees reach the lamp heads)
           s0 = s - Lg; } }
-      for (const [x, y, z, yr] of [...bridgeKit().lamps, ...RK.lamps]) GPU.lampPts.push(x, y, z) && L.push(x, yr + 0.1, z, 1, 0, 7, 7, 1, 0.706, 0.392, 0.14, 2, 0, x, y, z, 0, 0, 1.4, 2.8, 1, 0.745, 0.47, 0.16, 0, 6, x, y, z, 0, 0, 0.35, 1.0, 1, 0.886, 0.667, 0.9, 1, 6);   // bridge / viaduct lamp heads (bridgeKit)
+      for (const [x, y, z, yr] of [...bridgeKit().lamps, ...RK.lamps]) { const X = y - yr > 11, pr = X ? 16 : 7, pa = X ? 0.3 : 0.14, pu = X ? 12 : 6, C = X ? [0.86, 0.84, 0.76, 0.9, 0.88, 0.8, 1, 0.97, 0.9] : [1, 0.706, 0.392, 1, 0.745, 0.47, 1, 0.886, 0.667];   // expressway 12 m LED lamps (LTA LED retrofit, ≈4000 K, 40 m apart): wider overlapping pools + halo pulled past the roadside canopies
+        GPU.lampPts.push(x, y, z); L.push(x, yr + 0.1, z, 1, 0, pr, pr, C[0], C[1], C[2], pa, 2, 0, x, y, z, 0, 0, 1.4, 2.8, C[3], C[4], C[5], 0.16, 0, pu, x, y, z, 0, 0, 0.35, 1.0, C[6], C[7], C[8], 0.9, 1, pu); }   // bridge / viaduct / roadKit lamp heads
       GPU.lamps = gpuBuf(new Float32Array(L)); GPU.lampN = L.length / 13; }
+    { const K = tunnelKit(); GPU.tunB = gpuBuf(new Float32Array(K.B.a.length ? K.B.a : [0])); GPU.tunBN = K.B.n; GPU.tunO = gpuBuf(new Float32Array(K.O.a.length ? K.O.a : [0])); GPU.tunON = K.O.n; }   // tunnel troughs/interiors (below grade) + their openings (stencil mask)
     if (RC) { GPU.markT = RC.markT; GPU.mark = gpuBuf(RC.m); GPU.markN = RC.n; }
     else { const K = roadKit(); GPU.markT = gpuTileSort(K.M.b, K.M.n); const m = new Float32Array(K.M.a.length ? K.M.a : [0]); GPU.mark = gpuBuf(m); GPU.markN = K.M.n; WC.rk = { m, n: K.M.n, markT: GPU.markT, lamps: K.lamps, lit: [...K.lit].map(R => ROADS.indexOf(R)) }; }   // road markings (roadKit), tiled for culling
     GPU.sm = [0, 1, 2].map(() => { const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 2048, 2048); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE], [gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE], [gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
@@ -4679,6 +4832,8 @@ function gpuInit() {
       const mv = i => { const a = sn[Math.max(0, i - 1)], b = sn[Math.min(n - 2, i)]; let mx = a[0] + b[0], mz = a[1] + b[1]; const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l; const k = hw / Math.max(0.5, mx * b[0] + mz * b[1]); return [mx * k, mz * k]; };
       for (let i = 0; i + 1 < n; i++) { const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3], [pa, qa] = mv(i), [pb, qb] = mv(i + 1);
         if (ringIn(SITE_IMG, (ax + bx) / 2, (az + bz) / 2)) continue;   // inside the site plan: plan roads (gpuGrounds) instead
+        if (R.tun) { const m = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2)), L = (u, sg) => [ax + (bx - ax) * u + sg * (pa + (pb - pa) * u), 0, az + (bz - az) * u + sg * (qa + (qb - qa) * u)];   // trough ways: 2 m pieces, none over the trough (its own road below grade)
+          for (let k = 0; k < m; k++) { const u0 = k / m, u1 = (k + 1) / m; if (tunAt(ax + (bx - ax) * (u0 + u1) / 2, az + (bz - az) * (u0 + u1) / 2)) continue; G.quad(L(u0, -1), L(u1, -1), L(u1, 1), L(u0, 1), up, asph, rt4, rt4, rt4, rt4); } continue; }
         G.quad([ax - pa, 0, az - qa], [bx - pb, 0, bz - qb], [bx + pb, 0, bz + qb], [ax + pa, 0, az + qa], up, asph, rt4, rt4, rt4, rt4); } }
     GPU.groundN = G.n; const rv = [0, 0, -2, 0], blk = [0, 0, 0];   // ground shadow receiver: ±6 km grid, 100 m cells (follows curvature)
     GPU.recvT = []; for (let bz = -6000; bz < 6000; bz += 1000) for (let bx = -6000; bx < 6000; bx += 1000) { const s0 = G.n; for (let x = bx; x < bx + 1000; x += 100) for (let z = bz; z < bz + 1000; z += 100) G.quad([x, 0.1, z], [x + 100, 0.1, z], [x + 100, 0.1, z + 100], [x, 0.1, z + 100], up, blk, rv, rv, rv, rv); GPU.recvT.push([s0, G.n - s0, bx, bx + 1000, 0, 0.2, bz, bz + 1000]); }   // 1 km blocks (frustum-culled)
@@ -4838,7 +4993,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
   if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A); gpuEstate(A);
-  if (state.showRoads) gpuBridges(A);
+  if (state.showRoads) { gpuBridges(A); gpuTunnel(A); }
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
   for (const P of ALL) if ((P.wdoor || P.wlift || (P.name === 'Blk 32A' && !P.tank)) && P.kind !== 'new' && !P.nogl) {   // nogl = physics-only (32A raster boxes spanning the corridor/slots, corridor boxes): drawing them filled the slots (TY 2026-10-31)
   const s = A.n; glPrism(A, P); own.push([P, s, A.n - s]); }   // + void-deck stair door (open while walking down there)
@@ -5301,7 +5456,7 @@ function gpuShadows(env) {
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
-    const lc = lightCull(L, k); gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); cityDraw(lc); if (!k && GPU.rkT) cityDraw(lc, GPU.rkT); for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
+    const lc = lightCull(L, k); gl.useProgram(GPU.sh.p); gpuAttrib(GPU.sh, GPU.city); cityDraw(lc); if (!k && GPU.rkT) cityDraw(lc, GPU.rkT); if (!k && GPU.tunBN && state.showRoads) { gpuAttrib(GPU.sh, GPU.tunB); gl.drawArrays(gl.TRIANGLES, 0, GPU.tunBN); gpuAttrib(GPU.sh, GPU.city); } for (const [P, s0, c] of GPU.own) if (!own || !own(P)) gl.drawArrays(gl.TRIANGLES, s0, c); if (!own && GPU.relR[1]) gl.drawArrays(gl.TRIANGLES, GPU.relR[0], GPU.relR[1]); if (GPU.newR[1] && !CMP.on) gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]);
     gl.useProgram(GPU.sht.p); gpuTrees(GPU.sht, lc); }
   gl.disable(gl.POLYGON_OFFSET_FILL); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
@@ -5364,6 +5519,12 @@ function gpuRender(cam, env, pxW, pxH) {
   // solids with depth
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city); opaque();   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
   const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
+  if (state.showRoads && GPU.tunON) {   // tunnel troughs + interiors: below grade, so drawn only where the trough opening (y 0) is visible (stencil bit 8; the ground layer writes no depth)
+    const zm = GPU.zm || GPU.dep; gl.enable(gl.STENCIL_TEST); gl.stencilMask(8); gl.clear(gl.STENCIL_BUFFER_BIT); gl.stencilFunc(gl.ALWAYS, 8, 8); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+    gl.useProgram(GPU.zm.p); gpuCam(GPU.zm, cam, NEAR, FAR); gl.uniform1f(GPU.zm.u.uMirror, 0); gl.colorMask(false, false, false, false); gl.depthMask(false); gl.depthFunc(gl.LESS); gpuAttrib(GPU.zm, GPU.tunO); gl.drawArrays(gl.TRIANGLES, 0, GPU.tunON);
+    gl.colorMask(true, true, true, true); gl.depthMask(true); gl.depthFunc(gl.LEQUAL); gl.stencilMask(0); gl.stencilFunc(gl.EQUAL, 8, 8); gl.useProgram(M.p); gpuAttrib(M, GPU.tunB); gl.drawArrays(gl.TRIANGLES, 0, GPU.tunBN);
+    if (fx.tcar) { gpuAttrib(M, GPU.dyn.tcar); gl.drawArrays(gl.TRIANGLES, 0, fx.tcar); }   // cars down in the troughs
+    gl.stencilMask(0xff); gl.disable(gl.STENCIL_TEST); gpuAttrib(M, GPU.city); }
   gpuCam(GPU.tree, cam, NEAR, FAR); gpuEnv(GPU.tree, env, false); gpuTrees(GPU.tree, cc, cam.ex, cam.ez); gpuGrass(cam);
   gl.enable(gl.BLEND); if (GPU.newR[1] && !CMP.on) { const a = state.xray ? 0.28 : state.opacity; gl.useProgram(M.p); gl.uniform1f(M.u.uAlpha, a); gpuAttrib(M, GPU.city); gl.drawArrays(gl.TRIANGLES, GPU.newR[0], GPU.newR[1]); gl.uniform1f(M.u.uAlpha, 1);
     gl.useProgram(F.p); gl.uniform1f(F.u.uClip, 0); gpuAttrib(F, GPU.edges); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.edges); gl.vertexAttribPointer(F.a.aPos, 3, gl.FLOAT, false, 24, 0);
@@ -5660,22 +5821,23 @@ function peopleGeo(A, cam) { const hr = state.hour % 24, busy = hr < 5.5 ? 0 : h
     let ux = (b[0] - a[0]) / L * dd, uz = (b[1] - a[1]) / L * dd, off = (hash01(i, 4.4, 9) - 0.5) * 1.2; const x = a[0] + (b[0] - a[0]) * f - uz * off, z = a[1] + (b[1] - a[1]) * f + ux * off;
     if (!cam.inWedge(x - 1, x + 1, z - 1, z + 1, 700)) continue; personMesh(A, x, 0.02, z, ux, uz, t * v * (run ? 2.6 : 3.4) / 1.4 + i, i * 7 + 3, run, t0); } }
 function gpuFx0(cam, env) {
-  const add = [], opq = [], la = [], lo = [], Sh = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
+  const add = [], opq = [], la = [], lo = [], Sh = glArr(), Tc = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
   SHIPS.forEach(([x, z, len], i) => shipMesh(Sh, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i));
   peopleGeo(Sh, cam); mscpLiftGeo(Sh); for (const q of mscpCarsNow()) if (cam.inWedge(q.wx - 3, q.wx + 3, q.wz - 3, q.wz + 3, 900)) carMesh(Sh, q.wx, q.y, q.wz, q.hx, q.hz, q.k, [0, 0, 0.3, 0], Math.hypot(q.wx - cam.ex, q.y - cam.hEye, q.wz - cam.ez) < CAR_LOD);   // carpark: parked cars by hour/day (view wedge, detailed ≤ CAR_LOD)   // stage 5 (2026-10-31): typed ship meshes
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
     shipMesh(Sh, x, z, len, dir, 20 + MOVERS.indexOf(Mv));
     S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2); });
   if (state.showRoads) { const cc = {};
-    CAR_SINK = (x, y, z, hx, hz, k, dd) => { const dn = Math.hypot(x - cam.ex, z - cam.ez), near = dn < 700; if (near) carMesh(Sh, x, y, z, hx, hz, k, undefined, dn < CAR_LOD, true);   // ≤700 m: 3D car (realism 2026-10-31); beyond: sprite rect
+    CAR_SINK = (x, y, z, hx, hz, k, dd) => { const dn = Math.hypot(x - cam.ex, z - cam.ez), near = dn < 700; if (y < -0.3) { if (near) carMesh(Tc, x, y, z, hx, hz, k, undefined, dn < CAR_LOD, true); return; }   // in a tunnel trough: own buffer, drawn through the trough mask
+      if (near) carMesh(Sh, x, y, z, hx, hz, k, undefined, dn < CAR_LOD, true);   // ≤700 m: 3D car (realism 2026-10-31); beyond: sprite rect
       if (night) { const tow = hx * (cam.ex - x) + hz * (cam.ez - z) > 0; S(add, x, y + 0.8, z, 0, 0, 0.8, 1.2, tow ? [1, 0.97, 0.88] : [1, 0.16, 0.12], tow ? 0.9 : 0.8, 1); }
       else if (!near) { const i = k % CAR_COL.length, c = cc[i] || (cc[i] = shade(CAR_COL[i], [0, 1, 0], env).map(v => v / 255)); S(opq, x, y + 0.8, z, hx, hz, 2.25, 0.9, c, 1, 3); } };
     try { drawCars(null, cam, env); for (const P of DECKS) { if (P.name === 'Pier' || Math.hypot(P.cx - cam.ex, P.cz - cam.ez) > 2200 || !cam.inWedge(P.minx, P.maxx, P.minz, P.maxz, 2300)) continue; deckCars(null, cam, env, P); } } finally { CAR_SINK = null; } }
   { const ax = Math.sin(60 * DEG), az = Math.cos(60 * DEG), P = t => [FLYER[0] + ax * 75 * Math.cos(t), 90 + 75 * Math.sin(t), FLYER[1] + az * 75 * Math.cos(t)], o = night ? la : lo, c = night ? [150 / 255, 200 / 255, 1] : [235 / 255, 235 / 255, 240 / 255];   // Flyer rim (+ 24 lit capsules at night)
     if (night) for (let i = 0; i < 48; i++) { const p = P((2 * Math.PI * i) / 48), q = P((2 * Math.PI * (i + 1)) / 48); o.push(...p, ...c, 1, ...q, ...c, 1); if (night && i % 2 === 0) S(add, ...p, 0, 0, 0, 1.3, [200 / 255, 230 / 255, 1], 0.8, 1); } }
   if (night) gpuNight(env, add, la, S);
-  gpuDyn('ship', Sh.a); gpuDyn('opq', opq); gpuDyn('add', add); gpuDyn('la', la); gpuDyn('lo', lo);
-  return { ship: Sh.n, opq: opq.length / 13, add: add.length / 13, la: la.length / 7, lo: lo.length / 7 };
+  gpuDyn('ship', Sh.a); gpuDyn('tcar', Tc.a); gpuDyn('opq', opq); gpuDyn('add', add); gpuDyn('la', la); gpuDyn('lo', lo);
+  return { ship: Sh.n, tcar: Tc.n, opq: opq.length / 13, add: add.length / 13, la: la.length / 7, lo: lo.length / 7 };
 }
 function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, crown disc, glow; Garden Rhapsody colour cycle), dome glow, MBS SkyPark edge, Spectra beams
   const hr = state.hour, [yy, mm, dd] = state.dateStr.split('-').map(Number), dow = new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay(), rhapsody = inShow(hr, [19.75, 20.75]), spectra = inShow(hr, dow === 5 || dow === 6 ? [20, 21, 22] : [20, 21]);
