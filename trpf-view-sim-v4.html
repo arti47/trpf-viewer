@@ -963,7 +963,7 @@ const EXISTING = GEO.b.map(([h, e, n, flat]) => makePrism(n || '', 'existing', h
 // Hand-modelled CBD / Marina Bay (TY 2026-10-31 "buildings don't look real", stage 1; physics too): OSM footprints, shapes from published descriptions, sizes estimates (est 2).
 // Stacked pieces carry P.sb/P.st (storey base / building top) so the window grid + parapet coping run continuously across the pieces; topc = facade colour (no dark ledges).
 const MBS_AX = { a: [-2006, -1561], b: [-1919, -1352] };   // SkyPark long axis (Spectra beams)
-const CBD_HAND = [];
+const CBD_HAND = [], LM_KIT = [];   // LM_KIT: render-only prisms (glPrism in gpuWorld; not in physics)
 {
   const P0 = n => EXISTING.findIndex(P => P.name === n), take = n => { const i = P0(n); if (i < 0) return null; const P = EXISTING[i]; EXISTING.splice(i, 1); return P; };
   const add = (n, h, b, flat, o) => { const P = Object.assign(makePrism(n, 'existing', h, b, flat, 2), { hand: true }, o || {}); EXISTING.push(P); CBD_HAND.push(P); return P; };
@@ -984,8 +984,18 @@ const CBD_HAND = [];
       add(n, tw, 0, box(u0, u1, v0, v0 + W * 0.48), o);   // W leg, vertical
       add(n, tw, Hj, box(u0, u1, v0 + W * 0.46, v1), o);   // E leg above the join
       const K = 22; for (let i = 0; i < K; i++) { const y0 = (Hj * i) / K, y1 = (Hj * (i + 1)) / K, g = W * 0.35 * Math.pow(1 - (y0 + y1) / 2 / Hj, 1.5);   // E leg below the join: curved, leaning in
-        add(n, y1, y0, box(u0, u1, v0 + W * 0.52 + g, v1 + g), o); } }
-    const S = take('SkyPark'); if (S) add('Marina Bay Sands SkyPark', 200, 191, fl(ptsOf(S)), { plain: true, alb: [214, 218, 222], topc: [120, 150, 110], botc: [190, 194, 198] });   // hull + garden/pool deck
+        add(n, y1, y0, box(u0, u1, v0 + W * 0.52 + g, v1 + g), o); }
+      // round 6: light slab-edge band every storey (55 storeys ≈ 3.47 m; 0.3 m deep, 0.25 m proud; render only) → the towers' horizontal striping
+      const band = (y, f) => { const P = makePrism('MBS band', 'existing', y + 0.32, y, f, 2); P.plain = true; P.alb = [214, 220, 224]; P.topc = [200, 206, 210]; LM_KIT.push(P); }, e = 0.25;
+      for (let y = 3.47; y < tw - 1; y += 3.47) { if (y >= Hj) band(y, box(u0 - e, u1 + e, v0 - e, v1 + e)); else { band(y, box(u0 - e, u1 + e, v0 - e, v0 + W * 0.48 + e)); const g = W * 0.35 * Math.pow(1 - y / Hj, 1.5); band(y, box(u0 - e, u1 + e, v0 + W * 0.52 + g - e, v1 + g + e)); } } }
+    const S = take('SkyPark'); if (S) { add('Marina Bay Sands SkyPark', 200, 191, fl(ptsOf(S)), { plain: true, alb: [214, 218, 222], topc: [120, 150, 110], botc: [190, 194, 198] });   // hull + garden/pool deck
+      // round 6: boat-hull underside (render only, estimates): 2 keel steps narrower across (v) so the deck reads as a curved hull, not a slab; dark glass rim band along the deck edge
+      const c = [S.cx, S.cz], sv = (k) => fl(ptsOf(S).map(([x, z]) => { const dx = x - c[0], dz = z - c[1], a = dx * u[0] + dz * u[1], b = dx * v[0] + dz * v[1]; return [c[0] + a * (0.985 - 0.04 * (1 - k)) * u[0] + b * k * v[0], c[1] + a * (0.985 - 0.04 * (1 - k)) * u[1] + b * k * v[1]]; }));
+      [[189.4, 191, 0.82], [187.6, 189.4, 0.58]].forEach(([y0, y1, k]) => { const P = makePrism('MBS SkyPark hull', 'existing', y1, y0, sv(k), 2); P.plain = true; P.alb = [206, 210, 214]; P.botc = [176, 180, 186]; LM_KIT.push(P); });
+      { const P = makePrism('MBS SkyPark rim', 'existing', 201.3, 200, fl(ptsOf(S)), 2); P.plain = true; P.alb = [120, 140, 150]; P.topc = [120, 150, 110]; LM_KIT.push(P); }   // glass balustrade band (solid stand-in) + garden deck
+      { let a0 = 1e9, a1 = -1e9, b0 = 1e9; for (const [x, z] of ptsOf(S)) { const a = (x - c[0]) * u[0] + (z - c[1]) * u[1], b = (x - c[0]) * v[0] + (z - c[1]) * v[1]; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); }
+        const q = (a, b) => [c[0] + a * u[0] + b * v[0], c[1] + a * u[1] + b * v[1]], m = (a0 + a1) / 2, L = 146 / 2, P = makePrism('MBS SkyPark pool', 'existing', 201.4, 201.2, fl([q(m - L, b0 + 3), q(m + L, b0 + 3), q(m + L, b0 + 13), q(m - L, b0 + 13)]), 2);
+        P.plain = true; P.alb = [80, 150, 180]; P.topc = [70, 150, 190]; LM_KIT.push(P); } }   // infinity pool (146 m) along the city (W) edge; position estimate
   }
   // Guoco Tower (2016, 290 m, 64 storeys, SOM): podium over Tanjong Pagar MRT + rectangular tower whose facade bands stop at staggered heights (stepped crown); band heights estimates
   { const T = take('Guoco Tower'); if (T) { const p = ptsOf(T), A = p[0], B = p[1], D = p[3], ux = [B[0] - A[0], B[1] - A[1]], vx = [D[0] - A[0], D[1] - A[1]], q = (a, b) => [A[0] + ux[0] * a + vx[0] * b, A[1] + ux[1] * a + vx[1] * b];
@@ -5018,6 +5028,18 @@ function gpuRoofKit(A) { const al = [150, 152, 150], tp = [128, 130, 130];
       glPrism(A, { n: 4, xs, zs, cx: x, cz: z, base: P.h, h: P.h + hh, kind: 'existing', name: 'roof plant', plain: true, alb: al, topc: tp }); } } }
 // near-building detail (less blocky 2026-10-31; visual only, sizes estimates): existing buildings ≤1 km of #134 get a 1.0 m roof parapet (0.25 m thick, light coping);
 // residential (P.res) ≤600 m get a slab ledge per storey (0.15 m, 0.3 m proud) on edges ≥3 m; vertex budget 400k, nearest first
+// Seawall line (round 6; render only, estimates): along every land-use edge that borders water (LU class 0 or sea outside the LU) ≤4 km of #134: a light concrete
+// coping 0.45 m wide × 0.35 m on the land side + a dark wet face 0.15 m × 0.3 m on the water side, so the shore reads as a crisp edge instead of grass meeting water.
+// Water and land are both drawn at y 0, so the real 2–3 m seawall face can't show; this is the visible stand-in.
+function shoreKit() { if (shoreKit.L) return shoreKit.L; const out = [], wet = (x, z) => { if (x < -5195 || x > 2595 || z < -4195 || z > 1795) return false; const L = luAt(x, z); return !L || L.c === 0; };
+  for (const L of LU) { if (L.c === 0) continue; for (const R of L.rings) { const n = R.length / 2;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n, x0 = R[2 * i], z0 = R[2 * i + 1], x1 = R[2 * j], z1 = R[2 * j + 1], ex = x1 - x0, ez = z1 - z0, Ln = Math.hypot(ex, ez); if (Ln < 2) continue;
+      const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2; if (Math.hypot(mx - UNIT134[0], mz - UNIT134[1]) > 4000) continue; let nx = -ez / Ln, nz = ex / Ln;
+      if (!wet(mx + nx * 2.5, mz + nz * 2.5)) { if (!wet(mx - nx * 2.5, mz - nz * 2.5)) continue; nx = -nx; nz = -nz; } if (wet(mx - nx * 2.5, mz - nz * 2.5)) continue;   // n → water side; skip slivers
+      const seg = (a0, a1) => [x0 + nx * a0, z0 + nz * a0, x1 + nx * a0, z1 + nz * a0, x1 + nx * a1, z1 + nz * a1, x0 + nx * a1, z0 + nz * a1];
+      const c = makePrism('Seawall coping', 'existing', 0.35, 0, seg(-0.45, 0), 2); c.plain = true; c.alb = [204, 202, 194]; c.topc = [214, 212, 204]; out.push(c);
+      const w = makePrism('Seawall face', 'existing', 0.3, 0, seg(0, 0.15), 2); w.plain = true; w.alb = [64, 72, 66]; w.topc = [96, 100, 92]; out.push(w); } } }
+  return (shoreKit.L = out); }
 function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.h >= 10 && P.n >= 3 && P.n <= 64 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000).sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]));
   const n0 = A.n, wl = [236, 234, 228], cp = [205, 205, 200];
   for (const P0 of L) { if (A.n - n0 > 4e5) break; const P = P0.massTop ? Object.assign(Object.create(P0), { xs: P0.massTop.xs, zs: P0.massTop.zs, n: P0.massTop.n }) : P0, fa = facadeAlb(P0), pa = fa.map(c => Math.min(255, c * 1.05 + 6)), dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), ledge = P.res === true && dd < 600;
@@ -5070,7 +5092,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A); gpuEstate(A);
   if (state.showRoads) { gpuBridges(A); gpuTunnel(A); }
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
