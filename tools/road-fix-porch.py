@@ -25,10 +25,14 @@ HAND = [[(306.7, 571.5), (377.5, 576.5), (384.2, 577.7), (374.2, 623), (374, 669
          (1040.5, 520), (1041, 535), (997, 535), (997, 520), (995, 513), (990, 508), (980, 506.5), (956, 505), (935, 504.5), (926, 503), (918, 500),
          (930, 494), (939, 489), (941, 484), (940.5, 468), (934, 451), (929, 447), (920, 440)]]
 ISLANDS = [(329.2, 608, 18.5)]
+# 31A drive-thru (TY 2026-11-02 "there should be a drive thru"): ~4 m lane under the canopy W of the green strip, strip = island
+HAND.append([(904, 441), (915, 433), (932, 446), (930, 450), (930, 485), (934, 490), (925, 503), (912, 500), (911, 488), (912, 452)])
+STRIPS = [[(930, 448), (941, 451), (941.5, 486), (936, 489), (930, 486)]]
 zi = Image.new('L', (W, H), 0); zd = ImageDraw.Draw(zi)
 for z in ZONES: zd.polygon([f(*p) for p in z], fill=255); d.polygon([f(*p) for p in z], fill=0)
 for h in HAND: d.polygon([f(*p) for p in h], fill=255)
 for cx, cy, r in ISLANDS: d.ellipse([f(cx - r, cy - r), f(cx + r, cy + r)], fill=0)
+for q in STRIPS: d.polygon([f(*p) for p in q], fill=0)
 m = np.asarray(im, np.float32) / 255
 # extend roads that touch the image border outward (edge replicate) so the border doesn't round them off
 p0, p1 = PAD * SC + 2, PAD * SC + IW * SC - 3; q0, q1 = PAD * SC + 2, PAD * SC + IH * SC - 3
@@ -39,7 +43,7 @@ cs = measure.find_contours(np.pad(g, 1), 0.5)
 pl = []
 for c in cs:
     P = Polygon([((cc - 1 + 0.5) / SC - PAD, (rr - 1 + 0.5) / SC - PAD) for rr, cc in c]).buffer(0)
-    if P.area * PX * PX >= 25: pl.append(P)
+    if P.area * PX * PX >= 12: pl.append(P)
 pl.sort(key=lambda p: -p.area)
 depth = [sum(1 for o in pl if o is not p and o.area > p.area and o.contains(p.representative_point())) for p in pl]
 U = unary_union([p for p, k in zip(pl, depth) if k % 2 == 0])
@@ -53,7 +57,7 @@ for p in G:
     if p.area * PX * PX < 25: continue
     newL.append(dp(list(p.exterior.coords)))
     for h in p.interiors:
-        if Polygon(h).area * PX * PX >= 25: newL.append(dp(list(h.coords)))
+        if Polygon(h).area * PX * PX >= 12: newL.append(dp(list(h.coords)))
 # trapezoids
 def iv(y):
     s = U.intersection(LineString([(-5, y), (IW + 5, y)])); out = []
