@@ -3329,7 +3329,7 @@ function liftGo(f) { if (!state.walk || !LIFT.car || LIFT.busy) return; const L 
   LIFT.busy = 1; LIFT.goal = f; liftPanel(); liftDoor(0, () => { LIFT.pos = slabAt(state.obsFloor); LIFT.dest = slabAt(f); LIFT.dir = Math.sign(LIFT.dest - LIFT.pos); LIFT.v = 0; }); }
 function liftArrive() { const f = LIFT.goal; state.obsFloor = f; state.walk.Z = 0; UW_CACHE.key = ''; renderAll(); liftPanel(); setTimeout(() => liftDoor(1, () => { LIFT.busy = 0; LIFT.goal = 0; liftPanel(); liftIdle(); }), 500); }
 function liftPanel() {
-  let el = $('liftPanel'); const on = !!(state.walk && LIFT.car); if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'liftPanel'; perspectiveCanvas.parentNode.appendChild(el);
+  let el = $('liftPanel'); const on = !!(state.walk && !state.walk.look && LIFT.car); if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'liftPanel'; perspectiveCanvas.parentNode.appendChild(el);
     el.style.cssText = 'position:absolute;right:64px;top:50%;transform:translateY(-50%);z-index:17;padding:8px;border-radius:12px;background:rgba(13,20,36,.86);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:repeat(5,30px);gap:4px;font:600 11px -apple-system,Inter,sans-serif;color:#e2e8f0';
     el.addEventListener('click', e => { const b = e.target.closest('[data-f],[data-d]'); if (!b) return; if (b.dataset.f) liftGo(+b.dataset.f); else if (!LIFT.busy) { clearTimeout(LIFT.idle); if (+b.dataset.d) liftDoor(1, liftIdle); else liftDoor(0); } }); }
   el.style.display = on ? 'grid' : 'none'; if (!on) { LIFT.sig = ''; return; } const LZ = LIFTS.find(q => q.id === LIFT.car), cur = LIFT.dir ? liftFloorAt(LIFT.pos) : state.obsFloor, g = LIFT.goal, arw = LIFT.dir > 0 ? '▲' : LIFT.dir < 0 ? '▼' : '', sig = [LIFT.car, cur, g, arw, LIFT.busy].join();
@@ -3370,7 +3370,7 @@ const walkStep = k => { const s = walkRunning() ? 0.4 : 0.15; walkVec(k === 'lef
 const WALK_V = 1.4, RUN_V = 3.6;   // m/s: walk; run (jog, estimate; TY 2026-10-31 "run feature")
 const WALK_RUN = { on: false, shift: false }, walkRunning = () => WALK_RUN.on || WALK_RUN.shift;
 function walkVec(off, st) {   // move st m along heading + off° (plan frame), sliding along walls; split into ≤0.15 m substeps (run steps can't skip thin walls / stair treads)
-  const sp = curSpot(); if (!state.walk || !sp) return; const n = Math.max(1, Math.ceil(Math.abs(st) / 0.15)), f0 = state.obsFloor, sp0 = sp.id;
+  const sp = curSpot(); if (!state.walk || state.walk.look || !sp) return; const n = Math.max(1, Math.ceil(Math.abs(st) / 0.15)), f0 = state.obsFloor, sp0 = sp.id;
   for (let i = 0; i < n && state.walk && !LIFT.busy; i++) walkSub(off, st / n);
   if (state.spot !== sp0 || state.obsFloor !== f0) renderAll(); else { renderView(); drawWalkMap(); }
 }
@@ -3386,10 +3386,12 @@ function walkSub(off, st) {
 }
 function setWalk(on) {
   const sp = curSpot() || UNIT_SPOTS[0], S = UNIT_PLAN.spots[sp.id];
-  if (on) { if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); if (onGround()) state.obsFloor = 2; }
+  if (on) { if (onGround()) state.obsFloor = 2; if (!curSpot()) { state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } { const [X, Y] = S.walk0 || spotEyeP(S, Math.max(0.3, state.standDist)); state.walk = { X, Y, Z: 0 }; if (S.walk0) state.heading = UNIT_FN; } state.showBalcony = true; $('balconyToggle').checked = true; } else { state.walk = null; walkMapBig(false); clearTimeout(LIFT.idle); if (LIFT.raf > 0) cancelAnimationFrame(LIFT.raf); Object.assign(LIFT, { open: '', car: '', o: 0, tgt: 0, busy: 0, dir: 0, raf: 0, pend: null, goal: 0 }); UW_CACHE.key = ''; FIX_CACHE.key = ''; liftPanel(); if (onGround()) state.obsFloor = 2; }
   if (on && matchMedia(PHONE_MQ).matches && PNL.open.length) { PNL.open = []; pnlApply(); }   // phone: sheet would cover the walk pad
   walkUI(on); renderAll();
 }
+// Ground look view (TY 2026-11-02 "at ground floor, close walk mode → back at the unit"): Stop on the ground keeps state.walk with look = 1 → eye stays put, joystick/minimap/keys/door taps/hand/lift panel off, drag still turns; Walk resumes; a floor ≥2 on the strip, a room, ⌂ or Room interior off leave it (setWalk(false) → 2F as before)
+function walkPark(on) { const w = state.walk; if (!w) return; if (on) { w.look = 1; walkMapBig(false); liftPanel(); mlPanel(false); } else { delete w.look; liftUpdate(w.X, w.Y); if (mscpIn(w.X, w.Y)) mlUpdate(w.X, w.Y); } walkUI(!on); renderAll(); }
 // Floor strip 1F (TY 2026-11-01 "go to ground floor"): void deck = walk mode on the ground, start in the 32A lift lobby facing S (out through the corridor line); Stop on the ground → 2F (no window view at 1F)
 const GROUND0 = [21.5, 13.6];
 function goGround() { if (!curSpot()) { const sp = UNIT_SPOTS[0]; state.spot = sp.id; state.vx = sp.x; state.vz = sp.z; } state.obsFloor = 1; state.walk = { X: GROUND0[0], Y: GROUND0[1], Z: 0 }; state.heading = UNIT_FN; state.pitchDeg = 0; state.showBalcony = true; $('balconyToggle').checked = true; UW_CACHE.key = ''; FIX_CACHE.key = ''; liftUpdate(GROUND0[0], GROUND0[1]);
@@ -3401,7 +3403,7 @@ function walkUI(on) { $('walkBtn').setAttribute('aria-pressed', on ? 'true' : 'f
 // Resume after refresh (TY 2026-10-30 "remain in the previous spot"): viewer state (spot/position, floor, heading, tilt, lens, posture, room interior, windows, walk X/Y/Z, time, date) in localStorage `trpf134.view`;
 // saved every 2 s when changed + on pagehide/hidden; restored in initApp2 before the first render. Date saved as 'today' when it was today (a later visit opens on its own today). World/scenario not saved.
 const VIEW_KEYS = ['spot', 'vx', 'vz', 'obsFloor', 'heading', 'pitchDeg', 'focalLength', 'standDist', 'eyeOffset', 'posture', 'showBalcony', 'winOpen', 'hour'];
-function viewSave() { if (!initialized || LIFT.busy || ML.busy) return; const o = {}; VIEW_KEYS.forEach(k => { o[k] = state[k]; }); o.date = state.dateStr === todayISO() ? 'today' : state.dateStr; o.lv = 2; o.walk = state.walk ? { X: state.walk.X, Y: state.walk.Y, Z: state.walk.Z || 0 } : null;
+function viewSave() { if (!initialized || LIFT.busy || ML.busy) return; const o = {}; VIEW_KEYS.forEach(k => { o[k] = state[k]; }); o.date = state.dateStr === todayISO() ? 'today' : state.dateStr; o.lv = 2; o.walk = state.walk ? { X: state.walk.X, Y: state.walk.Y, Z: state.walk.Z || 0, look: state.walk.look ? 1 : 0 } : null;
   const j = JSON.stringify(o); if (j !== viewSave.j) { viewSave.j = j; try { localStorage.setItem('trpf134.view', j); } catch (_) {} } }
 function viewLoad() { let o; try { o = JSON.parse(localStorage.getItem('trpf134.view') || 'null'); } catch (_) { return; } if (!o || typeof o !== 'object') return;
   const num = (k, a, b) => { const v = o[k]; if (typeof v === 'number' && isFinite(v) && v >= a && v <= b) state[k] = v; };
@@ -3411,7 +3413,7 @@ function viewLoad() { let o; try { o = JSON.parse(localStorage.getItem('trpf134.
   if (typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) state.dateStr = o.date;
   const w = o.walk; if (w && state.spot && [w.X, w.Y, w.Z].every(v => typeof v === 'number' && isFinite(v))) { const cp = state.obsFloor === 1 && mscpIn(w.X, w.Y); state.walk = { X: w.X, Y: w.Y, Z: cp ? clamp(w.Z, -1, 40) : clamp(w.Z, -1.4, 1.39) };   // carpark (TY 2026-11-01): Z = height above ground on decks/ramps/roof
     if (cp) { const [x, z] = mlLoc(w.X, w.Y); if (mlInCar(x, z)) { ML.lv = mlLvAt(state.walk.Z); ML.y = MSCP_LV[ML.lv]; ML.o = ML.tgt = 1; } }   // in the carpark lift: car waits at that level, doors open
-    if (walkFree(w.X, w.Y, 0, true)) { state.showBalcony = true; walkUI(true); liftUpdate(w.X, w.Y); if (cp) mlUpdate(w.X, w.Y); } else state.walk = null; }
+    if (walkFree(w.X, w.Y, 0, true)) { state.showBalcony = true; if (w.look && state.obsFloor <= 1) { state.walk.look = 1; walkUI(false); } else { walkUI(true); liftUpdate(w.X, w.Y); if (cp) mlUpdate(w.X, w.Y); } } else state.walk = null; }
   if (state.obsFloor < 2 && !state.walk) state.obsFloor = 2;
   viewSave.j = JSON.stringify(o); }
 // big-map labels (plan m) from the HDB storey plan (TY 2026-10-29, ≈16.5 px/m): neighbouring units placed beside their entrances, common areas
@@ -5401,7 +5403,7 @@ function gpuRenderInterior(cam, env, kIn) {
   const LS = ltState(), lit0 = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
   gpuCam(M, cam, 0.05, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, (0.12 + (lit0 - 0.12) * LS.kCov) * kIn); gl.uniform1f(M.u.uEmis, LS.on ? 1.35 : clamp(lit0 * kIn, 0.45, 0.95));
   gl.uniform2f(M.u.uPO, ...Wm.o); gl.uniform2f(M.u.uPU, ...Wm.u); gl.uniform2f(M.u.uPN, ...Wm.n); gl.uniform2f(M.u.uPP, ...Wm.p);
-  const HV = state.walk && HAND.m ? handGeo(cam) : null, Ls = (LS.on ? ltCached().L : []).slice(0, HV && HV.light ? 27 : 28), p4 = [], r4 = [], c3 = [];
+  const HV = state.walk && !state.walk.look && HAND.m ? handGeo(cam) : null, Ls = (LS.on ? ltCached().L : []).slice(0, HV && HV.light ? 27 : 28), p4 = [], r4 = [], c3 = [];
   for (const l of Ls) { p4.push(...GPU.W(l.p[0], l.p[1], l.p[2]), l.I); r4.push(...l.r); c3.push(...l.c); }   // room lights (shader, clipped per room)
   if (HV && HV.light) { p4.push(...HV.light, 0.35 * (1.15 - lit0)); r4.push(-99, -99, 99, 99); c3.push(0.3, 1, 0.4); }   // saber glow on the room
   const nl = p4.length / 4; gl.uniform1i(M.u.uNL, nl); if (nl) { gl.uniform4fv(M.u['uLp[0]'], p4); gl.uniform4fv(M.u['uLR[0]'], r4); gl.uniform3fv(M.u['uLcol[0]'], c3); } if (HV) HV.nl = nl;
@@ -5874,7 +5876,7 @@ document.querySelector('.hint-where').textContent = matchMedia('(max-width: 640p
 $('helpBtn').addEventListener('click', () => hintShow(true)); $('hintOk').addEventListener('click', () => hintShow(false)); $('hint').addEventListener('click', e => { if (e.target.id === 'hint') hintShow(false); });
 if (!UI.hint) hintShow(true);
 $('labelsToggle').addEventListener('change', e => { state.showLabels = e.target.checked; renderAll(); });
-$('walkBtn').addEventListener('click', () => setWalk(!state.walk));
+$('walkBtn').addEventListener('click', () => { const w = state.walk; if (w && w.look) walkPark(false); else if (w && onGround()) walkPark(true); else setWalk(!w); });   // ground: Stop parks the eye where it is (TY 2026-11-02), Walk resumes from there
 const LENS = [13, 26, 50, 77], LENS_LABEL = { 13: '0.5×', 26: '1×', 50: 'Eye', 77: '3×' };   // 50 mm = human-eye default (TY 2026-10-31)
 $('weatherSel').innerHTML = Object.entries(WEATHER).map(([k, W]) => `<option value="${k}">${W.label}</option>`).join('');
 $('trafSel').innerHTML = Object.entries(TRAF_DAYS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
@@ -5923,7 +5925,7 @@ function doorToggle() { if (!state.walk) return; const { X, Y } = state.walk, a 
 function doorFlip(id) { if (UNIT_W.dc[id]) delete UNIT_W.dc[id]; else UNIT_W.dc[id] = 1; furnChanged(); wallUI(); furnDrawPlan(); renderAll(); }
 // Walk: tap a door (leaf or doorway) in the 3D view → toggle it (owner 2026-10-27). Pixel ray → plan frame; nearest hit vs walls (non-door) wins, ≤6 m.
 function doorTap(px, py) {
-  const cv = perspectiveCanvas, w = cv._w, h = cv._h; if (!state.walk || !w) return false;
+  const cv = perspectiveCanvas, w = cv._w, h = cv._h; if (!state.walk || state.walk.look || !w) return false;
   const yaw = state.heading * DEG, pt = state.pitchDeg * DEG, fPx = (w / SENSOR_W) * state.focalLength, xc = (px - w / 2) / fPx, yc = -(py - h / 2) / fPx;
   const dy = yc * Math.cos(pt) + Math.sin(pt), zr = -yc * Math.sin(pt) + Math.cos(pt), dx = xc * Math.cos(yaw) + zr * Math.sin(yaw), dz = -xc * Math.sin(yaw) + zr * Math.cos(yaw);
   const nb = UNIT_FN * DEG, dX = dx * Math.cos(nb) - dz * Math.sin(nb), dY = -(dx * Math.sin(nb) + dz * Math.cos(nb)), o = [state.walk.X, state.walk.Y, state.eyeOffset], d = [dX, dY, dy];
@@ -5943,7 +5945,7 @@ $('walkRun').addEventListener('pointerdown', e => e.stopPropagation());
 $('walkRun').addEventListener('click', e => { e.stopPropagation(); WALK_RUN.on = !WALK_RUN.on; $('walkRun').setAttribute('aria-pressed', String(WALK_RUN.on)); buzz(); });
 ['keydown', 'keyup'].forEach(ev => window.addEventListener(ev, e => { if (e.key === 'Shift') WALK_RUN.shift = ev === 'keydown'; }));
 window.addEventListener('blur', () => { WALK_RUN.shift = false; });
-window.addEventListener('keydown', e => { if (!state.walk || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+window.addEventListener('keydown', e => { if (!state.walk || state.walk.look || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
   if (e.key === 'e' || e.key === 'E') { e.preventDefault(); doorToggle(); return; }
   if (e.key === 'h' || e.key === 'H') { e.preventDefault(); handCycle(); return; }
   const k = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', a: 'left', A: 'left', d: 'right', D: 'right' }[e.key];
@@ -6010,7 +6012,7 @@ function drawStrip() {
 }
 { const cv = $('floorStrip'); let on = null;   // UX round 4: collapsed pill; press-drag = relative floor change on the full ruler, tap = ruler stays open for a tap on a floor
   const open = o => { if (cv.classList.contains('open') === o) return; cv.classList.toggle('open', o); sizeCanvas(cv, cv.clientWidth, cv.clientHeight); drawStrip(); };
-  const setF = f => { f = clamp(f, 1, 30); if (f === 1) { if (!state.walk) { on = null; open(false); buzz(); goGround(); } return; } if (f !== state.obsFloor) { state.obsFloor = f; buzz(); renderView(); } };   // 1F = void deck: walk on the ground (TY 2026-11-01)
+  const setF = f => { f = clamp(f, 1, 30); if (f === 1) { if (!state.walk) { on = null; open(false); buzz(); goGround(); } return; } if (state.walk && state.walk.look) setWalk(false); if (f !== state.obsFloor) { state.obsFloor = f; buzz(); renderView(); } };   // 1F = void deck: walk on the ground (TY 2026-11-01)
   const abs = e => { const { y } = localXY(cv, e); setF(Math.round(30 - ((y - STRIP.pad) / (cv._h - 2 * STRIP.pad)) * 29)); };
   cv.addEventListener('pointerdown', e => { e.stopPropagation(); cv.setPointerCapture(e.pointerId); const wasOpen = cv.classList.contains('open'); open(true); on = { y: e.clientY, f: state.obsFloor, abs: wasOpen, moved: false }; if (wasOpen) abs(e); });
   cv.addEventListener('pointermove', e => { if (!on) return; if (Math.abs(e.clientY - on.y) > 4) on.moved = true; if (!on.moved) return; if (on.abs) abs(e); else setF(on.f - Math.round((e.clientY - on.y) / ((cv._h - 2 * STRIP.pad) / 29))); });
