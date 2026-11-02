@@ -963,7 +963,7 @@ const EXISTING = GEO.b.map(([h, e, n, flat]) => makePrism(n || '', 'existing', h
 // Hand-modelled CBD / Marina Bay (TY 2026-10-31 "buildings don't look real", stage 1; physics too): OSM footprints, shapes from published descriptions, sizes estimates (est 2).
 // Stacked pieces carry P.sb/P.st (storey base / building top) so the window grid + parapet coping run continuously across the pieces; topc = facade colour (no dark ledges).
 const MBS_AX = { a: [-2006, -1561], b: [-1919, -1352] };   // SkyPark long axis (Spectra beams)
-const CBD_HAND = [];
+const CBD_HAND = [], LM_KIT = [];   // LM_KIT: render-only prisms (glPrism in gpuWorld; not in physics)
 {
   const P0 = n => EXISTING.findIndex(P => P.name === n), take = n => { const i = P0(n); if (i < 0) return null; const P = EXISTING[i]; EXISTING.splice(i, 1); return P; };
   const add = (n, h, b, flat, o) => { const P = Object.assign(makePrism(n, 'existing', h, b, flat, 2), { hand: true }, o || {}); EXISTING.push(P); CBD_HAND.push(P); return P; };
@@ -984,8 +984,18 @@ const CBD_HAND = [];
       add(n, tw, 0, box(u0, u1, v0, v0 + W * 0.48), o);   // W leg, vertical
       add(n, tw, Hj, box(u0, u1, v0 + W * 0.46, v1), o);   // E leg above the join
       const K = 22; for (let i = 0; i < K; i++) { const y0 = (Hj * i) / K, y1 = (Hj * (i + 1)) / K, g = W * 0.35 * Math.pow(1 - (y0 + y1) / 2 / Hj, 1.5);   // E leg below the join: curved, leaning in
-        add(n, y1, y0, box(u0, u1, v0 + W * 0.52 + g, v1 + g), o); } }
-    const S = take('SkyPark'); if (S) add('Marina Bay Sands SkyPark', 200, 191, fl(ptsOf(S)), { plain: true, alb: [214, 218, 222], topc: [120, 150, 110], botc: [190, 194, 198] });   // hull + garden/pool deck
+        add(n, y1, y0, box(u0, u1, v0 + W * 0.52 + g, v1 + g), o); }
+      // round 6: light slab-edge band every storey (55 storeys ≈ 3.47 m; 0.3 m deep, 0.25 m proud; render only) → the towers' horizontal striping
+      const band = (y, f) => { const P = makePrism('MBS band', 'existing', y + 0.32, y, f, 2); P.plain = true; P.alb = [214, 220, 224]; P.topc = [200, 206, 210]; LM_KIT.push(P); }, e = 0.25;
+      for (let y = 3.47; y < tw - 1; y += 3.47) { if (y >= Hj) band(y, box(u0 - e, u1 + e, v0 - e, v1 + e)); else { band(y, box(u0 - e, u1 + e, v0 - e, v0 + W * 0.48 + e)); const g = W * 0.35 * Math.pow(1 - y / Hj, 1.5); band(y, box(u0 - e, u1 + e, v0 + W * 0.52 + g - e, v1 + g + e)); } } }
+    const S = take('SkyPark'); if (S) { add('Marina Bay Sands SkyPark', 200, 191, fl(ptsOf(S)), { plain: true, alb: [214, 218, 222], topc: [120, 150, 110], botc: [190, 194, 198] });   // hull + garden/pool deck
+      // round 6: boat-hull underside (render only, estimates): 2 keel steps narrower across (v) so the deck reads as a curved hull, not a slab; dark glass rim band along the deck edge
+      const c = [S.cx, S.cz], sv = (k) => fl(ptsOf(S).map(([x, z]) => { const dx = x - c[0], dz = z - c[1], a = dx * u[0] + dz * u[1], b = dx * v[0] + dz * v[1]; return [c[0] + a * (0.985 - 0.04 * (1 - k)) * u[0] + b * k * v[0], c[1] + a * (0.985 - 0.04 * (1 - k)) * u[1] + b * k * v[1]]; }));
+      [[189.4, 191, 0.82], [187.6, 189.4, 0.58]].forEach(([y0, y1, k]) => { const P = makePrism('MBS SkyPark hull', 'existing', y1, y0, sv(k), 2); P.plain = true; P.alb = [206, 210, 214]; P.botc = [176, 180, 186]; LM_KIT.push(P); });
+      { const P = makePrism('MBS SkyPark rim', 'existing', 201.3, 200, fl(ptsOf(S)), 2); P.plain = true; P.alb = [120, 140, 150]; P.topc = [120, 150, 110]; LM_KIT.push(P); }   // glass balustrade band (solid stand-in) + garden deck
+      { let a0 = 1e9, a1 = -1e9, b0 = 1e9; for (const [x, z] of ptsOf(S)) { const a = (x - c[0]) * u[0] + (z - c[1]) * u[1], b = (x - c[0]) * v[0] + (z - c[1]) * v[1]; a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); }
+        const q = (a, b) => [c[0] + a * u[0] + b * v[0], c[1] + a * u[1] + b * v[1]], m = (a0 + a1) / 2, L = 146 / 2, P = makePrism('MBS SkyPark pool', 'existing', 201.4, 201.2, fl([q(m - L, b0 + 3), q(m + L, b0 + 3), q(m + L, b0 + 13), q(m - L, b0 + 13)]), 2);
+        P.plain = true; P.alb = [80, 150, 180]; P.topc = [70, 150, 190]; LM_KIT.push(P); } }   // infinity pool (146 m) along the city (W) edge; position estimate
   }
   // Guoco Tower (2016, 290 m, 64 storeys, SOM): podium over Tanjong Pagar MRT + rectangular tower whose facade bands stop at staggered heights (stepped crown); band heights estimates
   { const T = take('Guoco Tower'); if (T) { const p = ptsOf(T), A = p[0], B = p[1], D = p[3], ux = [B[0] - A[0], B[1] - A[1]], vx = [D[0] - A[0], D[1] - A[1]], q = (a, b) => [A[0] + ux[0] * a + vx[0] * b, A[1] + ux[1] * a + vx[1] * b];
@@ -1060,6 +1070,28 @@ const LM_MESH = [], LM_DOMES = [], LM_TREES = [];
     const box = (a0, a1, b0, b1) => [q(a0, b0), q(a1, b0), q(a1, b1), q(a0, b1)].flat(), add = (h, b, f, alb) => { const P = makePrism('Tanjong Rhu Substation', 'existing', h, b, f, 2); P.alb = alb; P.plain = true; EXISTING.push(P); return P; };
     const hb = 8 / 31.6; add(14, 0, box(0, 1, 0, hb), [232, 232, 228]); add(15.1, 14, box(0.01, 0.99, 0.005, hb - 0.01), [205, 208, 210]).topc = [190, 192, 194];   // front block + railing band
     add(12.5, 0, box(0, 1, hb, 1), [232, 232, 228]); add(17, 12.5, box(0, 1, hb, 1), [170, 116, 78]).topc = [120, 112, 108]; } }   // hall: white base, timber upper hall, dark metal roof
+  // Founders' Memorial (Kengo Kuma + K2LD, opens 2028; foundersmemorial.gov.sg: organic form rising out of the landscape, galleries, arrival lake, amphitheatre;
+  // no published dimensions → all sizes estimates). OSM outlines (curved gallery pieces, a row of round pavilions) were 10 m est boxes. Galleries = recessed glass
+  // ground floor + white eave plates (Kuma layered roofs) + timber upper storey + green roof, timber fins; grass terraces stepping up to them; amphitheatre + arrival lake.
+  { const near = EXISTING.filter(P => Math.hypot(P.cx - FM_XZ[0], P.cz - FM_XZ[1]) < 180 && P.h <= 12 && P.est), area = P => { let a = 0; for (let i = 0, j = P.n - 1; i < P.n; j = i++) a += P.xs[j] * P.zs[i] - P.xs[i] * P.zs[j]; return Math.abs(a) / 2; };
+    const offs = (P, d) => { const n = P.n, o = [], X = P.xs, Z = P.zs; let sg = 1; { const ex = X[1] - X[0], ez = Z[1] - Z[0], L = Math.hypot(ex, ez) || 1; if (pointIn(P, (X[0] + X[1]) / 2 - ez / L * 0.05, (Z[0] + Z[1]) / 2 + ex / L * 0.05)) sg = -1; }
+      for (let i = 0; i < n; i++) { const a = (i + n - 1) % n, b = (i + 1) % n, e1 = [X[i] - X[a], Z[i] - Z[a]], e2 = [X[b] - X[i], Z[b] - Z[i]], l1 = Math.hypot(...e1) || 1, l2 = Math.hypot(...e2) || 1;
+        const n1 = [-e1[1] / l1 * sg, e1[0] / l1 * sg], n2 = [-e2[1] / l2 * sg, e2[0] / l2 * sg], m = [n1[0] + n2[0], n1[1] + n2[1]], ml = Math.hypot(...m) || 1, k = Math.min(2, 1 / Math.max(0.5, (m[0] * n1[0] + m[1] * n1[1]) / ml));
+        o.push(X[i] + m[0] / ml * d * k, Z[i] + m[1] / ml * d * k); } return o; };
+    const add = (h, b, f, alb, topc) => { const P = makePrism("Founders' Memorial", 'existing', h, b, f, 2); P.alb = alb; P.plain = true; if (topc) P.topc = topc; EXISTING.push(P); return P; };
+    for (const G of near) { const i = EXISTING.indexOf(G); EXISTING.splice(i, 1); const A = area(G);
+      if (A < 60) { add(1.2, 0, [...G.xs].flatMap((x, k) => [x, G.zs[k]]), [196, 192, 182], [104, 136, 76]); continue; }   // small round OSM pieces (≈5 m): raised round planters (use unknown)
+      for (const [d, h] of [[24, 0.8], [16, 1.6], [9, 2.4]]) add(h, 0, offs(G, d), [104, 140, 80], [112, 150, 84]);   // grass terraces rising to the building
+      add(4.5, 0, offs(G, -1.5), [64, 80, 88]); add(5.1, 4.5, offs(G, 2), [236, 234, 228]); add(9.5, 5.1, offs(G, 0), [168, 124, 84]);
+      add(10.1, 9.5, offs(G, 2.6), [236, 234, 228]); add(12, 10.1, offs(G, 0.6), [150, 146, 138], [96, 128, 72]);   // glass floor, eave, timber storey, eave, green roof
+      for (let k = 0; k < G.n; k++) { const j = (k + 1) % G.n, x0 = G.xs[k], z0 = G.zs[k], ex = G.xs[j] - x0, ez = G.zs[j] - z0, L = Math.hypot(ex, ez); if (L < 1) continue;   // timber fins every 1.2 m in front of the glass
+        const ux = ex / L, uz = ez / L; for (let t = 0.6; t < L; t += 1.2) { const cx = x0 + ux * t, cz = z0 + uz * t; add(4.5, 0, [cx - ux * 0.06 - uz * 0.25, cz - uz * 0.06 + ux * 0.25, cx + ux * 0.06 - uz * 0.25, cz + uz * 0.06 + ux * 0.25, cx + ux * 0.06 + uz * 0.25, cz + uz * 0.06 - ux * 0.25, cx - ux * 0.06 + uz * 0.25, cz - uz * 0.06 - ux * 0.25], [176, 132, 90]); } } }
+    { const c = [-1062, -700], a0 = 10 * DEG, a1 = 170 * DEG;   // amphitheatre: 7 grass-and-stone tiers on an arc opening SW toward the bay, stage disc
+      const sec = (r0, r1) => { const o = []; for (let k = 0; k <= 24; k++) { const a = a0 + (a1 - a0) * k / 24; o.push(c[0] + r1 * Math.cos(a + 0.6), c[1] + r1 * Math.sin(a + 0.6)); } for (let k = 24; k >= 0; k--) { const a = a0 + (a1 - a0) * k / 24; o.push(c[0] + r0 * Math.cos(a + 0.6), c[1] + r0 * Math.sin(a + 0.6)); } return o; };
+      for (let t = 0; t < 7; t++) add(0.45 * (t + 1), 0, sec(14 + 2.6 * t, 14 + 2.6 * (t + 1)), [178, 174, 164], t % 2 ? [120, 152, 88] : [196, 192, 182]);
+      const r = []; for (let k = 0; k < 24; k++) { const a = k / 24 * 2 * Math.PI; r.push(c[0] + 11 * Math.cos(a), c[1] + 11 * Math.sin(a)); } add(0.6, 0, r, [200, 198, 192], [212, 208, 200]); }
+    { const c = [-1120, -520], r = [], th = 35 * DEG; for (let k = 0; k < 40; k++) { const a = k / 40 * 2 * Math.PI, p = 62 * Math.cos(a), q = 30 * Math.sin(a) * (1 + 0.15 * Math.cos(3 * a)); r.push(c[0] + p * Math.cos(th) - q * Math.sin(th), c[1] + p * Math.sin(th) + q * Math.cos(th)); }
+      const P = add(0.12, 0, r, [52, 76, 86], [52, 76, 86]); P.name = "Founders' Memorial arrival lake"; } }
   // Tanjong Rhu condos W of TRPF (OSM heights): cream condo facade (as E1/E2)
   for (const P of EXISTING) if (P.h > 20 && P.cx > -920 && P.cx < -200 && P.cz > -150 && P.cz < 170) { P.style = 'condo'; P.pal = [[222, 214, 198], [236, 234, 228], [206, 208, 206], [216, 204, 184], [200, 206, 210]][Math.floor(hash01(Math.floor(P.cx / 110), Math.floor(P.cz / 110), 83) * 5)]; }   // per-estate wall palette (realism r5: 110 m clusters ≈ one estate each; colours estimates, not surveyed)
   // Tanjong Rhu Riverfront HDB blocks (TY 2026-11-02, HDB scale-model photos: were random blue curtain-wall towers, h > 90 m): HDB style 'rf' (GL_FS mode 6, w ≥ 20):
@@ -1756,6 +1788,8 @@ function gpuBridges(A) { const z4 = [0, 0, 0, 0]; for (const [a, b, d, n, col] o
 // markings only where they fall ≥ 0.4 m inside the site-road mask, kerbs along the mask edge (0.5 m raster → loops incl. islands, DP 0.25 m).
 const RK_R = 1500, RK_K = 500, RK_X = 2500, RK_L = 450;   // markings, kerbs, expressway kit, lamp-post geometry (beyond RK_L: night lamp sprite only)
 let ROAD_KIT = null;
+// LTA bus stops ≤2.5 km of #134 (data.gov.sg "LTA Bus Stop" d_3f172c6feb3f4f92a2f47d93eed2908a, updated 2026-08; 160 points, local m) → roadKit shelters
+const BUS_STOPS = [[2343.1,650.5],[2308.7,614.6],[2037.6,771.8],[-1821.3,1642.7],[-1767.4,1613.1],[-1642.5,1402.9],[-1655.8,1476.5],[-1838.5,-620.3],[-2179.1,787.1],[-2182.9,738.9],[-2348.2,388.2],[-1971.5,961.8],[-1952.0,933.9],[-2073.3,724.9],[-1911.6,711.0],[-1852.1,673.7],[-1787.7,1135.8],[-1669.8,1189.1],[-1628.2,899.7],[-1557.8,1208.1],[-1528.5,1067.7],[-1426.8,980.4],[-1703.2,585.3],[-1669.0,575.0],[-1493.6,725.9],[-1473.9,707.0],[-2183.0,263.0],[-2153.4,249.3],[-1958.6,449.3],[-1983.1,397.7],[-2327.6,226.1],[-2192.3,428.2],[-2314.8,530.8],[-2415.4,15.4],[-2377.8,29.3],[-2139.7,-809.1],[-2120.5,-585.3],[-1828.3,-822.1],[-2105.8,-116.6],[-2081.7,-134.4],[-2271.9,-402.7],[-2209.5,-355.2],[-1928.5,-457.2],[-1953.3,-385.0],[-1929.6,-676.7],[-1500.4,-1897.9],[-1042.2,-1869.0],[-933.2,-1903.2],[-1334.4,-1786.3],[-1964.2,-1306.5],[1553.2,1934.5],[1520.0,1938.7],[1346.3,1679.4],[1268.8,1692.4],[1066.8,1626.9],[1019.0,1643.0],[547.7,1517.8],[542.2,1544.0],[750.9,1182.8],[739.8,1154.5],[1136.5,1286.6],[1141.2,1273.6],[1506.9,1361.4],[1332.3,1311.6],[528.3,2418.6],[671.9,2390.2],[2267.6,1167.1],[-678.5,1586.1],[2130.2,440.1],[2130.4,504.1],[1913.5,1154.2],[1884.8,1237.5],[1766.0,1498.6],[1780.0,1562.1],[1764.0,1750.0],[1782.0,1788.5],[2038.5,1418.8],[2039.9,1402.2],[-1211.0,1427.2],[-1193.6,1393.1],[-772.9,1576.5],[-758.6,1448.9],[-514.5,1543.3],[-556.2,1735.5],[-123.5,1694.8],[-189.9,1877.6],[282.6,1761.8],[299.5,1998.9],[-748.1,1735.9],[-760.1,1816.1],[-305.5,1443.1],[-251.7,1448.6],[181.8,1138.7],[156.1,1186.7],[-2291.9,-61.4],[-2260.1,-94.8],[-1759.1,387.8],[-1658.2,429.6],[-123.1,444.6],[2477.1,128.4],[-125.9,417.3],[160.1,913.8],[313.5,908.6],[-317.6,529.5],[-347.8,523.9],[-309.3,1139.8],[-333.4,1097.3],[-17.2,2263.4],[205.7,2404.4],[250.5,2393.2],[178.1,2224.4],[185.3,1467.9],[181.2,1445.8],[11.2,2011.8],[540.9,917.1],[574.3,921.0],[118.9,2129.1],[-531.3,2168.7],[-586.6,2257.0],[-629.9,1947.6],[-627.4,1992.9],[566.7,2046.0],[742.4,1857.2],[866.8,2099.0],[1011.9,1908.0],[1383.3,1980.3],[380.8,2144.8],[418.7,2152.0],[386.3,2491.6],[-1396.2,1915.8],[-1379.7,1938.0],[-1002.9,32.4],[-962.3,16.7],[-775.9,39.4],[-830.4,30.0],[-362.2,-28.7],[-319.1,-20.7],[-522.7,32.8],[101.6,92.8],[94.4,83.9],[461.8,144.0],[481.0,125.5],[-1216.7,87.0],[918.2,462.5],[909.6,428.8],[1247.5,403.0],[1118.8,409.8],[1592.2,418.8],[1645.7,420.1],[1973.3,541.0],[1892.7,496.1],[787.3,274.8],[809.1,256.3],[679.6,701.0],[718.9,706.5],[2050.8,-82.8],[1588.6,-163.3],[-508.5,41.6],[404.7,1887.8],[2059.6,769.8]];
 function roadKit() {
   if (ROAD_KIT) return ROAD_KIT; const [ux, uz] = UNIT134, cc = v => v.map(q => q / 255), M = glArr(), T = [], lamps = [], lit = new Set(), up = [0, 1, 0], z4 = [0, 0, 0, 0];
   const WH = cc([228, 228, 222]), YE = cc([228, 180, 46]), KB = cc([186, 184, 176]), CON = cc([200, 198, 190]), STL = cc([172, 176, 180]), POLE = cc([150, 154, 158]), GRN = cc([16, 110, 70]), GRY = cc([118, 122, 126]);
@@ -1842,6 +1876,10 @@ function roadKit() {
     const bw = Math.min(9, hw * 1.1), boards = [[hw - 0.4 - bw / 2, bw]]; if (w.R.w >= 14) boards.push([-(hw - 0.4 - 2.6), 5.2]);
     for (const [sc, wb] of boards) { const q = posAt(w, a - 0.25, sc); box(q[0], q[1], 5.0, 7.7, tx, tz, 0.07, wb / 2, GRY, GRN);
       for (const [yy, f] of [[7.1, 0.7], [6.4, 0.55], [5.6, 0.8]]) { const r = posAt(w, a - 0.33, sc - wb * (1 - f) / 2 + wb * 0.04); box(r[0], r[1], yy, yy + 0.32, tx, tz, 0.02, wb * f / 2 - wb * 0.06, WH); } } };
+  const STOP_AT = new Map(); for (const [sx, sz] of BUS_STOPS) { if (Math.hypot(sx - ux, sz - uz) > 1300) continue; let bw = -1, bd = 1e9, ba = 0, bs = 1;   // assign each LTA stop to its nearest at-grade way (cls 1–4)
+    W.forEach((w, wi) => { if (w.c < 1 || w.c > 4) return; for (let i = 0; i + 1 < w.n; i++) { const p = w.p, ex = p[2 * i + 2] - p[2 * i], ez = p[2 * i + 3] - p[2 * i + 1], L2 = ex * ex + ez * ez || 1e-9, t = Math.max(0, Math.min(1, ((sx - p[2 * i]) * ex + (sz - p[2 * i + 1]) * ez) / L2)), qx = p[2 * i] + ex * t, qz = p[2 * i + 1] + ez * t, d = Math.hypot(sx - qx, sz - qz);
+      if (d < bd && d < w.hw + 12) { bd = d; bw = wi; ba = w.A[i] + Math.sqrt(L2) * t; bs = (sx - qx) * w.sn[i][0] + (sz - qz) * w.sn[i][1] >= 0 ? 1 : -1; } } });
+    if (bw >= 0) { const e = STOP_AT.get(bw) || []; e.push([Math.max(4, Math.min(W[bw].len - 4, ba)), bs]); STOP_AT.set(bw, e); } }
   W.forEach((w, wi) => {
     if (w.R.minx > ux + RK_R || w.R.maxx < ux - RK_R || w.R.minz > uz + RK_R || w.R.maxz < uz - RK_R) { if (w.c !== 0) return; }
     const hw = w.hw, e = Math.max(1, hw - 0.6), med = w.med = partner(w, wi), one = w.c === 0 || med !== 0, ph = hash01(w.p[0], w.p[1], 3) * 6;
@@ -1860,9 +1898,9 @@ function roadKit() {
       if (midNear(w, RK_K + w.len / 2)) { lit.add(w.R); const ph2 = hash01(w.p[0], w.p[1], 5) * 35, hp = w.c <= 2 ? 10 : 8;
         for (let a = ph2; a < w.len; a += 35) for (const sg of w.c <= 2 ? [-1, 1] : [1]) { const [x, z, i] = posAt(w, a, sg * (hw + 0.9)); if (other(wi, x, z, 0.6) || (inS(x, z, i) && mk(x, z))) continue;
           const [hx, hz] = posAt(w, a, sg * (hw - 0.9)), [tx, tz] = [w.sn[i][2], w.sn[i][3]]; lamps.push([hx, hp - 0.22, hz, 0]); if (!near(x, z, RK_L)) continue; box(x, z, 0, hp, tx, tz, 0.09, 0.09, POLE); box((x + hx) / 2, (z + hz) / 2, hp - 0.12, hp, -w.sn[i][0], -w.sn[i][1], 0.9, 0.04, POLE); box(hx, hz, hp - 0.22, hp - 0.05, tx, tz, 0.16, 0.3, POLE); }
-        // street furniture (realism r5; LTA-style, positions NOT from bus-stop data → estimates): bus shelter every ~330 m on cls 1–4 (left side; roof, 3 posts, back panel + ad box, bench, bin), litter bins every 90 m both sides on cls ≤ 3
+        // street furniture (realism r5; LTA-style): bus shelter at each LTA bus stop (BUS_STOPS, round 6; was every ~330 m) on the nearest cls 1–4 way ≤ hw + 12 m, on the stop's side ( roof, 3 posts, back panel + ad box, bench, bin), litter bins every 90 m both sides on cls ≤ 3
         const ph3 = hash01(w.p[1], w.p[0], 7) * 330, BIN = cc([46, 92, 70]), RF = cc([96, 100, 106]), AD = cc([224, 228, 232]), BEN = cc([150, 154, 158]);
-        for (let a = ph3 + 60; a < w.len - 40; a += 330) { const [x, z, i] = posAt(w, a, hw + 2.4); if (!near(x, z, RK_L) || other(wi, x, z, 2.5) || inS(x, z, i) || nearJ(wi, x, z)) continue; const [tx, tz] = [w.sn[i][2], w.sn[i][3]], [nx, nz] = [w.sn[i][0], w.sn[i][1]], bk = (o, al) => [x + nx * o + tx * al, z + nz * o + tz * al];
+        for (const [a, sg] of STOP_AT.get(wi) || []) { const [x, z, i] = posAt(w, a, sg * (hw + 2.4)); if (!near(x, z, 1200)) continue; const [tx, tz] = [w.sn[i][2] * sg, w.sn[i][3] * sg], [nx, nz] = [w.sn[i][0] * sg, w.sn[i][1] * sg], bk = (o, al) => [x + nx * o + tx * al, z + nz * o + tz * al];   // real LTA stop positions (round 6), on the side the stop lies
           box(x, z, 2.55, 2.7, tx, tz, 3.2, 1.0, RF); for (const al of [-2.9, 0, 2.9]) { const [px, pz] = bk(0.8, al); box(px, pz, 0, 2.55, tx, tz, 0.05, 0.05, POLE); }
           { const [px, pz] = bk(0.85, 0); box(px, pz, 0.1, 2.3, tx, tz, 2.6, 0.02, cc([170, 186, 196])); } { const [px, pz] = bk(0.8, 3.6); box(px, pz, 0.05, 2.1, tx, tz, 0.6, 0.12, AD, RF); }
           { const [px, pz] = bk(0.45, -0.8); box(px, pz, 0.42, 0.47, tx, tz, 1.4, 0.2, BEN); box(px, pz, 0, 0.42, tx, tz, 1.3, 0.05, POLE); } { const [px, pz] = bk(0.2, -3.8); cyl(px, pz, 0, 0.95, 0.27, BIN); cyl(px, pz, 0.95, 1.0, 0.29, RF); } }
@@ -2442,7 +2480,8 @@ const LANDMARKS = [
   { id: 'sea', name: 'Sea surface (Strait)', x: 500, z: -3000, h: 0.5, span: 1000, color: '#818cf8' },
   { id: 'nstad', name: 'National Stadium', x: -436, z: 842, h: 76, span: 220, color: '#e2e8f0', self: 'National Stadium' },
   { id: 'sis', name: 'Singapore Indoor Stadium', x: -428, z: 428, h: 42, span: 60, color: '#cbd5e1', self: 'Singapore Indoor Stadium' },
-  { id: 'gmc', name: 'Golden Mile Complex', x: -1455, z: 655, h: 60, span: 120, color: '#fbbf24', self: 'Golden Mile Complex' }
+  { id: 'gmc', name: 'Golden Mile Complex', x: -1455, z: 655, h: 60, span: 120, color: '#fbbf24', self: 'Golden Mile Complex' },
+  { id: 'fm', name: "Founders' Memorial (2028)", x: -1063, z: -650, h: 10, span: 120, color: '#fde68a', self: "Founders' Memorial" }
 ];
 const FLYER = [-1686, -824];
 const SHIPS = [[-600, -3800, 150], [300, -4300, 180], [1300, -3600, 140], [2200, -4600, 160], [-200, -5200, 200], [900, -5600, 170], [-1400, -4700, 130]];
@@ -4995,6 +5034,18 @@ function gpuRoofKit(A) { const al = [150, 152, 150], tp = [128, 130, 130];
       glPrism(A, { n: 4, xs, zs, cx: x, cz: z, base: P.h, h: P.h + hh, kind: 'existing', name: 'roof plant', plain: true, alb: al, topc: tp }); } } }
 // near-building detail (less blocky 2026-10-31; visual only, sizes estimates): existing buildings ≤1 km of #134 get a 1.0 m roof parapet (0.25 m thick, light coping);
 // residential (P.res) ≤600 m get a slab ledge per storey (0.15 m, 0.3 m proud) on edges ≥3 m; vertex budget 400k, nearest first
+// Seawall line (round 6; render only, estimates): along every land-use edge that borders water (LU class 0 or sea outside the LU) ≤4 km of #134: a light concrete
+// coping 0.45 m wide × 0.35 m on the land side + a dark wet face 0.15 m × 0.3 m on the water side, so the shore reads as a crisp edge instead of grass meeting water.
+// Water and land are both drawn at y 0, so the real 2–3 m seawall face can't show; this is the visible stand-in.
+function shoreKit() { if (shoreKit.L) return shoreKit.L; const out = [], wet = (x, z) => { if (x < -5195 || x > 2595 || z < -4195 || z > 1795) return false; const L = luAt(x, z); return !L || L.c === 0; };
+  for (const L of LU) { if (L.c === 0) continue; for (const R of L.rings) { const n = R.length / 2;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n, x0 = R[2 * i], z0 = R[2 * i + 1], x1 = R[2 * j], z1 = R[2 * j + 1], ex = x1 - x0, ez = z1 - z0, Ln = Math.hypot(ex, ez); if (Ln < 2) continue;
+      const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2; if (Math.hypot(mx - UNIT134[0], mz - UNIT134[1]) > 4000) continue; let nx = -ez / Ln, nz = ex / Ln;
+      if (!wet(mx + nx * 2.5, mz + nz * 2.5)) { if (!wet(mx - nx * 2.5, mz - nz * 2.5)) continue; nx = -nx; nz = -nz; } if (wet(mx - nx * 2.5, mz - nz * 2.5)) continue;   // n → water side; skip slivers
+      const seg = (a0, a1) => [x0 + nx * a0, z0 + nz * a0, x1 + nx * a0, z1 + nz * a0, x1 + nx * a1, z1 + nz * a1, x0 + nx * a1, z0 + nz * a1];
+      const c = makePrism('Seawall coping', 'existing', 0.35, 0, seg(-0.45, 0), 2); c.plain = true; c.alb = [204, 202, 194]; c.topc = [214, 212, 204]; out.push(c);
+      const w = makePrism('Seawall face', 'existing', 0.3, 0, seg(0, 0.15), 2); w.plain = true; w.alb = [64, 72, 66]; w.topc = [96, 100, 92]; out.push(w); } } }
+  return (shoreKit.L = out); }
 function gpuNearKit(A) { const L = ALL.filter(P => P.kind === 'existing' && !P.nogl && P.h >= 10 && P.n >= 3 && P.n <= 64 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1000).sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]));
   const n0 = A.n, wl = [236, 234, 228], cp = [205, 205, 200];
   for (const P0 of L) { if (A.n - n0 > 4e5) break; const P = P0.massTop ? Object.assign(Object.create(P0), { xs: P0.massTop.xs, zs: P0.massTop.zs, n: P0.massTop.n }) : P0, fa = facadeAlb(P0), pa = fa.map(c => Math.min(255, c * 1.05 + 6)), dd = Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]), ledge = P.res === true && dd < 600;
@@ -5047,7 +5098,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A); gpuEstate(A);
   if (state.showRoads) { gpuBridges(A); gpuTunnel(A); }
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
@@ -5927,10 +5978,30 @@ function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, c
   for (const t of SUPERTREES) { la.push(t.x, 0, t.z, ...st, 0.6, t.x, t.h, t.z, ...st, 0.6); S(add, t.x, t.h, t.z, 1, 0, 9, 9, rhapsody ? hsl((t.hue + hr * 3600 * 20) % 360) : pu, 0.85, 4); S(add, t.x, t.h, t.z, 0, 0, 27, 4.5, rhapsody ? [1, 160 / 255, 240 / 255] : pu, 0.25, 0); }
   LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => S(add, l.x, l.h * 0.5, l.z, 0, 0, l.span * 0.7, 3, [170 / 255, 220 / 255, 1], 0.3, 0, l.span * 0.6));
   if (hr >= 19 || hr < 0.5) for (const P of NIGHT_CROWNS()) { const c = P.h > 240 ? [0.85, 0.92, 1] : [1, 0.9, 0.72]; for (const y of [P.h - 0.5, P.h - 4]) for (let i = 0, j = P.n - 1; i < P.n; j = i++) la.push(P.xs[j], y, P.zs[j], ...c, y === P.h - 0.5 ? 0.8 : 0.35, P.xs[i], y, P.zs[i], ...c, y === P.h - 0.5 ? 0.8 : 0.35); }   // CBD crown lighting 19:00–00:30 (realism r5; towers ≥150 m within 2.5 km of MBS: top outline + a second band 4 m down, estimate)
+  eventFx(hr, yy, mm, dd, add, la, S);
   const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark'); if (!SP) return; const ec = [1, 235 / 255, 200 / 255];
   for (let i = 0, j = SP.n - 1; i < SP.n; j = i++) la.push(SP.xs[j], SP.base, SP.zs[j], ...ec, 0.85, SP.xs[i], SP.base, SP.zs[i], ...ec, 0.85);
   if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = MBS_AX.a[0] + (MBS_AX.b[0] - MBS_AX.a[0]) * f, z = MBS_AX.a[1] + (MBS_AX.b[1] - MBS_AX.a[1]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
     la.push(x, SP.h, z, ...c, 0.55, x + 1500 * Math.sin(sw + 0.4) * 0.5, SP.h + 1500, z + 1500 * Math.cos(sw + 0.4) * 0.5, ...c, 0); } }
+}
+// Events (round 6; visual only, times/positions estimates): fireworks over Marina Bay (bay centre ≈(−2277, −1329)) on National Day (9 Aug 20:12–20:27) and New Year
+// (1 Jan 00:00–00:12): a burst every 0.8 s, each alive 3 s (60 sparks on an expanding, drooping shell + glow); frozen frame unless ▶ Animate runs (simT).
+// F1 Singapore GP night race weekend (F1_DATES, Fri–Sun 18:00–23:30): circuit floodlights = white line + light pools along an approximate Marina Bay street circuit
+// (F1_LL, lat/lon from memory, ±100 m; not the exact track).
+const F1_DATES = { 2026: [10, 9] }, F1_LL = [[1.2900, 103.8635], [1.2915, 103.8610], [1.2935, 103.8585], [1.2965, 103.8575], [1.2935, 103.8545], [1.2915, 103.8525], [1.2870, 103.8530], [1.2885, 103.8545], [1.2895, 103.8565], [1.2880, 103.8595], [1.2885, 103.8625]];
+function eventFx(hr, yy, mm, dd, add, la, S) {
+  const fw = (mm === 8 && dd === 9 && hr >= 20.2 && hr < 20.45) || (mm === 1 && dd === 1 && hr < 0.2);
+  if (fw) { const t = simT(), B = [-2277, -1329], h = (k, i) => { const v = Math.sin(k * 127.1 + i * 311.7) * 43758.5453; return v - Math.floor(v); }, PAL = [[1, 0.35, 0.3], [1, 0.85, 0.4], [0.5, 0.8, 1], [0.7, 1, 0.5], [1, 0.5, 0.9], [1, 1, 1]];
+    for (let k = Math.floor(t / 0.8) - 3; k <= Math.floor(t / 0.8); k++) { const age = t - k * 0.8; if (age < 0 || age > 3) continue;
+      const cx = B[0] + (h(k, 1) - 0.5) * 360, cz = B[1] + (h(k, 2) - 0.5) * 240, cy = 150 + h(k, 3) * 150, R = (40 + h(k, 4) * 50) * (1 - Math.exp(-age * 2.2)), fade = Math.max(0, 1 - age / 3), c = PAL[Math.floor(h(k, 5) * PAL.length)];
+      S(add, cx, cy, cz, 0, 0, R * 1.1, 6, c, 0.3 * fade, 0);
+      for (let i = 0; i < 60; i++) { const u = h(k, 10 + i) * 2 - 1, ph = h(k, 80 + i) * 6.2832, r = Math.sqrt(1 - u * u), dx = r * Math.cos(ph), dz = r * Math.sin(ph), sag = 9 * age * age;
+        const px = cx + dx * R, py = cy + u * R - sag, pz = cz + dz * R; S(add, px, py, pz, 0, 0, 4.5, 2.2, c, fade, 0); S(add, px, py, pz, 0, 0, 1.2, 1.0, [1, 1, 0.95], fade, 1);
+        la.push(cx + dx * R * 0.55, cy + u * R * 0.55 - sag * 0.7, cz + dz * R * 0.55, ...c, 0, px, py, pz, ...c, 0.7 * fade); } } }   // spark + white core + trail
+  const F = F1_DATES[yy], day = F ? Date.UTC(yy, mm - 1, dd) - Date.UTC(yy, F[0] - 1, F[1]) : -1;
+  if (F && day >= 0 && day <= 2 * 864e5 && hr >= 18 && hr < 23.5) { const P = F1_LL.map(([la_, lo]) => [(lo - 103.87826) * 111291, (la_ - 1.29682) * 110574]), w = [1, 0.97, 0.9];
+    for (let i = 0; i < P.length; i++) { const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], L = Math.hypot(x1 - x0, z1 - z0); la.push(x0, 1, z0, ...w, 0.95, x1, 1, z1, ...w, 0.95);
+      for (let t = 0; t < L; t += 18) { const x = x0 + (x1 - x0) * t / L, z = z0 + (z1 - z0) * t / L; S(add, x, 0.3, z, (x1 - x0) / L, (z1 - z0) / L, 14, 9, w, 0.35, 2); S(add, x, 10, z, 0, 0, 1.4, 1.0, w, 0.3, 0); } } }
 }
 function gpuSprites(cam, env, buf, n, additive, range) {
   const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
