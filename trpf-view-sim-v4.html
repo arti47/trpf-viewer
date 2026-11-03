@@ -5157,6 +5157,28 @@ const glArr = () => ({ b: new Float32Array(13 * 256), l: 0, get a() { return thi
   v(p, n, c, t) { let b = this.b, l = this.l; if (l + 13 > b.length) { const g = new Float32Array(b.length * 2); g.set(b); this.b = b = g; }
     b[l] = p[0]; b[l + 1] = p[1]; b[l + 2] = p[2]; b[l + 3] = n[0]; b[l + 4] = n[1]; b[l + 5] = n[2]; b[l + 6] = c[0]; b[l + 7] = c[1]; b[l + 8] = c[2]; b[l + 9] = t[0]; b[l + 10] = t[1]; b[l + 11] = t[2]; b[l + 12] = t[3]; this.l = l + 13; },
   quad(p0, p1, p2, p3, n, c, t0, t1, t2, t3) { this.v(p0, n, c, t0); this.v(p1, n, c, t1); this.v(p2, n, c, t2); this.v(p0, n, c, t0); this.v(p2, n, c, t2); this.v(p3, n, c, t3); }, get n() { return this.l / 13; } });
+// chunked growable buffer (city build, memory 2026-11-03 "keeps crashing"): fixed 196,608-vertex chunks (whole triangles), never reallocated or copied while growing;
+// the doubling glArr held old + new (≈2× the buffer) at each growth and up to 2× slack after → ≈500 MB JS peak for the 3.1M-vertex city on the phone
+const GLCH = 3 * 65536;   // vertices per chunk (multiple of 3: a triangle never straddles chunks)
+const glChunks = () => ({ C: [], b: null, l: 0, k: 0,   // C chunks, b current chunk, l floats used in it, k vertices in full chunks
+  v(p, n, c, t) { let b = this.b, l = this.l; if (!b || l + 13 > b.length) { this.b = b = new Float32Array(GLCH * 13); this.C.push(b); if (this.C.length > 1) this.k += GLCH; this.l = l = 0; }
+    b[l] = p[0]; b[l + 1] = p[1]; b[l + 2] = p[2]; b[l + 3] = n[0]; b[l + 4] = n[1]; b[l + 5] = n[2]; b[l + 6] = c[0]; b[l + 7] = c[1]; b[l + 8] = c[2]; b[l + 9] = t[0]; b[l + 10] = t[1]; b[l + 11] = t[2]; b[l + 12] = t[3]; this.l = l + 13; },
+  quad(p0, p1, p2, p3, n, c, t0, t1, t2, t3) { this.v(p0, n, c, t0); this.v(p1, n, c, t1); this.v(p2, n, c, t2); this.v(p0, n, c, t0); this.v(p2, n, c, t2); this.v(p3, n, c, t3); }, get n() { return this.b ? this.k + this.l / 13 : 0; } });
+// sort triangles [v0, v0 + n) of a chunked buffer into tiles (as gpuTileSort) and stream them into the bound ARRAY_BUFFER at vertex dOff via a small staging copy (no full-size JS copy)
+function gpuTileStream(A, v0, n, dOff, sort) { const gl = GPU.gl, C = A.C, TPC = GLCH / 3, nt = n / 3, t0 = v0 / 3, at = t => { const g = t0 + t, ci = (g / TPC) | 0; return [C[ci], (g - ci * TPC) * 39]; };
+  const ST = new Float32Array(39 * 8192), T = []; let sl = 0, so = dOff; const flush = () => { if (sl) gl.bufferSubData(gl.ARRAY_BUFFER, so * 52, ST, 0, sl); so += sl / 13; sl = 0; };
+  const put = t => { const [q, o] = at(t); ST.set(q.subarray(o, o + 39), sl); sl += 39; if (sl + 39 > ST.length) flush(); };
+  if (!sort) { for (let t = 0; t < nt; t++) put(t); flush(); return T; }
+  const [ux, uz] = UNIT134, key = new Int32Array(nt), m = new Map();
+  for (let t = 0; t < nt; t++) { const [a, o] = at(t), x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = Math.hypot(x - ux, z - uz) < 1500, c = near ? 150 : 600;
+    const k = (near ? 0 : 1) * 1e8 + (Math.floor(z / c) + 5000) * 1e4 + (Math.floor(x / c) + 5000); let id = m.get(k); if (id === undefined) m.set(k, id = m.size); key[t] = id; }
+  const ks = [...m.keys()].sort((p, q) => p - q), rank = new Int32Array(m.size); ks.forEach((k, i) => { rank[m.get(k)] = i; });
+  const cnt = new Int32Array(m.size + 1); for (let t = 0; t < nt; t++) cnt[rank[key[t]] + 1]++; for (let i = 0; i < m.size; i++) cnt[i + 1] += cnt[i];
+  const pos = cnt.slice(0, m.size), ord = new Int32Array(nt); for (let t = 0; t < nt; t++) ord[pos[rank[key[t]]]++] = t;   // stable, same order as gpuTileSort
+  for (let i = 0; i < m.size; i++) { const b = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
+    for (let p = cnt[i]; p < cnt[i + 1]; p++) { const t = ord[p], [a, o0] = at(t); for (let v = 0; v < 3; v++) { const o = o0 + v * 13; for (let k = 0; k < 3; k++) { const q = a[o + k]; if (q < b[2 * k]) b[2 * k] = q; if (q > b[2 * k + 1]) b[2 * k + 1] = q; } } put(t); }
+    T.push([dOff + cnt[i] * 3, (cnt[i + 1] - cnt[i]) * 3, b[0], b[1], b[2], b[3], b[4], b[5]]); }
+  flush(); return T; }
 // Wall sky-visibility AO (realism 2026-10-31, L3): from 2 points on the face, march out along the normal (≤75 m) through the 40 m grid; the steepest
 // obstruction elevation θ above the wall's foot / top (other prisms ≥ 8 m, not the same block) → ao = 1 − 0.7·sin θ, 0.3..1. Stored as the length of the
 // face normal (base / top vertices); GL_FS scales the sky ambient by it. Visual only.
@@ -5417,9 +5439,9 @@ function slimKitP(A, P) { const wh = [238, 238, 234].map(v => v / 255), sf = [21
     band(P.h + 0.25, 0.75, false); } }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
-  if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+  if (C && C.city) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
     for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; C.city = C.edges = C.gx = null; return; }   // uploaded: drop the JS copies (memory)
-  const A = glArr(), own = [], E = [];
+  const A = glChunks(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
   if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of rf30Kit()) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
@@ -5431,9 +5453,9 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; GPU.noAO = true; for (const S of CONDO_SITES) condoKit(A, S); GPU.noAO = false; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.uc) craneKit(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
-  const CA = new Float32Array(A.l); CA.set(A.b.subarray(GPU.opN * 13, A.l), GPU.opN * 13);   // one exact-size copy, sorted into directly; A freed after (peak memory: was capacity + temp sort copy + upload copy + cache copy ≈4× the buffer → iPhone tab crash, TY 2026-11-03)
-  GPU.tiles = gpuTileSort(A.b, k0, undefined, undefined, 0, CA); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0, undefined, undefined, 0, CA.subarray(k0 * 13)).map(t => [t[0] + k0, ...t.slice(1)]); A.b = null; GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
-  GPU.city = gpuBuf(CA); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = CA.length / 13;
+  if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges); const NV = A.n; GPU.city = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.city); gl.bufferData(gl.ARRAY_BUFFER, Math.max(NV, 1) * 52, gl.STATIC_DRAW);   // chunks → tile-sorted straight into the GPU buffer (memory 2026-11-03: no full-size JS copy; was CA + growable buffer ≈3× the city in JS)
+  GPU.tiles = gpuTileStream(A, 0, k0, 0, true); GPU.rkT = gpuTileStream(A, k0, GPU.opN - k0, k0, true); gpuTileStream(A, GPU.opN, NV - GPU.opN, GPU.opN, false); A.C = A.b = null;
+  GPU.newR = [ns, NV - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = NV;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
@@ -5441,7 +5463,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (state.showExisting) rf30Grounds(X);   // Riverfront W corner: drive, aprons, plaza
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: CA, edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 // covered linkways paved all the way (TY 2026-11-01 "pave all the way… make it natural"): each linkway end that isn't already on paving is extended along its own direction until it
 // meets paving (site road, block apron, plaza/porch/drive/court/pad, jogging track, footpath; ≤25 m), else bent toward the nearest paved point ≤15 m (smooth quadratic curve); cached
@@ -6928,10 +6950,11 @@ function wcHash() { let a = 0x811c9dc5, b = 0x9747b28c; const f = new Float64Arr
   return (a >>> 0).toString(36) + (b >>> 0).toString(36); }
 const wcDB = () => new Promise((res, rej) => { const r = indexedDB.open('trpf134-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('w'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { WC.key = ''; return Promise.resolve(); }
-  const get = wcDB().then(db => new Promise(res => { const q = db.transaction('w').objectStore('w').get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; db.close(); res(); }; q.onerror = () => { db.close(); res(); }; }));
+  const get = wcDB().then(db => new Promise(res => { const os = () => db.transaction('w', 'readwrite').objectStore('w'), done = () => { db.close(); res(); }, k = os().get('k');   // key first: a stale entry is deleted unread (old entries held the 160 MB+ city buffer; reading one per deploy spiked memory, 2026-11-03)
+    k.onsuccess = () => { if (k.result !== WC.key) { const d = os().delete('world'); d.onsuccess = d.onerror = done; return; } const q = os().get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; done(); }; q.onerror = done; }; k.onerror = done; }));
   return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
 function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
-  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.objectStore('w').put(WC.key, 'k'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
 /* ===================== UX ROUND 4 (2026-10-31): scenario chip, hold-to-compare, pinch/wheel lens, double-tap face, haptics, phone dock, plan full screen, panel width + keys ===================== */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} };
 const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', build: '2032', allres: 'Full', custom: 'Custom' };
