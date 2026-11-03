@@ -1259,13 +1259,13 @@ function trpfRelief(B) {
       for (const [r0, r1] of runs) { if (r1 - r0 < (cor ? 0.3 : 1.0)) continue; const q = (u0, u1, d0, d1) => [P(u0, d0), P(u1, d0), P(u1, d1), P(u0, d1)];
         if (cor) { const e0 = r0 - 0.15, e1 = r1 + 0.15;
           for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; pc(y, y + 1.0, q(e0, e1, -0.15, 0.02), WH); if (i < nS) pc(y + 2.4, y + 2.6, q(e0, e1, -0.3, 0.02), WH); }
-          const np = Math.max(1, Math.ceil((r1 - r0) / 6)); for (let k = 0; k <= np; k++) { const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pc(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
+          const np = Math.max(1, Math.ceil((r1 - r0) / 6)); if (r1 - r0 >= 2.0) for (let k = 0; k <= np; k++) {   /* runs < 2 m (31A S-end notch 0.9 m): no posts, 2 × 0.3 m posts had left a 0.2 m slit */ const u = r0 + 0.15 + ((r1 - r0 - 0.3) * k) / np; pc(VOID_DECK_HEIGHT, BLK_TOP, q(u - 0.15, u + 0.15, -0.3, 0.02), WH); }
           continue; }
         const inC = t => { const [px, pz] = P(t, 0.15); return !raster && B.boxes.some(c => c[4] && px > c[0] && px < c[2] && pz > c[1] && pz < c[3]); }, e0 = inC(r0 - 0.15) ? r0 : r0 - 0.3, e1 = inC(r1 + 0.15) ? r1 : r1 + 0.3, cuts = [e0]; for (let j = Math.ceil(e0 / SW); j * SW < e1; j++) cuts.push(j * SW); cuts.push(e1);
         for (let i = 0; i <= nS; i++) { const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT, band = i > 0 && i % 5 === 0;
           if (!band) pr(y - 0.05, y + 0.2, q(e0, e1, 0, 0.3), WH); else for (let k = 0; k < cuts.length - 1; k++) if (cuts[k + 1] - cuts[k] > 0.01) pr(y - 0.05, y + 0.2, q(cuts[k], cuts[k + 1], 0, 0.3), !plain && brown((cuts[k] + cuts[k + 1]) / 2) ? BR : WH); }
         for (let j = Math.ceil((r0 + 0.4) / SW); j * SW < r1 - 0.4; j++) if (!plain && (brown(j * SW - 0.1) || brown(j * SW + 0.1))) pr(VOID_DECK_HEIGHT, top, q(j * SW - 0.3, j * SW + 0.3, 0, 0.35), BR); } } });
-  for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; const S = pc(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); S.botc = [150, 148, 144];   // corridor floor slabs (roof slab at i = nS), shaded soffit
+  for (let i = 1; i <= nS; i++) B.boxes.forEach(b => { if (b[4] !== 'c') return; const y = VOID_DECK_HEIGHT + i * FLOOR_HEIGHT; const S = pc(y - 0.2, y, [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], FL); S.botc = B.name === 'Blk 31A' ? [207, 205, 200] : [150, 148, 144];   /* 31A: ceiling as the 32A corridor (walkable inside) */   // corridor floor slabs (roof slab at i = nS), shaded soffit
     const L = b[2] - b[0] >= b[3] - b[1], len = L ? b[2] - b[0] : b[3] - b[1], cx = (b[0] + b[2]) / 2, cz = (b[1] + b[3]) / 2;   // ceiling lamps (LED battens) every ≤6 m along the corridor
     for (let n = Math.max(1, Math.round(len / 6)), k = 0; k < n; k++) { const t = (L ? b[0] : b[1]) + (len * (k + 0.5)) / n, a = L ? [t - 0.6, cz - 0.07, t + 0.6, cz + 0.07] : [cx - 0.07, t - 0.6, cx + 0.07, t + 0.6]; pr(y - 0.26, y - 0.2, [[a[0], a[1]], [a[2], a[1]], [a[2], a[3]], [a[0], a[3]]], [250, 250, 246]).lamp = 1; } });
   return out; }
@@ -1779,6 +1779,8 @@ function w31G(A, B) { const W = (x, y, z) => { const [X, Z] = blkToWorld(B, x, z
     Q(P(u0, v0, ya - th), P(u0, v0, ya), P(u0, v1, ya), P(u0, v1, ya - th), du.map(q => -q)); Q(P(u1, v0, yb - th), P(u1, v1, yb - th), P(u1, v1, yb), P(u1, v0, yb), du); };
   return { bx, F, pr, sl }; }
 function w31Geo(A) { const B = b31(); if (!B) return; const { bx, F, pr, sl } = w31G(A, B), cv = [0, 0, 0.3, 0], lm = [0, 0, 0.45, 0], top = BLK_TOP + 3, H = B.h, WL = [226, 222, 212], TR = [214, 210, 202], LD = [204, 200, 192], RL = [92, 96, 100];
+  // corridor / lobby / wash floors 2F–30F: 600 mm homogeneous tiles as the 32A corridor (tileAlb, tag 53) on the relief slabs (TY 2026-11-03: 31A floors were bare slab colour, 2F showed the void-deck plate)
+  for (const q of B.boxes) if (q[4] === 'c') for (let f = 2; f <= 30; f++) { const y = slabAt(f); bx(q[0], q[1], q[2], q[3], y, y + 0.006, [160, 156, 150], [0, 0, 0.3, 53], 62); }
   // stair cores
   for (const T of W31.stairs) { const M = (u, v) => w31SM(T, u, v), U = (u0, v0, u1, v1, y0, y1, col, t = cv) => { const [a, b] = M(u0, v0), [c, d] = M(u1, v1); bx(a, b, c, d, y0, y1, col, t); }, hW = T.W / 2;
     U(-0.2, -0.2, T.L + 0.2, 0, 0, top, WL); U(-0.2, T.W, T.L + 0.2, T.W + 0.2, 0, top, WL); U(-0.2, 0, 0, T.d[0], 0, top, WL); U(-0.2, T.d[1], 0, T.W, 0, top, WL);   // side walls, door-wall jambs
@@ -1804,7 +1806,7 @@ function w31Geo(A) { const B = b31(); if (!B) return; const { bx, F, pr, sl } = 
         F('x', g, n, c - 0.6, c + 0.6, 0, 0.07, y, y + 0.012, [141, 144, 147], cv); F('x', g, n, c - 0.2, c + 0.2, 0, 0.03, y + 2.32, y + 2.46, [38, 40, 43], cv); F('x', g, n, c - 0.07, c + 0.07, 0.03, 0.034, y + 2.35, y + 2.43, [255, 179, 71], lm); }
       F('x', g, n, -2.43, -2.27, 0, 0.015, y + 1.0, y + 1.32, [201, 204, 206], cv); F('x', g, n, -2.375, -2.325, 0.015, 0.03, y + 1.18, y + 1.23, [233, 242, 248], lm); F('x', g, n, -2.375, -2.325, 0.015, 0.03, y + 1.08, y + 1.13, [233, 242, 248], lm); } }   // up / down call buttons
   // chute stack: refuse chamber on the void deck, hoppers per storey (W = recyclables, blue), bib tap
-  { const [a, b, c, d] = W31.chute; bx(a, b, c, d, 0, VOID_DECK_HEIGHT, [200, 198, 192], cv); F('x', d, 1, -7.3, -6.3, 0, 0.03, 0, 2.1, [138, 140, 138], cv);
+  { const [a, b, c, d] = W31.chute; bx(a, b, c, d, 0, VOID_DECK_HEIGHT, [200, 198, 192], cv); bx(a, d, c, d + 0.008, VOID_DECK_HEIGHT, slabAt(31), [222, 219, 210], cv, 2);   /* corridor paint skin on the hopper face (the chute prism's plain facade showed as a mottled exterior wall) */ F('x', d, 1, -7.3, -6.3, 0, 0.03, 0, 2.1, [138, 140, 138], cv);
     for (let f = 2; f <= 30; f++) { const y = slabAt(f); W31.hop.forEach((hx, i) => { const rec = i === 0, g = W31.hg;
       F('x', g, 1, hx - 0.34, hx + 0.34, 0, 0.03, y + 0.78, y + 1.44, rec ? [36, 80, 138] : [167, 171, 174], cv); F('x', g, 1, hx - 0.27, hx + 0.27, 0.03, 0.07, y + 0.86, y + 1.36, rec ? [47, 99, 166] : [196, 199, 201], cv); F('x', g, 1, hx - 0.16, hx + 0.16, 0.07, 0.1, y + 1.27, y + 1.3, [154, 158, 163], cv);
       F('x', g, 1, hx - 0.24, hx + 0.24, 0, 0.012, y + 1.58, y + 1.8, rec ? [47, 99, 166] : [60, 110, 76], cv); F('x', g, 1, hx - 0.18, hx + 0.18, 0.012, 0.016, y + 1.64, y + 1.68, [242, 242, 238], cv); });
@@ -1855,10 +1857,12 @@ function w31DynGeo(A) { const B = b31(); if (!B) return; const { bx, F } = w31G(
     for (const fr of [1 / 3, 2 / 3]) { Bc(-0.8 + t, 1.7 * fr - 0.004, -0.8 + t + 0.004, 1.7 * fr + 0.004, y + 0.15, y + 2.4, SJ); Bc(0.8 - t - 0.004, 1.7 * fr - 0.004, 0.8 - t, 1.7 * fr + 0.004, y + 0.15, y + 2.4, SJ); Bc(-0.8 + 1.6 * fr - 0.004, 1.7 - t - 0.004, -0.8 + 1.6 * fr + 0.004, 1.7 - t, y + 0.15, y + 2.4, SJ); }
     Bc(-0.8 + t, 0, -0.8 + t + 0.01, 1.7, y, y + 0.15, KP); Bc(0.8 - t - 0.01, 0, 0.8 - t, 1.7, y, y + 0.15, KP); Bc(-0.8, 1.7 - t - 0.01, 0.8, 1.7 - t, y, y + 0.15, KP);   // kick plates
     Bc(-0.65, 1.7 - t - 0.07, 0.65, 1.7 - t - 0.03, y + 0.88, y + 0.93, HR); Bc(-0.8 + t + 0.03, 0.4, -0.8 + t + 0.07, 1.55, y + 0.88, y + 0.93, HR);   // handrails
-    Bc(-0.8, 0, -0.55, t, y, y + 2.4, SS); Bc(0.55, 0, 0.8, t, y, y + 2.4, SS); Bc(-0.55, 0, 0.55, t, y + 2.1, y + 2.4, SS);   // car front + transom
-    Bc(0.57, t, 0.78, t + 0.015, y + 0.85, y + 1.7, KP); Bc(0.6, t + 0.015, 0.75, t + 0.02, y + 1.52, y + 1.62, [255, 170, 60], lm); for (let i = 0; i < 10; i++) { const p = 0.6 + (i % 2) * 0.08, yy = y + 0.95 + Math.floor(i / 2) * 0.1; Bc(p, t + 0.015, p + 0.05, t + 0.025, yy, yy + 0.06, [228, 228, 222]); }   // COP
-    Bc(-0.15, t, 0.15, t + 0.01, y + 2.17, y + 2.3, [20, 20, 22]); Bc(-0.08, t + 0.01, 0.08, t + 0.015, y + 2.2, y + 2.27, [255, 170, 60], lm);   // indicator
-    const so = op ? 0.5 * L31.o : 0; Bc(-0.55 - so, -0.035, -so, -0.005, y, y + 2.1, SS); Bc(so, -0.035, 0.55 + so, -0.005, y, y + 2.1, SS); }   // car door leaves
+    // car door leaves hang on the shaft side of the car front, all behind the shaft wall's inner face (zf): they were 5–35 mm on the lobby side of it, inside the wall thickness, so the wall above
+    // each landing opening (and the next storey's opening) slid past in front of the closed car doors while riding (TY 2026-11-03 "walls moving as I move up")
+    const fo = 0.045; Bc(-0.8, fo, -0.55, fo + t, y, y + 2.4, SS); Bc(0.55, fo, 0.8, fo + t, y, y + 2.4, SS); Bc(-0.55, fo, 0.55, fo + t, y + 2.1, y + 2.4, SS);   // car front + transom
+    Bc(0.57, fo + t, 0.78, fo + t + 0.015, y + 0.85, y + 1.7, KP); Bc(0.6, fo + t + 0.015, 0.75, fo + t + 0.02, y + 1.52, y + 1.62, [255, 170, 60], lm); for (let i = 0; i < 10; i++) { const p = 0.6 + (i % 2) * 0.08, yy = y + 0.95 + Math.floor(i / 2) * 0.1; Bc(p, fo + t + 0.015, p + 0.05, fo + t + 0.025, yy, yy + 0.06, [228, 228, 222]); }   // COP
+    Bc(-0.15, fo + t, 0.15, fo + t + 0.01, y + 2.17, y + 2.3, [20, 20, 22]); Bc(-0.08, fo + t + 0.01, 0.08, fo + t + 0.015, y + 2.2, y + 2.27, [255, 170, 60], lm);   // indicator
+    const so = op ? 0.5 * L31.o : 0; Bc(-0.55 - so, 0.008, -so, 0.038, y, y + 2.1, SS); Bc(so, 0.008, 0.55 + so, 0.038, y, y + 2.1, SS); }   // car door leaves
   for (const T of W31.stairs) { const M = (u, v) => w31SM(T, u, v), U = (u0, v0, u1, v1, y0, y1, col) => { const [a, b] = M(u0, v0), [c, d] = M(u1, v1); bx(a, b, c, d, y0, y1, col, cv); }, [d0, d1] = T.d;
     for (let f = 1; f <= 30; f++) { const y = slabAt(f); if (here && f === fw) { U(0.02, d1 - 0.06, 0.02 + d1 - d0 - 0.04, d1 - 0.01, y, y + 2.08, [138, 140, 138]); U(0.6, d1 - 0.1, 0.72, d1 - 0.06, y + 0.95, y + 1.0, RLc()); }
       else { U(-0.12, d0 + 0.01, -0.07, d1 - 0.01, y, y + 2.08, [138, 140, 138]); U(-0.07, d0 + 0.08, -0.03, d0 + 0.2, y + 0.95, y + 1.0, RLc()); } } } }   // fire door: open leaf against the landing side wall
@@ -1896,7 +1900,7 @@ const P2W = (() => { const sp = GEO.spots.find(q => q.id === 'living'), nb = 170
     rep([-5.05, 2.35, 0.45, 5.5, 'l'], [-5.05, 2.35, 0.55, 5.5, 'l']); rep([-5.0, -3.5, 0.45, -0.5, 'l'], [-5.05, -3.5, 0.55, -0.5, 'l']);   // close the 0.1 m sky slits E of both lift banks (corridor starts at x 0.55) + 5 cm slit chute | S bank (TY 2026-11-03)
     rep([2.25, -1.0, 11.25, 2.4], [2.35, -1.0, 11.25, 2.4]); rep([2.3, -13.5, 11.15, -8.3], [2.35, -13.5, 11.15, -8.3]); rep([2.25, 2.35, 3.15, 5.5, 'c'], [2.25, 2.4, 3.15, 5.5, 'c']); rep([3.1, 8.2, 7.85, 11.75], [3.1, 9.0, 7.85, 11.75]); B.boxes.push([3.2, 8.2, 7.85, 9.0]);
     B.cuts = [[-11.2, 8.95, -8.8, 10.3], [8.3, 8.6, 11.0, 10.3], [5.0, -1.0, 6.45, 0.0], [3.6, -8.3, 4.68, -5.6], [-19.05, -11.1, -17.72, -9.5], [-19.1, -16.5, -17.2, -15.9], [-4.68, -18.7, -3.6, -17.3], [-0.45, -22.45, 0.6, -21.34], [9.8, -22.45, 11.2, -21.34]];   // A/C ledges (storey plan, snapped to the box faces ±0.5 m): render pieces carve them out, physics keeps the boxes; drawn per storey in w31Geo (TY 2026-11-03)
-    rep([-7.9, 7.5, -3.65, 11.7], [-7.9, 7.5, -3.75, 11.7]); rep([-3.65, 9.0, 3.1, 11.7], [-3.75, 9.0, 3.1, 11.7]); rep([-6.9, -24.1, -3.6, -14.9], [-6.9, -24.1, -3.6, -15.15]); rep([3.15, 2.35, 9.8, 5.65], [3.15, 2.35, 9.8, 5.5]); B.boxes.push([3.2, 5.45, 9.8, 5.7]); } }   // no unit face inside a corridor (they showed their window grid / glass reflection in front of the corridor wall)   // unit faces flush with the E corridor edge x 2.35 (stood 5–10 cm inside the corridor)
+    rep([-7.9, 7.5, -3.65, 11.7], [-7.9, 7.5, -3.75, 11.7]); rep([-3.65, 9.0, 3.1, 11.7], [-3.75, 9.0, 3.1, 11.7]); rep([-6.9, -24.1, -3.6, -14.9], [-6.9, -24.1, -3.6, -15.15]); rep([3.15, 2.35, 9.8, 5.65], [3.15, 2.35, 9.8, 5.5]); B.boxes.push([3.2, 5.45, 9.8, 5.7]); rep([-0.45, -26.15, 3.05, -18.2], [-0.45, -26.15, 3.0, -18.2]); rep([8.15, -26.1, 11.2, -18.2], [8.2, -26.1, 11.2, -18.2]); rep([-10.05, -22.45, -6.9, -15.65], [-10.05, -22.45, -6.9, -15.7]); rep([-16.35, -22.05, -10.05, -15.1], [-16.35, -22.05, -10.05, -15.15]); } }   // no unit face inside a corridor (they showed their window grid / glass reflection in front of the corridor wall)   // unit faces flush with the E corridor edge x 2.35 (stood 5–10 cm inside the corridor)
 const planRing = ([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].flatMap(([X, Y]) => P2W(X, Y));
 const VD = {
   fac: [['Blk 32A', [607, 360, 723, 413], 'Future amenities (7), 1st storey (convenience shop?)', [132, 156, 162]], ['Blk 33A', [347, 447, 460, 500], "Residents' Network Centre", [136, 154, 164]]],   // (7): TY 2026-10-30 "maybe a convenience shop" (estimate)   // site px rects: boxes whose centre is inside stay solid
@@ -4808,7 +4812,7 @@ float winRefl(vec3 p, vec3 r, vec2 pp) {   // floor sheen: reflected view ray vs
   return w; }
 float shadowAt(vec3 p, vec3 n) {
   if (uShadow < 0.5) return 1.0;
-  vec3 r = p + n * 0.5 - uLc0, l = vec3(dot(uLr, r) / uLs.x, dot(uLu, r) / uLs.x, dot(uLf, r) / uLs.y);
+  vec3 r = p + n * (uLs.x * 0.00143) - uLc0, l = vec3(dot(uLr, r) / uLs.x, dot(uLu, r) / uLs.x, dot(uLf, r) / uLs.y);
   if (max(abs(l.x), abs(l.y)) < 0.97 && abs(l.z) < 0.99) return pcf(uSm0, l);
   r = p + n * 3.0 - uLc1; l = vec3(dot(uLr, r) / uLs.z, dot(uLu, r) / uLs.z, dot(uLf, r) / uLs.w);
   if (max(abs(l.x), abs(l.y)) < 0.98 && abs(l.z) < 0.99) return pcf(uSm1, l);
@@ -4956,7 +4960,7 @@ void main() {
       alb *= 0.55 + 0.45 * smoothstep(-1.0, 0.5, vTex.x); }
     else if (uTexOn > 0.5) alb *= mDet(6, vec2(atan(nrm.z, nrm.x) * 0.4, -p.y), 1.0) * 0.95;   // photo bark (UE5 pass)
     else if (k2 > 0.0) alb *= 0.8 + 0.3 * vn2(vec2(atan(nrm.z, nrm.x) * 3.0, p.y * 4.0)) * k2; else alb *= 0.8; }
-  else if (uUnlit < 0.5 && vDist < 3000.0 && mode < 9.5 && mode > -0.5) {   // weathering: vertical rain streaks + panel tone on walls, grime patches on roofs, asphalt/paving grain at grade
+  else if (uUnlit < 0.5 && vDist < 3000.0 && mode < 9.5 && mode > -0.5 && !(mode > 0.2 && mode < 0.4)) {   /* not on covered parts (corridors, void decks: indoor finishes) */ // weathering: vertical rain streaks + panel tone on walls, grime patches on roofs, asphalt/paving grain at grade
     bool wall = abs(nrm.y) < 0.3; vec2 tq = wall ? vec2(dot(vWorld.xz, vec2(-nrm.z, nrm.x)), vWorld.y) : vWorld.xz; float fw = length(fwidth(tq));
     if (wall) { float st = fw < 2.5 ? vn2(vec2(tq.x * 0.9, tq.y * 0.035)) : 0.0, pn = fw < 12.0 ? vn2(tq * vec2(0.12, 0.05) + 3.0) : 0.5;
       alb *= 1.0 - (0.1 * smoothstep(0.45, 0.95, st) * (1.0 - smoothstep(0.4, 2.5, fw)) + 0.05 * (pn - 0.5) * (1.0 - smoothstep(3.0, 12.0, fw))) * (1.0 - gm); }
@@ -4965,7 +4969,7 @@ void main() {
   if (uUnlit < 0.5 && vTex.w > 49.5 && vTex.w < 52.5 && mode > -0.5 && mode < 0.1 && vDist < 600.0) { float gpx = length(fwidth(vWorld.xz)); if (uTexOn > 0.5 && vDist < 120.0) { vec3 q = mNrm(vTex.w < 50.5 ? 0 : vTex.w < 51.5 ? 2 : 1, vWorld.xz); nrm = normalize(nrm + vec3(q.x, 0.0, -q.y) * 0.5 * (1.0 - smoothstep(30.0, 120.0, vDist))); }
     alb = vTex.w < 50.5 ? lawnAlb(alb, vWorld.xz, gpx) : vTex.w < 51.5 ? pavAlb(alb, vWorld.xz, gpx) : asphAlb(alb, vWorld.xz, gpx); }   /* estate lawn / paving / site roads: near-field materials (GL_GDET) */
   if (uUnlit < 0.5 && vTex.w > 52.5 && vTex.w < 53.5 && vDist < 300.0) alb = tileAlb(alb, vWorld.xz, length(fwidth(vWorld.xz)));
-  if (uTexOn < 0.5 && uUnlit < 0.5 && vDist < 45.0 && mode > -0.5 && mode < 9.5 && abs(nrm.y) < 0.3 && gm < 0.5) { float k = 1.0 - smoothstep(15.0, 45.0, vDist); vec3 q = vWorld * 14.0; float n0 = vn3(q);   /* close-range wall relief: render/concrete micro-normal (~7 cm) + pores (open-world pass 2026-11-01) */
+  if (uTexOn < 0.5 && uUnlit < 0.5 && vDist < 45.0 && mode > -0.5 && mode < 9.5 && !(mode > 0.2 && mode < 0.4) && abs(nrm.y) < 0.3 && gm < 0.5) { float k = 1.0 - smoothstep(15.0, 45.0, vDist); vec3 q = vWorld * 14.0; float n0 = vn3(q);   /* close-range wall relief: render/concrete micro-normal (~7 cm) + pores (open-world pass 2026-11-01) */
     vec3 gq = vec3(vn3(q + vec3(0.5, 0.0, 0.0)), vn3(q + vec3(0.0, 0.5, 0.0)), vn3(q + vec3(0.0, 0.0, 0.5))) - n0; gq -= nrm * dot(gq, nrm); nrm = normalize(nrm + gq * 0.4 * k); alb *= 1.0 - 0.05 * k * (n0 - 0.5); }
   vec3 c;
   if (uUnlit > 0.5 && mode > 10.5) c = untone(min(alb * uEmis, vec3(1.0))) * (uEmis > 1.0 ? 1.8 : 1.0);   // light fittings (on: glowing; off: plain diffuser)
@@ -5034,7 +5038,7 @@ void main() {
       c = mix(c, untone(skyRefl(r)), 0.22 + 0.55 * F); c += vec3(1.0, 0.96, 0.86) * pow(max(dot(r, uSun), 0.0), 900.0) * uDirect * vis * 3.0 * SUNK; }
     if (abs(nrm.y) < 0.3 && mode < 9.5 && vDist < 1400.0) c *= 1.0 - 0.3 * (0.6 + 0.4 * uAmb) * (1.0 - smoothstep(0.0, 6.0, vWorld.y));   // contact shading at wall feet (aoBase)
     if (nrm.y < -0.5 && mode < 9.5) c += al * 0.2 * SUNK * uDirect * tint;   /* soffits: sunlight reflected off the ground below */
-    if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && vWorld.y < 30.0 && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.435 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.41 && mode < 0.435) c = mix(c, toLin(alb) * 3.2, 0.9);   /* 0.42: coloured emissive (tunnel lane signals) */ if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
+    if (mode > 0.2 && mode < 0.4) { c += al * (0.12 * uAmb + 0.2 * uDirect + 0.25 * uNight) * SUNK * vec3(1.0, 0.99, 0.96); }   /* covered parts: per-face shade like the interior pass (walls 1 / 0.86 / 0.74, 2026-11-01 TY carpark "shading all wrong, follow the blocks": the uniform fill made treads/risers/walls one flat tone) */   /* void deck: bounce off the light floor/soffit + LED battens (estimate) */ if (mode > -0.5 && mode < 0.4 && !leaf && (vWorld.y < 30.0 || mode > 0.2) && vDist < 1500.0) c *= mix(0.86 - 0.12 * nrm.z + 0.03 * nrm.x, nrm.y > 0.0 ? 1.0 : 0.8, abs(nrm.y));   /* estate ground level (void decks, carpark, shelters, playgrounds, lamps, kit; plain/covered modes ≤30 m up, ≤1.5 km): per-face shade like the interior pass (walls 1 / 0.86 / 0.74, down 0.8) so faces read apart in shade/dusk (TY 2026-11-01 "same blending for the whole estate ground floor") */ if (mode > 0.435 && mode < 0.46) c = mix(c, vec3(2.4, 2.35, 2.2), 0.85); if (mode > 0.41 && mode < 0.435) c = mix(c, toLin(alb) * 3.2, 0.9);   /* 0.42: coloured emissive (tunnel lane signals) */ if (mode > 0.46 && mode < 0.5) c = mix(c, vec3(2.3, 2.4, 2.6), 0.9 * uNight); }   /* 0.48: estate lamp lenses, lit at night only */
   vec3 dc = tone(c); if (uUnlit < 0.5) dc = mix(fogColO(normalize(vWorld - uEye)), dc, exp(-uBeta * vDist * APK));   // haze blended in display space (as tuned for the 2D sky)
   if (uMirror > 0.5) { dc = mix(dc, uWater, 0.35); float a = uMirA * (0.8 + 0.2 * hash(vec2(floor(gl_FragCoord.y * 0.5), mod(floor(uTime * 2.0), 97.0)))); o = vec4(grade(dc) * a, a); return; }   // reflection in water
   o = vec4(grade(dc) * uAlpha, uAlpha);
@@ -5893,11 +5897,13 @@ function gpuEnv(pr, env, unlit) {
 // shadow-map centre snapped to whole texels in light space (2048² over ±s): a recentred map keeps the same texel grid, so shadow edges don't crawl/jump when it moves
 function smSnap(c, r, u, s) { const t = 2 * s / 2048, a = c[0] * r[0] + c[1] * r[1] + c[2] * r[2], b = c[0] * u[0] + c[1] * u[1] + c[2] * u[2], da = Math.round(a / t) * t - a, db = Math.round(b / t) * t - b; return [c[0] + r[0] * da + u[0] * db, c[1] + r[1] * da + u[1] * db, c[2] + r[2] * da + u[2] * db]; }
 // Sun shadow maps (2 cascades around the viewer's spot: ±350 m and ±3.2 km), re-rendered only when sun / spot / world / own-unit skip change (so drag/walk reuse them).
-function gpuShadows(env) {
+function gpuShadows(env, cam) {
   const s = env.sunVec; if (env.direct <= 0.02 || s[1] < 0.02) { GPU.L = null; return; }
-  const own = ownUnitTest(), key = [s.map(v => v.toFixed(4)), state.vx.toFixed(1), state.vz.toFixed(1), WORLD_VER, !!own, state.spot, TREES.n, CMP.on].join('|'); if (GPU.skey === key && GPU.L) return; GPU.skey = key;
+  // walking on the ground (void deck, carpark, Blk 31A corridors): near cascade ±150 m round the eye (0.15 m texels, normal offset scaled) — the ±350 m map round the spot (0.34 m texels) leaked sun stripes into the 31A corridors (TY 2026-11-03)
+  const tight = !!(cam && state.walk && onGround()), tc = tight ? [Math.round(cam.ex / 16) * 16, Math.round(cam.ez / 16) * 16] : [state.vx, state.vz];
+  const own = ownUnitTest(), key = [s.map(v => v.toFixed(4)), tc[0].toFixed(1), tc[1].toFixed(1), tight, WORLD_VER, !!own, state.spot, TREES.n, CMP.on].join('|'); if (GPU.skey === key && GPU.L) return; GPU.skey = key;
   const f = [-s[0], -s[1], -s[2]], up = Math.abs(s[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0], cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nz = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
-  const r = nz(cr(f, up)), u = cr(r, f), sc = [[350, 700], [3200, 4000]], L = GPU.L = { r, u, f, c: [smSnap([state.vx, 40, state.vz], r, u, sc[0][0]), smSnap([state.vx, 0, state.vz], r, u, sc[1][0])], s: sc }, gl = GPU.gl;   // centres snapped to whole texels: moving to another spot doesn't re-raster shadow edges (TY 2026-11-01: light shifts while walking)
+  const r = nz(cr(f, up)), u = cr(r, f), sc = [[tight ? 150 : 350, 700], [3200, 4000]], L = GPU.L = { r, u, f, c: [smSnap([tc[0], 40, tc[1]], r, u, sc[0][0]), smSnap([state.vx, 0, state.vz], r, u, sc[1][0])], s: sc }, gl = GPU.gl;   // centres snapped to whole texels: moving to another spot doesn't re-raster shadow edges (TY 2026-11-01: light shifts while walking)
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
   for (let k = 0; k < 2; k++) { gl.bindFramebuffer(gl.FRAMEBUFFER, GPU.sm[k].fb); gl.viewport(0, 0, 2048, 2048); gl.clear(gl.DEPTH_BUFFER_BIT);
     for (const pr of [GPU.sh, GPU.sht]) { gl.useProgram(pr.p); gl.uniform3f(pr.u.uLr, ...r); gl.uniform3f(pr.u.uLu, ...u); gl.uniform3f(pr.u.uLf, ...f); gl.uniform3f(pr.u.uLc, ...L.c[k]); gl.uniform2f(pr.u.uLs, ...L.s[k]); }
@@ -5913,7 +5919,7 @@ function lampsNear(cam, env) { GPU.olN = 0; if (!env.night) return; const key = 
   c.sort((a, b) => a[0] - b[0]); const L = GPU.olL || (GPU.olL = new Float32Array(96)); L.fill(0); const n = Math.min(24, c.length); for (let i = 0; i < n; i++) L.set(c[i].slice(1), i * 4); GPU.olN = GPU.olN0 = n; }
 function gpuRender(cam, env, pxW, pxH) {
   if (!gpuInit()) return false; const gl = GPU.gl, cv = GPU.cv; if (cv.width !== pxW || cv.height !== pxH) { cv.width = pxW; cv.height = pxH; }
-  gpuWorld(); gpuShadows(env); lampsNear(cam, env); gl.viewport(0, 0, pxW, pxH); gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  gpuWorld(); gpuShadows(env, cam); lampsNear(cam, env); gl.viewport(0, 0, pxW, pxH); gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
   gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const M = GPU.main, F = GPU.flat, NEAR = state.walk && onGround() ? nearFit(pxW, pxH, 0.4) : 1, FAR = 40000;   // ground walk: near plane fitted inside the free radius around the eye (never sees into a column/wall)
   // Room interior on: the room's opaque walls/frames/furniture (drawn later over this, alpha 1) go into depth at 0 first
