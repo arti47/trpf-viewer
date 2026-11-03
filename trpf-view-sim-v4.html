@@ -1763,10 +1763,13 @@ function rectsMinus(R, M) { const all = R.concat(M), xs = [...new Set(all.flatMa
 const w31Plates = B => rectsMinus(B.boxes.map(b => b.slice(0, 4)), B.boxes.filter(b => b[4] === 's' || b[4] === 'l').map(b => b.slice(0, 4))).map(([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]]);
 // geometry helpers in a block's local frame (raw quads, as mscpLiftGeo): box, face box (on a box face, d = distance to the corridor side), convex prism, sloped slab
 function w31G(A, B) { const W = (x, y, z) => { const [X, Z] = blkToWorld(B, x, z); return [X, y, Z]; }, [X0, Z0] = blkToWorld(B, 0, 0), nW = (lx, lz) => { const [X, Z] = blkToWorld(B, lx, lz), l = Math.hypot(X - X0, Z - Z0) || 1; return [(X - X0) / l, 0, (Z - Z0) / l]; }, k = v => v.map(q => q / 255), z4 = [0, 0, 0, 0];
-  const bx = (x0, z0, x1, z1, y0, y1, col, t = z4) => { if (x1 < x0) [x0, x1] = [x1, x0]; if (z1 < z0) [z0, z1] = [z1, z0]; const c = k(col), Q = (a, b, d, e, n) => A.quad(a, b, d, e, n, c, t, t, t, t);
-    Q(W(x0, y1, z0), W(x1, y1, z0), W(x1, y1, z1), W(x0, y1, z1), [0, 1, 0]); Q(W(x0, y0, z1), W(x1, y0, z1), W(x1, y0, z0), W(x0, y0, z0), [0, -1, 0]); Q(W(x0, y0, z0), W(x1, y0, z0), W(x1, y1, z0), W(x0, y1, z0), nW(0, -1)); Q(W(x1, y0, z1), W(x0, y0, z1), W(x0, y1, z1), W(x1, y1, z1), nW(0, 1));
-    Q(W(x1, y0, z0), W(x1, y0, z1), W(x1, y1, z1), W(x1, y1, z0), nW(1, 0)); Q(W(x0, y0, z1), W(x0, y0, z0), W(x0, y1, z0), W(x0, y1, z1), nW(-1, 0)); };
-  const F = (ax, g, ns, t0, t1, d0, d1, y0, y1, col, t) => (ax === 'x' ? bx(t0, g + ns * d0, t1, g + ns * d1, y0, y1, col, t) : bx(g + ns * d0, t0, g + ns * d1, t1, y0, y1, col, t));
+  // sk = faces to skip (bits: 1 top, 2 bottom, 4 −z, 8 +z, 16 +x, 32 −x): hidden faces of small window parts left out (vertex budget; TY 2026-11-03 phone crash)
+  const bx = (x0, z0, x1, z1, y0, y1, col, t = z4, sk = 0) => { if (x1 < x0) [x0, x1] = [x1, x0]; if (z1 < z0) [z0, z1] = [z1, z0]; const c = k(col), Q = (a, b, d, e, n) => A.quad(a, b, d, e, n, c, t, t, t, t);
+    if (!(sk & 1)) Q(W(x0, y1, z0), W(x1, y1, z0), W(x1, y1, z1), W(x0, y1, z1), [0, 1, 0]); if (!(sk & 2)) Q(W(x0, y0, z1), W(x1, y0, z1), W(x1, y0, z0), W(x0, y0, z0), [0, -1, 0]); if (!(sk & 4)) Q(W(x0, y0, z0), W(x1, y0, z0), W(x1, y1, z0), W(x0, y1, z0), nW(0, -1)); if (!(sk & 8)) Q(W(x1, y0, z1), W(x0, y0, z1), W(x0, y1, z1), W(x1, y1, z1), nW(0, 1));
+    if (!(sk & 16)) Q(W(x1, y0, z0), W(x1, y0, z1), W(x1, y1, z1), W(x1, y1, z0), nW(1, 0)); if (!(sk & 32)) Q(W(x0, y0, z1), W(x0, y0, z0), W(x0, y1, z0), W(x0, y1, z1), nW(-1, 0)); };
+  // F skip in face terms: 1 top, 2 bottom, 4 back (d0 side), 8 front (d1 side), 16 ends (t0/t1 faces)
+  const F = (ax, g, ns, t0, t1, d0, d1, y0, y1, col, t, s = 0) => { const bk = ax === 'x' ? (ns > 0 ? 4 : 8) : (ns > 0 ? 32 : 16), fr = ax === 'x' ? (ns > 0 ? 8 : 4) : (ns > 0 ? 16 : 32), en = ax === 'x' ? 48 : 12, sk = (s & 3) | (s & 4 ? bk : 0) | (s & 8 ? fr : 0) | (s & 16 ? en : 0);
+    return ax === 'x' ? bx(t0, g + ns * d0, t1, g + ns * d1, y0, y1, col, t, sk) : bx(g + ns * d0, t0, g + ns * d1, t1, y0, y1, col, t, sk); };
   const pr = (pts, y0, y1, col, t = z4) => { const c = k(col), n = pts.length; for (let i = 0; i < n; i++) { const [a, b] = pts[i], [d, e] = pts[(i + 1) % n]; A.quad(W(a, y0, b), W(d, y0, e), W(d, y1, e), W(a, y1, b), nW(e - b, -(d - a)), c, t, t, t, t); }
     for (let i = 1; i + 1 < n; i++) { A.v(W(pts[0][0], y1, pts[0][1]), [0, 1, 0], c, t); A.v(W(pts[i][0], y1, pts[i][1]), [0, 1, 0], c, t); A.v(W(pts[i + 1][0], y1, pts[i + 1][1]), [0, 1, 0], c, t); } };
   const sl = (M, u0, u1, v0, v1, ya, yb, th, col, t = z4) => { const c = k(col), P = (u, v, y) => { const [x, z] = M(u, v); return W(x, y, z); }, g = (yb - ya) / (u1 - u0), [ax, az] = M(1, 0), [bx0, bz0] = M(0, 0), du = nW(ax - bx0, az - bz0), dv = (() => { const [p, q] = M(0, 1); return nW(p - bx0, q - bz0); })(), l = Math.hypot(g, 1);
@@ -1821,13 +1824,13 @@ function w31Geo(A) { const B = b31(); if (!B) return; const { bx, F, pr, sl } = 
   { const z0 = [0, 0, 0, 0], FR = [238, 238, 234], GL = [62, 72, 84], GR = [150, 154, 160], SLB = [214, 208, 196];
     for (let f = 2; f <= 30; f++) { const y = slabAt(f);
       for (const [ax, g, t0, t1, o, ty] of W31.win) { const sl = ty === 'w' ? 0.55 : 1.0, hd = ty === 'k' ? 2.4 : 2.2, n = ty === 'k' ? 3 : Math.max(1, Math.round((t1 - t0) / 0.65));
-        F(ax, g, o, t0, t1, 0.035, 0.05, y + sl, y + hd, GL, z0); F(ax, g, o, t0 - 0.04, t1 + 0.04, 0.0, 0.14, y + sl - 0.07, y + sl, SLB, z0);   // glass, sill
-        F(ax, g, o, t0, t1, 0.035, 0.09, y + sl, y + sl + 0.05, FR, z0); F(ax, g, o, t0, t1, 0.035, 0.09, y + hd - 0.05, y + hd, FR, z0);
-        for (let i = 0; i <= n; i++) { const t = t0 + ((t1 - t0) * i) / n, h = i === 0 || i === n ? 0.05 : 0.03; F(ax, g, o, Math.max(t0, t - h), Math.min(t1, t + h), 0.035, 0.09, y + sl, y + hd, FR, z0); }
-        if (ty === 'k') { F(ax, g, o, t0 - 0.05, t1 + 0.05, 0.09, 0.6, y + 0.93, y + 0.98, GR, z0);   // grating floor
-          for (let t = t0 - 0.03; t <= t1 + 0.04; t += 0.12) F(ax, g, o, t, t + 0.025, 0.57, 0.6, y + 0.98, y + 1.98, GR, z0);   // screen slats (outer face)
-          for (const e of [t0 - 0.05, t1 + 0.02]) for (let d = 0.12; d < 0.58; d += 0.12) F(ax, g, o, e, e + 0.03, d, d + 0.025, y + 0.98, y + 1.98, GR, z0);   // end screens
-          F(ax, g, o, t0 - 0.05, t1 + 0.05, 0.09, 0.6, y + 1.98, y + 2.02, GR, z0); } }   // top rail
+        F(ax, g, o, t0, t1, 0.035, 0.05, y + sl, y + hd, GL, z0, 31 - 8); F(ax, g, o, t0 - 0.04, t1 + 0.04, 0.0, 0.14, y + sl - 0.07, y + sl, SLB, z0, 4);   // glass (front face only), sill
+        F(ax, g, o, t0, t1, 0.035, 0.09, y + hd - 0.05, y + hd, FR, z0, 1 | 4 | 16);   // head frame (the sill is the bottom frame)
+        for (let i = 0; i <= n; i++) { const t = t0 + ((t1 - t0) * i) / n, h = i === 0 || i === n ? 0.05 : 0.03; F(ax, g, o, Math.max(t0, t - h), Math.min(t1, t + h), 0.035, 0.09, y + sl, y + hd - 0.05, FR, z0, 1 | 2 | 4); }
+        if (ty === 'k') { F(ax, g, o, t0 - 0.05, t1 + 0.05, 0.09, 0.6, y + 0.93, y + 0.98, GR, z0, 4);   // grating floor
+          F(ax, g, o, t0 - 0.05, t1 + 0.05, 0.57, 0.6, y + 0.98, y + 1.98, GR, z0, 1 | 2);   // screen (one panel; slats cost ≈250k vertices)
+          for (const e of [t0 - 0.05, t1 + 0.02]) F(ax, g, o, e, e + 0.03, 0.09, 0.57, y + 0.98, y + 1.98, GR, z0, 1 | 2 | 4 | 8);   // end screens
+          F(ax, g, o, t0 - 0.05, t1 + 0.05, 0.09, 0.6, y + 1.98, y + 2.02, GR, z0, 2 | 4); } }   // top rail
       for (const [a, b, c, d] of B.cuts || []) { bx(a, b, c, d, y - 0.15, y, SLB, z0);
         const out = (px, pz) => !B.boxes.some(q => px > q[0] && px < q[2] && pz > q[1] && pz < q[3]);
         if (out((a + c) / 2, b - 0.15)) bx(a, b, c, b + 0.1, y, y + 1.0, SLB, z0); if (out((a + c) / 2, d + 0.15)) bx(a, d - 0.1, c, d, y, y + 1.0, SLB, z0);
@@ -5296,13 +5299,13 @@ function texU(pr, env) { const gl = GPU.gl, u = pr.u; if (u.uTexOn) gl.uniform1f
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
 // Spatial tiles (lag cut 2026-10-31): opaque city triangles bucketed by centroid (150 m cells ≤1.5 km of #134, 600 m beyond; stable order inside a cell) → [start, count, minx, maxx, miny, maxy, minz, maxz];
 // each pass draws only the tiles in its view frustum / shadow cascade (adjacent visible tiles merged into one draw). Pure culling: pixels unchanged.
-function gpuTileSort(a, n, ux = UNIT134[0], uz = UNIT134[1], cs = 0) {   // cs: one cell size everywhere (interior: 3 m)
+function gpuTileSort(a, n, ux = UNIT134[0], uz = UNIT134[1], cs = 0, dst = null) {   // cs: one cell size everywhere (interior: 3 m); dst: write the sorted vertices there (no temp copy of a; city build, memory 2026-11-03)
   const nt = n / 3, key = new Int32Array(nt), m = new Map();
   for (let t = 0; t < nt; t++) { const o = t * 39, x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = cs ? true : Math.hypot(x - ux, z - uz) < 1500, c = cs || (near ? 150 : 600);
     const k = (near ? 0 : 1) * 1e8 + (Math.floor(z / c) + 5000) * 1e4 + (Math.floor(x / c) + 5000); let id = m.get(k); if (id === undefined) m.set(k, id = m.size); key[t] = id; }
   const ks = [...m.keys()].sort((p, q) => p - q), rank = new Int32Array(m.size); ks.forEach((k, i) => { rank[m.get(k)] = i; });
   const cnt = new Int32Array(m.size + 1); for (let t = 0; t < nt; t++) cnt[rank[key[t]] + 1]++; for (let i = 0; i < m.size; i++) cnt[i + 1] += cnt[i];
-  const pos = cnt.slice(0, m.size), src = a.slice(0, n * 13), T = [];
+  const pos = cnt.slice(0, m.size), src = dst ? a : a.slice(0, n * 13), T = []; if (dst) a = dst;
   for (let t = 0; t < nt; t++) { const r = rank[key[t]]; a.set(src.subarray(t * 39, t * 39 + 39), pos[r]++ * 39); }
   for (let i = 0; i < m.size; i++) { const s0 = cnt[i] * 3, c0 = (cnt[i + 1] - cnt[i]) * 3, b = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
     for (let v = s0; v < s0 + c0; v++) { const o = v * 13; for (let k = 0; k < 3; k++) { const q = a[o + k]; if (q < b[2 * k]) b[2 * k] = q; if (q > b[2 * k + 1]) b[2 * k + 1] = q; } }
@@ -5415,7 +5418,7 @@ function slimKitP(A, P) { const wh = [238, 238, 234].map(v => v / 255), sf = [21
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
   if (C) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
-    for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; return; }
+    for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; C.city = C.edges = C.gx = null; return; }   // uploaded: drop the JS copies (memory)
   const A = glArr(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
@@ -5428,8 +5431,9 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   { const s = A.n; GPU.noAO = true; for (const P of TRPF_RELIEF) if (P.rel32) glPrism(A, P); GPU.noAO = false; GPU.relR = [s, A.n - s]; }   // 32A relief near #134: drawn only while the own-unit boxes are (ownUnitTest null)
   const ns = A.n; GPU.noAO = true; for (const S of CONDO_SITES) condoKit(A, S); GPU.noAO = false; let nk = 0; for (const P of ALL.filter(P => P.kind === 'new').sort((p, q) => Math.hypot(p.cx - UNIT134[0], p.cz - UNIT134[1]) - Math.hypot(q.cx - UNIT134[0], q.cz - UNIT134[1]))) { glPrism(A, P); if (P.style === 'slim') slimKitP(A, P); if (P.uc) craneKit(A, P); if (P.style === 'condo' && P.floors) { const k0 = A.n; condoKitP(A, P, nk < 1e5 && Math.hypot(P.cx - UNIT134[0], P.cz - UNIT134[1]) < 1500, false); nk += A.n - k0; }   // new towers: condo kit (balconies nearest first ≤1.5 km, ≤100k vertices, then crown only; stage 4)
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
-  GPU.tiles = gpuTileSort(A.b, k0); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0).map(t => [t[0] + k0, ...t.slice(1)]); GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
-  GPU.city = gpuBuf(new Float32Array(A.a)); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = A.n;
+  const CA = new Float32Array(A.l); CA.set(A.b.subarray(GPU.opN * 13, A.l), GPU.opN * 13);   // one exact-size copy, sorted into directly; A freed after (peak memory: was capacity + temp sort copy + upload copy + cache copy ≈4× the buffer → iPhone tab crash, TY 2026-11-03)
+  GPU.tiles = gpuTileSort(A.b, k0, undefined, undefined, 0, CA); GPU.rkT = gpuTileSort(A.b.subarray(k0 * 13), GPU.opN - k0, undefined, undefined, 0, CA.subarray(k0 * 13)).map(t => [t[0] + k0, ...t.slice(1)]); A.b = null; GPU.newR = [ns, A.n - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges);
+  GPU.city = gpuBuf(CA); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = CA.length / 13;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
@@ -5437,7 +5441,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   if (state.showExisting) rf30Grounds(X);   // Riverfront W corner: drive, aprons, plaza
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
   if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: A.a.slice(), edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { city: CA, edges: new Float32Array(E), gx: new Float32Array(X.a.length ? X.a : [0]), opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
 }
 // covered linkways paved all the way (TY 2026-11-01 "pave all the way… make it natural"): each linkway end that isn't already on paving is extended along its own direction until it
 // meets paving (site road, block apron, plaza/porch/drive/court/pad, jogging track, footpath; ≤25 m), else bent toward the nearest paved point ≤15 m (smooth quadratic curve); cached
