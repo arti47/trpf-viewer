@@ -1592,13 +1592,14 @@ function mscpCarsNow() { const d = trafDay(state.dateStr), T = MSCP_OCC[d === 's
 // MSCP lift (2026-11-01, TY "no lift to enter and exit and go to top floor"; sizes/speeds estimates): car 2.1 × 2.2 m in the W core (local x ML_CAR, door 1.0 m centre-opening at z ML_DOOR on the E face), serves ground (1), decks 2–7 and the roof (R).
 // Doors open when you walk up on a level the car is at (else the car is called there), auto-close 6 s after you stop in the car or when you walk away; car panel (#mlPanel) = 8 buttons; ride 1.5 m/s, 0.8 m/s²; car + leaves drawn per frame (mscpLiftGeo in gpuFx0).
 const mlLvAt = z => { let b = 0; MSCP_LV.forEach((y, j) => { if (Math.abs(y - z) < Math.abs(MSCP_LV[b] - z)) b = j; }); return b; };
+const mlDoorway = (x, y) => x > ML_DOOR[0] - 0.2 && x < ML_DOOR[1] + 0.2 && y > ML_SH[1] - 0.15 && y < ML_CAR[1] + 0.25;
 const mlOpenAt = z => !ML.busy && Math.abs(ML.y - z) < 0.4 && ML.o > 0.8;
 const mlLoc = (X, Y) => { const l = mscpLoc(X, Y); return l ? [l[0], l[1]] : [1e9, 1e9]; };
 const mlInCar = (x, z) => x > ML_CAR[0] && x < ML_CAR[2] && z > ML_CAR[1] && z < ML_CAR[3];
 function mlUpdate(X, Y) { const [x, z] = mlLoc(X, Y), Z = state.walk.Z || 0, inCar = mlInCar(x, z), near = !inCar && x > ML_DOOR[0] - 1.2 && x < ML_DOOR[1] + 1.2 && z > ML_SH[1] - 2.2 && z < ML_CAR[1] + 0.1;
   if (!ML.busy) { const j = mlLvAt(Z); if (near && Math.abs(MSCP_LV[j] - Z) < 0.4) { if (ML.lv === j) mlDoor(1); else mlGo(j); } else if (!near && !inCar && ML.o > 0) mlDoor(0); if (inCar) mlIdle(); }
   mlPanel(inCar); }
-function mlIdle() { clearTimeout(ML.idle); ML.idle = setTimeout(() => { if (!ML.busy) mlDoor(0); }, 6000); }
+function mlIdle() { clearTimeout(ML.idle); ML.idle = setTimeout(() => { const w = state.walk; if (!ML.busy && !(w && mscpIn(w.X, w.Y) && mlDoorway(...mlLoc(w.X, w.Y)))) mlDoor(0); }, 6000); }   // never close on someone standing in the doorway
 function mlDoor(t, done) { ML.tgt = t; if (done) ML.pend = done; mlRun(); }
 function mlRun() { if (ML.raf) return; let t0 = performance.now();
   const step = now => { const dt = Math.min(0.4, (now - t0) / 1000); t0 = now; let more = false;
@@ -3903,13 +3904,18 @@ function walkVec(off, st) {   // move st m along heading + off° (plan frame), s
   for (let i = 0; i < n && state.walk && !LIFT.busy; i++) walkSub(off, st / n);
   if (state.spot !== sp0 || state.obsFloor !== f0) renderAll(); else { renderView(); drawWalkMap(); }
 }
+function liftNudge() { const w = state.walk; if (!w || w.look) return; const { X, Y } = w;
+  if (onGround() && w31In(X, Y)) { if (L31.car && !L31.busy && L31.o < 1) { if (L31.open !== L31.car) { L31.open = L31.car; L31.o = L31.tgt = 0; } clearTimeout(L31.idle); w31Door(1, w31Idle); } return; }
+  if (onGround() && mscpIn(X, Y)) { if (mlInCar(...mlLoc(X, Y)) && !ML.busy && ML.o < 1) { clearTimeout(ML.idle); mlDoor(1, mlIdle); } return; }
+  if (LIFT.car && !LIFT.busy && LIFT.o < 1) { if (LIFT.open !== LIFT.car) liftSet(LIFT.car, LIFT.o); clearTimeout(LIFT.idle); liftDoor(1, liftIdle); } }
 function walkSub(off, st) {
   const nb = UNIT_FN * DEG, h = (state.heading + off) * DEG;
   const wx = Math.sin(h), wz = Math.cos(h), dX = (wx * Math.cos(nb) - wz * Math.sin(nb)) * st, dY = -(wx * Math.sin(nb) + wz * Math.cos(nb)) * st, { X, Y } = state.walk, esc = furnBlocks(X, Y);
   // slide along walls; then try directions turned ±25/50/75/90° (step × max(cos, 0.4)) so a diagonal push still gets through narrow gaps (door leaf ↔ shoe cabinet, TY 2026-10-29 "suddenly stuck");
   // if the eye already overlaps a wall (door closed on it, wall toggled), any move that doesn't enter a wall box itself is allowed so it can walk out
   const stuck = !walkFree(X, Y, 0.2, true), ok = (x, y) => walkFree(x, y, 0.2, esc) || (stuck && walkFree(x, y, 0, true));
-  let to = ok(X + dX, Y + dY) ? [X + dX, Y + dY] : ok(X + dX, Y) && Math.abs(dX) > 1e-4 ? [X + dX, Y] : ok(X, Y + dY) && Math.abs(dY) > 1e-4 ? [X, Y + dY] : null;
+  const ok0 = ok(X + dX, Y + dY); if (!ok0) liftNudge();   // blocked inside a lift car with the doors shut / closing → doors reopen (door sensor), so you can always walk out (TY 2026-11-03 "can't get out of the lift" in 31A: doors auto-close 6 s after arrival and nothing reopened them)
+  let to = ok0 ? [X + dX, Y + dY] : ok(X + dX, Y) && Math.abs(dX) > 1e-4 ? [X + dX, Y] : ok(X, Y + dY) && Math.abs(dY) > 1e-4 ? [X, Y + dY] : null;
   for (const a of [25, -25, 50, -50, 75, -75, 90, -90]) { if (to) break; const c = Math.cos(a * DEG), sn = Math.sin(a * DEG), k = Math.max(c, 0.4), x = X + (dX * c - dY * sn) * k, y = Y + (dX * sn + dY * c) * k; if (ok(x, y)) to = [x, y]; }
   if (to) walkSet(to[0], to[1]); if (Math.abs(state.walk.Z) > 0.3 && !(onGround() && (mscpIn(state.walk.X, state.walk.Y) || w31In(state.walk.X, state.walk.Y)))) gpuInteriorPrefetch(state.obsFloor + Math.sign(state.walk.Z));   // on the stairs: build the next storey's interior ahead
 }
