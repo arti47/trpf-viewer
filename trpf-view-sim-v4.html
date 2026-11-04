@@ -1696,6 +1696,7 @@ let W31_CARS = null;
 const w31Cars = () => W31_CARS || (W31_CARS = W31.banks.flatMap(K => W31.cx.map((c, i) => { const g = K.g, n = K.ns, zf = g - n * 0.15, zb = g - n * 1.85;   // front wall 0.15 m, car 1.6 × 1.7 m
   return { id: K.id + (i + 1), K, c, g, ns: n, hi: K.hi, zf, car: [c - 0.8, Math.min(zf, zb), c + 0.8, Math.max(zf, zb)], dz: [c - 0.55, Math.min(g, zf), c + 0.55, Math.max(g, zf)] }; })));
 const L31 = { open: '', o: 0, tgt: 0, busy: 0, pos: 0, v: 0, dest: 0, dir: 0, car: '', goal: 0, raf: 0, idle: 0, pend: null, sig: '', psig: '' };
+// car height: L31.pos while busy; pos is set to the current floor as soon as a ride is booked (it kept the last ride's floor, 0 before the first ride, so while the doors closed the car was drawn at that floor and the walker stood in the open shaft, TY 2026-11-04 "in the lift I see lift shaft")
 const w31CarY = C => (L31.busy && L31.car === C.id && (L31.dir || L31.goal) ? L31.pos : slabAt(Math.min(30, w31Fl(state.walk ? state.walk.Z || 0 : 0))));
 // walk surfaces at a local point: lift car / doorway, stair (landings, ramps through the flights, mid landings, roof landing), corridor floors 2F–30F, ground (void deck / outside)
 function w31Surfs(x, z) { const S = [];
@@ -1743,7 +1744,7 @@ function w31Run() { if (L31.raf) return; let t0 = performance.now();
   L31.raf = requestAnimationFrame(step); }
 function w31Go(f) { const w = state.walk; if (!w || !L31.car || L31.busy) return; const C = w31Cars().find(q => q.id === L31.car), cur = Math.min(30, w31Fl(w.Z || 0)); if (C && !w31Serves(C, f)) return; clearTimeout(L31.idle);
   if (f === cur) { w31Door(1, w31Idle); return; }
-  L31.busy = 1; L31.goal = f; w31Panel(); w31Door(0, () => { L31.pos = slabAt(cur); L31.dest = slabAt(f); L31.dir = Math.sign(L31.dest - L31.pos); L31.v = 0; }); }
+  L31.busy = 1; L31.goal = f; L31.pos = slabAt(cur); w31Panel(); w31Door(0, () => { L31.pos = slabAt(cur); L31.dest = slabAt(f); L31.dir = Math.sign(L31.dest - L31.pos); L31.v = 0; }); }
 function w31Arrive() { const f = L31.goal; L31.pos = slabAt(f); if (state.walk) state.walk.Z = L31.pos; renderAll(); w31Panel(); setTimeout(() => w31Door(1, () => { L31.busy = 0; L31.goal = 0; w31Panel(); w31Idle(); }), 500); }
 function w31Reset() { clearTimeout(L31.idle); if (L31.raf > 0) cancelAnimationFrame(L31.raf); Object.assign(L31, { open: '', o: 0, tgt: 0, busy: 0, dir: 0, v: 0, raf: 0, pend: null, goal: 0, car: '', sig: '' }); w31Panel(false); }
 function w31Panel(show) {
