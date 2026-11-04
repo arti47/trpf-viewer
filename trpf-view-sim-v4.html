@@ -1718,12 +1718,24 @@ function w31Obs() { if (W31_OBS) return W31_OBS; const O = [], top = BLK_TOP + 3
   for (const K of W31.banks) { const [x0, z0, x1, z1] = K.box, g = K.g, n = K.ns, f0 = Math.min(g, g - n * 0.15), f1 = Math.max(g, g - n * 0.15), cs = K.cx || W31.cx, bz = n < 0 ? [z1 - 0.2, z1] : [z0, z0 + 0.2];
     O.push([x0, z0, x0 + 0.2, z1, 0, H], [x1 - 0.2, z0, x1, z1, 0, H], [x0, bz[0], x1, bz[1], 0, H], [x0, f0, cs[0] - 0.55, f1, 0, H], [cs[cs.length - 1] + 0.55, f0, x1, f1, 0, H]);
     for (let i = 1; i < cs.length; i++) { const cm = (cs[i - 1] + cs[i]) / 2; O.push([cm - 0.1, z0, cm + 0.1, z1, 0, H], [cs[i - 1] + 0.55, f0, cs[i] - 0.55, f1, 0, H]); } }   // dividers + front wall between the door openings (2 or 3 cars)
+  for (const Fb of W31.blocks()) for (const [ax, g, t0, t1, ns, dp = 0.16, m = 0.06] of [...(Fb.doors || []), ...(Fb.flush || []).map(q => [...q, 0.1, 0])]) { const e = g + ns * dp, R = ax === 'x' ? [[t0 - m, g], [t1 + m, e]] : [[g, t0 - m], [e, t1 + m]], P = [[R[0][0], R[0][1]], [R[1][0], R[0][1]], [R[0][0], R[1][1]], [R[1][0], R[1][1]]].map(([u, v]) => toLoc(b31(), ...blkToWorld(Fb.B, u, v)));
+    O.push([Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1])), VOID_DECK_HEIGHT, H]); }   // flat door frames stand 0.16 m proud of the wall, flush riser doors 0.1 m (body leaned 4–8 cm into them)
   return (W31_OBS = O); }
+// rendered relief of the block (posts at open run ends, corridor parapets, fins' parapet line, stair/riser parts) as walk obstacles: the walker passed through corridor posts and leaned 0.15 m into parapets (TY 2026-11-04 audit); 1 m grid in core-frame local, rebuilt when TRPF_RELIEF changes
+let W31_REL = null, W31_RELS = null;
+function w31Rel() { if (W31_RELS === TRPF_RELIEF) return W31_REL; W31_RELS = TRPF_RELIEF; const G = new Map(), nm = new Set(W31.blocks().map(F => F.B.name + ' relief')), K = b31();
+  for (const P of TRPF_RELIEF) { if (!nm.has(P.name) || P.h <= VOID_DECK_HEIGHT + 0.1 || !P.n) continue; let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+    for (let i = 0; i < P.n; i++) { const [u, v] = toLoc(K, P.xs[i], P.zs[i]); a = Math.min(a, u); b = Math.min(b, v); c = Math.max(c, u); d = Math.max(d, v); }
+    if (c - a > 12 && d - b > 12) continue; const q = [a, b, c, d, P.base, P.h];
+    for (let i = Math.floor(a - 0.7); i <= Math.floor(c + 0.7); i++) for (let j = Math.floor(b - 0.7); j <= Math.floor(d + 0.7); j++) { const k = i * 4096 + j; let L = G.get(k); if (!L) G.set(k, L = []); L.push(q); } }
+  return (W31_REL = G); }
+const w31RelHit = (x, z, r, Z) => { const L = w31Rel().get(Math.floor(x) * 4096 + Math.floor(z)); return !!L && L.some(([a, b, c, d, y0, y1]) => y0 < Z + 1.2 && y1 > Z + 0.05 && x > a - r && x < c + r && z > b - r && z < d + r); };
 function w31Free(X, Y, r, Z, rg) { const [x, z] = w31Loc(X, Y);
   for (const C of w31Cars()) { const [p, q, s, t] = C.dz, op = L31.open === C.id && L31.o >= 0.8 && !L31.busy; if (x > p && x < s && z >= q && z <= t && !op) return false;   // closed / closing lift doors
     const [a, b, c, d] = C.car; if (x > a && x < c && z > b && z < d) { const u = Math.abs(x - C.c), q0 = (C.zf - z) * C.ns; if (u + r > 0.76 || q0 + r > 1.66 || q0 - r < 0.085 && !(op && u + r <= 0.55)) return false; } }   // in a car: its own walls bound the body and the near plane (walkClear) — they were bounded only by the shaft walls 0.37 m further out, so the near plane cut the car walls and the shaft slid past while riding (TY 2026-11-04)
   if (w31Obs().some(([a, b, c, d, y0, y1]) => y0 < Z + 1.2 && y1 > Z + 0.05 && x > a - r && x < c + r && z > b - r && z < d + r)) return false;
   if (inRis(x, z, r, Z)) return false;   // service risers (per block frame)
+  if (Z >= 1 && w31RelHit(x, z, r, Z)) return false;   // rendered posts / parapets / fins
   if (Z < 1) return groundFree(X, Y, rg);   // void deck / grounds
   if (inK(x, z, q => !q[4], r)) return false;   // unit walls (also bound the near plane via walkClear)
   const ok = (px, pz) => w31Surfs(px, pz).some(v => Math.abs(v - Z) < 0.5); return ok(x, z) && ok(x + r, z) && ok(x - r, z) && ok(x, z + r) && ok(x, z - r); }   // corridor edges: the body stays on a floor
@@ -4922,7 +4934,8 @@ void main() {
   if (uTexOn > 0.5 && uUnlit < 0.5 && mode > -0.5 && mode < 9.5 && (mode < 2.5 || mode > 3.5) && abs(mode - 0.46) > 0.03 && !(vTex.w > 49.5 && vTex.w < 54.5) && vDist < 2500.0) {   // photo wall/roof materials (UE5 pass); tag 54 = brushed stainless (lift cars/leaves: the concrete photo made the car walls read as a bare shaft, TY 2026-11-04); tag 53 = 600 mm tiles (tileAlb; the paving photo added a 2nd, unaligned joint grid)
     bool wl = abs(nrm.y) < 0.3; vec3 tn = vec3(-nrm.z, 0.0, nrm.x); vec2 w = wl ? vec2(dot(vWorld.xz, tn.xz), -vWorld.y) : vWorld.xz;   /* v down the image = −y (upright photos; GL-convention normal green = image up) */
     bool grn = alb.g > alb.r * 1.12 && alb.g > alb.b * 1.25; int L = !wl ? (grn ? 0 : nrm.y < -0.5 ? 4 : nrm.y > 0.5 && vWorld.y > 1.5 ? 5 : vWorld.y < 0.6 && dot(alb, vec3(0.33)) < 0.33 ? 1 : 2) : (mode > 5.5 && mode < 6.5) || (mode > 7.5 && mode < 9.5) || (mode > 0.5 && mode < 2.5 && mod(vTex.w, 1000.0) >= 199.0) ? 4 : 3;
-    float ka = mode < 0.5 ? 0.55 : 0.75; alb *= mDet(L, w, ka);
+    bool pc = mode > 0.15 && mode < 0.42 && nrm.y < 0.5; if (pc) L = 4;   // covered walls / ceilings (corridors, void decks, linkways, carpark): painted plaster, light — ceilings took the paving photo (tile grid) and walls stained concrete (TY 2026-11-04 31A corridor audit)
+    float ka = pc ? 0.3 : mode < 0.5 ? 0.55 : 0.75; alb *= mDet(L, w, ka);
     float kn = 1.0 - smoothstep(40.0, 160.0, vDist); if (kn > 0.0) { vec3 q = mNrm(L, w); vec3 T = wl ? tn : vec3(1.0, 0.0, 0.0), B = wl ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, -1.0); nrm = normalize(nrm + (T * q.x + B * q.y) * 0.45 * kn); } }
   if (mode > 0.5 && mode < 3.5) {   // procedural windows: bays 3.6 m × storeys; faded to their mean when a cell is < ~3 px (no moire). Realism 2026-10-31: facade types, frames/sills/reveals, shopfronts, coping
     vec2 g = vTex.xy, fw = fwidth(g), gdx = dFdx(g), gdy = dFdy(g), f = fract(g), aa = fw * 0.75 + 1e-4; float det = 1.0 - smoothstep(0.2 + 0.25 * uNight, 0.5 + 0.3 * uNight, max(fw.x, fw.y));   // night: lit windows stay resolved down to ~1.3 px (as litWindows)
