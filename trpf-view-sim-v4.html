@@ -5180,6 +5180,7 @@ const glArr = () => ({ b: new Float32Array(13 * 256), l: 0, get a() { return thi
   v(p, n, c, t) { let b = this.b, l = this.l; if (l + 13 > b.length) { const g = new Float32Array(b.length * 2); g.set(b); this.b = b = g; }
     b[l] = p[0]; b[l + 1] = p[1]; b[l + 2] = p[2]; b[l + 3] = n[0]; b[l + 4] = n[1]; b[l + 5] = n[2]; b[l + 6] = c[0]; b[l + 7] = c[1]; b[l + 8] = c[2]; b[l + 9] = t[0]; b[l + 10] = t[1]; b[l + 11] = t[2]; b[l + 12] = t[3]; this.l = l + 13; },
   quad(p0, p1, p2, p3, n, c, t0, t1, t2, t3) { this.v(p0, n, c, t0); this.v(p1, n, c, t1); this.v(p2, n, c, t2); this.v(p0, n, c, t0); this.v(p2, n, c, t2); this.v(p3, n, c, t3); }, get n() { return this.l / 13; } });
+const glCat = (A, a) => { if (A.l + a.length > A.b.length) { const g = new Float32Array(Math.max(A.b.length * 2, A.l + a.length)); g.set(A.b.subarray(0, A.l)); A.b = g; } A.b.set(a, A.l); A.l += a.length; };   // append a cached block to a glArr
 // chunked growable buffer (city build, memory 2026-11-03 "keeps crashing"): fixed 196,608-vertex chunks (whole triangles), never reallocated or copied while growing;
 // the doubling glArr held old + new (≈2× the buffer) at each growth and up to 2× slack after → ≈500 MB JS peak for the 3.1M-vertex city on the phone
 const GLCH = 3 * 65536;   // vertices per chunk (multiple of 3: a triangle never straddles chunks)
@@ -6335,10 +6336,11 @@ function peopleGeo(A, cam) { const hr = state.hour % 24, busy = hr < 5.5 ? 0 : h
     if (!cam.inWedge(x - 1, x + 1, z - 1, z + 1, 700)) continue; personMesh(A, x, 0.02, z, ux, uz, t * v * (run ? 2.6 : 3.4) / 1.4 + i, i * 7 + 3, run, t0); } }
 function gpuFx0(cam, env) {
   const add = [], opq = [], la = [], lo = [], Sh = glArr(), Tc = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
-  SHIPS.forEach(([x, z, len], i) => shipMesh(Sh, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i));
+  const fxBlk = (k, key, f) => { const M = GPU[k] || (GPU[k] = new Map()), K = key + '|' + (GPU.pid || 0) % 11; let c = M.get(K); if (!c) { if (M.size && [...M.keys()][0].split('|').slice(0, -1).join('|') !== key) M.clear(); const T = glArr(), p0 = GPU.pid || 0; f(T); M.set(K, c = { a: T.b.slice(0, T.l), dp: (GPU.pid || 0) - p0 }); } else GPU.pid = (GPU.pid || 0) + c.dp; glCat(Sh, c.a); };   // ship meshes are eye-independent: built once per world (anchored) / per world + time (movers) and copied in (walk perf 2026-11-04: ≈7 ms per fx rebuild). glPrism's 1–3 cm growth cycles with GPU.pid % 11, so blocks are cached per entry residue (≤11 × 0.8 MB) and a hit advances GPU.pid as the build would: output bit-identical to rebuilding
+  fxBlk('shipC', WORLD_VER + '|' + GPU.noAO, T => SHIPS.forEach(([x, z, len], i) => shipMesh(T, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i)));
   peopleGeo(Sh, cam); mscpLiftGeo(Sh); w31DynGeo(Sh); for (const q of mscpCarsNow()) if (cam.inWedge(q.wx - 3, q.wx + 3, q.wz - 3, q.wz + 3, 900)) carMesh(Sh, q.wx, q.y, q.wz, q.hx, q.hz, q.k, [0, 0, 0.3, 0], Math.hypot(q.wx - cam.ex, q.y - cam.hEye, q.wz - cam.ez) < CAR_LOD);   // carpark: parked cars by hour/day (view wedge, detailed ≤ CAR_LOD)   // stage 5 (2026-10-31): typed ship meshes
+  fxBlk('moverC', WORLD_VER + '|' + GPU.noAO + '|' + MOVERS.map(moverX).join(','), T => MOVERS.forEach(Mv => shipMesh(T, moverX(Mv), Mv[1], Mv[2], Math.sign(Mv[3]), 20 + MOVERS.indexOf(Mv))));
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
-    shipMesh(Sh, x, z, len, dir, 20 + MOVERS.indexOf(Mv));
     S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2);
     const fo = [242 / 255, 246 / 255, 248 / 255], ca = Math.cos(19.5 * DEG), sa = Math.sin(19.5 * DEG); S(opq, x - dir * len * 0.62, 0.22, z, 1, 0, len * 0.22, len * 0.07, fo, 0.75, 2); S(opq, x + dir * len * 0.47, 0.22, z, 1, 0, len * 0.06, len * 0.09, fo, 0.6, 2);   // r5: stern churn + bow wave
     for (const sg of [-1, 1]) { const L2 = len * 1.6, cx = x - dir * (len * 0.5 + L2 * 0.5 * ca), cz = z + sg * L2 * 0.5 * sa; S(opq, cx, 0.21, cz, dir * ca, -sg * sa, L2 * 0.5, len * 0.025, fo, 0.4, 2); } });   // Kelvin wake arms ±19.5° (realism r5)
@@ -6989,7 +6991,7 @@ function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { W
     k.onsuccess = () => { if (k.result !== WC.key) { const d = os().delete('world'); d.onsuccess = d.onerror = done; return; } const q = os().get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; done(); }; q.onerror = done; }; k.onerror = done; }));
   return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
 function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
-  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); t.objectStore('w').put(WC.key, 'k'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); WC.rk = null; t.objectStore('w').put(WC.key, 'k'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
 /* ===================== UX ROUND 4 (2026-10-31): scenario chip, hold-to-compare, pinch/wheel lens, double-tap face, haptics, phone dock, plan full screen, panel width + keys ===================== */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} };
 const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', build: '2032', allres: 'Full', custom: 'Custom' };
@@ -7040,7 +7042,7 @@ function initApp() {
 function splStep(t, k) { const a = $('splStep'), b = $('splBar'); if (a) a.textContent = t; if (b) b.style.width = `${k * 100}%`; }
 function initApp2() { const E = WC.e;
   if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees(); TT_BASE = { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }; towerTrees();
-  furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); if (!E) setTimeout(wcStore, 2000);
+  furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); setTimeout(() => { if (!E) wcStore(); else if (GPU.ver === WC.ver) WC.e = null; }, 2000);   // hit: drop the loaded entry once the startup world is built (≈5 MB JS)
   setInterval(viewSave, 2000); addEventListener('pagehide', viewSave); document.addEventListener('visibilitychange', () => { if (document.hidden) viewSave(); });
   const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); } BENCH.load = performance.now(); if (/[?&]bench/.test(location.search)) setTimeout(glBench, 1500);
   let pending = false; const sz = () => [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement, planCanvas].map(e => `${e.clientWidth}x${e.clientHeight}`).join() + FURN.open, last = { k: sz() };
