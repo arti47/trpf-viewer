@@ -1711,7 +1711,8 @@ function w31Obs() { if (W31_OBS) return W31_OBS; const O = [], top = BLK_TOP + 3
     O.push([x0, z0, x0 + 0.2, z1, 0, H], [x1 - 0.2, z0, x1, z1, 0, H], [-2.45, z0, -2.25, z1, 0, H], [x0, bz[0], x1, bz[1], 0, H], [x0, f0, c1 - 0.55, f1, 0, H], [c1 + 0.55, f0, c2 - 0.55, f1, 0, H], [c2 + 0.55, f0, x1, f1, 0, H]); }
   return (W31_OBS = O); }
 function w31Free(X, Y, r, Z, rg) { const [x, z] = w31Loc(X, Y);
-  for (const C of w31Cars()) { const [p, q, s, t] = C.dz; if (x > p && x < s && z >= q && z <= t && !(L31.open === C.id && L31.o >= 0.8 && !L31.busy)) return false; }   // closed / closing lift doors
+  for (const C of w31Cars()) { const [p, q, s, t] = C.dz, op = L31.open === C.id && L31.o >= 0.8 && !L31.busy; if (x > p && x < s && z >= q && z <= t && !op) return false;   // closed / closing lift doors
+    const [a, b, c, d] = C.car; if (x > a && x < c && z > b && z < d) { const u = Math.abs(x - C.c), q0 = (C.zf - z) * C.ns; if (u + r > 0.76 || q0 + r > 1.66 || q0 - r < 0.085 && !(op && u + r <= 0.55)) return false; } }   // in a car: its own walls bound the body and the near plane (walkClear) — they were bounded only by the shaft walls 0.37 m further out, so the near plane cut the car walls and the shaft slid past while riding (TY 2026-11-04)
   if (w31Obs().some(([a, b, c, d, y0, y1]) => y0 < Z + 1.2 && y1 > Z + 0.05 && x > a - r && x < c + r && z > b - r && z < d + r)) return false;
   if (Z < 1) return groundFree(X, Y, rg);   // void deck / grounds
   if (b31().boxes.some(q => !q[4] && x > q[0] - r && x < q[2] + r && z > q[1] - r && z < q[3] + r)) return false;   // unit walls (also bound the near plane via walkClear)
