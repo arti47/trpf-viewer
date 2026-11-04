@@ -6224,7 +6224,8 @@ function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, addit
   const P = p => [HV.vm.w / 2 + (p[0] / p[2]) * HV.f, HV.vm.h / 2 - (p[1] / p[2]) * HV.f], a = P(HV.B0), b = P(HV.B1), r = (0.009 / HV.B0[2]) * HV.f;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (const [k, al] of [[14, 0.05], [8, 0.08], [4, 0.12]]) { ctx.strokeStyle = `rgba(40,255,80,${al})`; ctx.lineWidth = r * k; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); } ctx.restore();
 }
-function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr.length ? arr : [0]), gl.DYNAMIC_DRAW); return b; }
+function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); const a = arr.length ? (ArrayBuffer.isView(arr) ? arr : new Float32Array(arr)) : new Float32Array(1);   // typed views uploaded as is (was a full copy per rebuild); storage reused while it fits (walk perf 2026-11-04)
+  if (b.cap >= a.length) gl.bufferSubData(gl.ARRAY_BUFFER, 0, a); else { gl.bufferData(gl.ARRAY_BUFFER, a, gl.DYNAMIC_DRAW); b.cap = a.length; } return b; }
 // Per-frame moving / night items: ships (prisms) + wakes, cars (drawCars/deckCars via CAR_SINK), Flyer ring + capsules, night landmarks. Uploads dynamic buffers; returns counts.
 // cars/ships/night sprites are rebuilt only when time, light, eye or roads change, or the view turns > 0.45 rad: built for a wedge 0.5 rad wider each side (off-screen sprites are clipped), so turning reuses them (lag cut 2026-10-31)
 function gpuFx(cam0, env) {
@@ -6233,7 +6234,7 @@ function gpuFx(cam0, env) {
 // 3D car (realism 2026-10-31; detailed body 2026-11-01, TY "the cars look horrible"; sizes estimates): ≤ CAR_LOD m from the eye = lofted body (chamfered sections: bumpers, hood, boot) + greenhouse
 // (raked windscreen / rear glass, A/B/C pillars + roof in body colour, side glass) + 4 wheels (tyre + silver rim) + head/tail lights, grille, mirrors, plate; 3 types by k (sedan / MPV / hatchback-SUV).
 // Templates built once per type in car-local metres (a = forward, b = left, y = up), transformed per car (no allocation); beyond = 4 boxes.
-const CAR_LOD = 60, CAR_TPL = [];
+const CAR_LOD = 60, CAR_TPL = [], CM_S = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], CM_QA = [0, 0, 0, 0], CM_QB = [0, 0, 0, 0];
 function carTpl(ty) { const T = [], g = [0.06, 0.07, 0.08], gl = [0.1, 0.13, 0.16], rim = [0.62, 0.64, 0.66], hl = [0.86, 0.88, 0.9], tl = [0.62, 0.06, 0.05], bk = [0.12, 0.12, 0.13];
   const S = [ { L: 4.6, body: [[-2.3, .30, .80, .80], [-2.21, .22, .93, .87], [-1.2, .18, .96, .89], [.9, .18, .90, .89], [1.9, .2, .80, .88], [2.24, .26, .70, .83], [2.3, .33, .62, .76]], gh: [-1.5, -.75, .2, .95], yb: .88, yt: 1.45, wb: .82, wt: .66, wa: 1.38, r: .32, hy: .6, ty: .78 },
     { L: 4.72, body: [[-2.36, .32, .85, .80], [-2.29, .22, .99, .88], [1.3, .18, .98, .9], [2.05, .22, .86, .88], [2.32, .30, .72, .83], [2.36, .38, .62, .76]], gh: [-2.27, -2.08, .55, 1.4], yb: .92, yt: 1.7, wb: .84, wt: .7, wa: 1.45, r: .33, hy: .66, ty: .9 },
@@ -6288,9 +6289,10 @@ function carMesh(A, x, y, z, hx, hz, k, t0 = [0, 0, 0, 0], lod = 1, road = false
   if (lod) { const T = CAR_TPL[ty] || (CAR_TPL[ty] = carTpl(ty)), p = [0, 0, 0], n = [0, 0, 0], c = [0, 0, 0];
     for (let i = 0; i < T.length; i += 9) { const a = T[i], yy = T[i + 1], b = T[i + 2]; p[0] = x + ux * a + vx * b; p[1] = y + yy; p[2] = z + uz * a + vz * b; n[0] = ux * T[i + 3] + vx * T[i + 5]; n[1] = T[i + 4]; n[2] = uz * T[i + 3] + vz * T[i + 5];
       if (T[i + 6] < 0) { c[0] = col[0]; c[1] = col[1]; c[2] = col[2]; } else { c[0] = T[i + 6]; c[1] = T[i + 7]; c[2] = T[i + 8]; } A.v(p, n, c, t0); } return; }
-  const bx = (a0, a1, w, y0, y1, c) => { const P = (a, b, yy) => [x + ux * a + vx * b, y + yy, z + uz * a + vz * b], q = [[a0, -w], [a1, -w], [a1, w], [a0, w]];
-    for (let i = 0; i < 4; i++) { const [p, r] = [q[i], q[(i + 1) % 4]], ex = (r[0] - p[0]), eb = (r[1] - p[1]), nx = ux * eb - vx * ex, nz = uz * eb - vz * ex, nl = Math.hypot(nx, nz) || 1, n = [nx / nl, 0, nz / nl]; A.quad(P(p[0], p[1], y0), P(r[0], r[1], y0), P(r[0], r[1], y1), P(p[0], p[1], y1), n, c, t0, t0, t0, t0); }
-    A.quad(P(a0, -w, y1), P(a1, -w, y1), P(a1, w, y1), P(a0, w, y1), [0, 1, 0], c, t0, t0, t0, t0); };
+  const [p0, p1, p2, p3, n] = CM_S, P = (o, a, b, yy) => { o[0] = x + ux * a + vx * b; o[1] = y + yy; o[2] = z + uz * a + vz * b; return o; };   // far boxes: no per-vertex allocation (walk perf 2026-11-04; same arithmetic)
+  const bx = (a0, a1, w, y0, y1, c) => { const qa = CM_QA, qb = CM_QB; qa[0] = a0; qa[1] = a1; qa[2] = a1; qa[3] = a0; qb[0] = -w; qb[1] = -w; qb[2] = w; qb[3] = w;
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4, ex = (qa[j] - qa[i]), eb = (qb[j] - qb[i]), nx = ux * eb - vx * ex, nz = uz * eb - vz * ex, nl = Math.hypot(nx, nz) || 1; n[0] = nx / nl; n[1] = 0; n[2] = nz / nl; A.quad(P(p0, qa[i], qb[i], y0), P(p1, qa[j], qb[j], y0), P(p2, qa[j], qb[j], y1), P(p3, qa[i], qb[i], y1), n, c, t0, t0, t0, t0); }
+    n[0] = 0; n[1] = 1; n[2] = 0; A.quad(P(p0, a0, -w, y1), P(p1, a1, -w, y1), P(p2, a1, w, y1), P(p3, a0, w, y1), n, c, t0, t0, t0, t0); };
   const dark = [0.08, 0.08, 0.09], glass = [0.12, 0.15, 0.18], h1 = ty === 2 ? 1.95 : ty === 1 ? 1.62 : 1.45, cl = ty === 2 ? [-2.0, 1.4] : ty === 1 ? [-1.7, 1.2] : [-1.25, 1.05];
   bx(-2.1, 2.1, 0.86, 0.05, 0.38, dark); bx(-2.2, 2.2, 0.89, 0.3, 0.85, col); bx(cl[0], cl[1], 0.78, 0.85, h1 - 0.42, glass); bx(cl[0] + 0.05, cl[1] - 0.05, 0.76, h1 - 0.42, h1, col); }
 // ships (TY 2026-10-31 stage 5; visual only, sizes/colours estimates): along x, bow toward dir. Type by length + index: < 50 m bumboat/harbour craft (timber hull, cabin + canopy);
