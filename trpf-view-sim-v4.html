@@ -1617,7 +1617,7 @@ function mlRun() { if (ML.raf) return; let t0 = performance.now();
       const w = state.walk, ride = w && onGround() && mscpIn(w.X, w.Y) && mlInCar(...mlLoc(w.X, w.Y)); ML.y += dir * Math.min(d, v * dt); if (ride) w.Z = ML.y; more = true;
       if (Math.abs(Y - ML.y) < 0.002) { ML.y = Y; ML.lv = ML.dest; ML.dest = -1; ML.v = 0; if (ride) w.Z = Y; setTimeout(() => mlDoor(1, () => { ML.busy = 0; mlPanel(ride); if (ride) mlIdle(); else setTimeout(() => { const w2 = state.walk; if (!ML.busy && !(w2 && mscpIn(w2.X, w2.Y) && mlInCar(...mlLoc(w2.X, w2.Y)))) mlDoor(0); }, 6000); }), 400); }
       mlPanel(ride); }
-    ML.sig = [ML.y.toFixed(3), ML.o.toFixed(3)].join(); GPU.fxC = null; renderView(); ML.raf = more ? requestAnimationFrame(step) : 0; };
+    ML.sig = [ML.y.toFixed(3), ML.o.toFixed(3)].join(); renderView(); ML.raf = more ? requestAnimationFrame(step) : 0; };
   ML.raf = requestAnimationFrame(step); }
 function mlGo(j) { if (ML.busy) return; clearTimeout(ML.idle); if (j === ML.lv) { mlDoor(1, mlIdle); return; } ML.busy = 1; ML.goal = j; mlPanel(true); mlDoor(0, () => { ML.dest = j; ML.v = 0; }); }
 function mlPanel(on) { let el = $('mlPanel'); if (!el) { if (!on) return; el = document.createElement('div'); el.id = 'mlPanel'; perspectiveCanvas.parentNode.appendChild(el);
@@ -1762,7 +1762,7 @@ function w31Run() { if (L31.raf) return; let t0 = performance.now();
       const d = Math.abs(L31.dest - L31.pos), v = Math.min(2.5 + vx, Math.sqrt(2 * (vx ? 1.2 : 0.8) * d) + 0.05, L31.v + (vx ? 1.2 : 0.8) * dt); L31.v = v; L31.pos += L31.dir * Math.min(d, v * dt); if (state.walk) state.walk.Z = L31.pos; more = true;
       if (Math.abs(L31.dest - L31.pos) < 0.002) { L31.dir = 0; L31.v = 0; w31Arrive(); } else w31Panel(); }
     if (L31.o === 0 && L31.tgt === 0 && L31.open && !L31.car && !L31.busy) L31.open = '';
-    L31.sig = [L31.open, L31.o.toFixed(3), L31.pos.toFixed(2), L31.busy].join(); GPU.fxC = null; renderView(); L31.raf = more ? requestAnimationFrame(step) : 0; };
+    L31.sig = [L31.open, L31.o.toFixed(3), L31.pos.toFixed(2), L31.busy].join(); renderView(); L31.raf = more ? requestAnimationFrame(step) : 0; };
   L31.raf = requestAnimationFrame(step); }
 function w31Go(f) { const w = state.walk; if (!w || !L31.car || L31.busy) return; const C = w31Cars().find(q => q.id === L31.car), cur = Math.min(30, w31Fl(w.Z || 0)); if (C && !w31Serves(C, f)) return; clearTimeout(L31.idle);
   if (f === cur) { w31Door(1, w31Idle); return; }
@@ -3288,7 +3288,12 @@ function computeOcclusionMask(W, H, src) {
   const A = MW * MH;
   return { total: (blk / A) * 100, newPct: (bN / A) * 100, trpfPct: (bT / A) * 100, exPct: (bE / A) * 100, horizonVisiblePct: hTot ? (hVis / hTot) * 100 : null };
 }
-function computeSightlines() {
+// memo (walk perf 2026-11-06): the window metrics depend only on state (spot eye, view, date/time/weather) + world + view size; walking/looking around in walk mode changes none of them
+// but each 250 ms settle render recomputed them (≈30–40 ms desktop). Same inputs → shallow copy of the last result (callers may reassign fields such as env).
+const CSL = { k: '' };
+function computeSightlines() { const k = WORLD_VER + '|' + (perspectiveCanvas._w || 820) + 'x' + (perspectiveCanvas._h || 360) + '|' + JSON.stringify(state, (q, v) => q === 'walk' || q === 'live' ? undefined : v);
+  if (CSL.k !== k || !CSL.m) { CSL.m = computeSightlines0(); CSL.k = k; } return Object.assign({}, CSL.m); }
+function computeSightlines0() {
   const W = perspectiveCanvas._w || 820, H = perspectiveCanvas._h || 360, cam = makeCamera(W, H), env = lightingEnv(), hEye = cam.hEye, ex = cam.ex, ez = cam.ez;
   const vFovRad = 2 * Math.atan(((H / W) * SENSOR_W) / 2 / state.focalLength), eye = [ex, hEye, ez];
   const dh = Math.sqrt(2 * hEye * R_EFF), dipDeg = Math.atan(Math.sqrt(2 * hEye / R_EFF)) / DEG, sinY = Math.sin(cam.yaw), cosY = Math.cos(cam.yaw);
@@ -3354,7 +3359,7 @@ function sunGrid(W = sunWindow()) {
   sunCache.set(key, grid); return grid;
 }
 const sunChart = $('sunChart'), sunCtx = sunChart.getContext('2d');
-function drawSunChart() {
+function drawSunChart() { if (!sunChart.offsetParent) return;   // panel closed (perf 2026-11-06)
   const w = sunChart._w, h = sunChart._h; if (!w) return; const ctx = sunCtx, grid = sunGrid(), L = 32, R = 40, T = 4, B = 17, cw = (w - L - R) / grid[0].row.length, ch = (h - T - B) / 12;
   ctx.clearRect(0, 0, w, h); ctx.font = '11px -apple-system, "SF Pro Text", Inter, system-ui, sans-serif';
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -3495,7 +3500,7 @@ const lightChart = $('lightChart'), lightCtx = lightChart.getContext('2d'), cmpD
 const cmpDefault = ds => { const y = ds.slice(0, 4), m = +ds.slice(5, 7); return m >= 4 && m <= 9 ? `${y}-12-15` : `${y}-06-15`; };
 let cmpDate = '';
 const fmtT = t => `${String(Math.floor(t)).padStart(2, '0')}:${String(Math.round((t % 1) * 60)).padStart(2, '0')}`;
-function drawLightChart() {
+function drawLightChart() { if (!lightChart.offsetParent) return;   // panel closed (perf 2026-11-06)
   const w = lightChart._w, h = lightChart._h, sp = roomSpot(), ctx = lightCtx; if (!w) return; ctx.clearRect(0, 0, w, h);
   if (!sp) { $('lightSum').innerHTML = '<span class="text-slate-500">Select a #134 room window.</span>'; return; }
   if (!cmpDate) cmpDate = cmpDefault(state.dateStr); if (cmpDateEl.value !== cmpDate) cmpDateEl.value = cmpDate;
@@ -3654,7 +3659,7 @@ function planXf() {
 }
 const LU_PLAN = ['#1e4f72', '#3b3f47', '#1f5130', '#5b5240', '#4a4a52', '#5d5230', '#454550'];
 function polyPath(ctx, flat, P) { for (let i = 0; i < flat.length; i += 2) { const [a, b] = P(flat[i], flat[i + 1]); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); } ctx.closePath(); }
-function drawPlan(m) {
+function drawPlan(m) { if (!planCanvas.offsetParent) return;   // panel closed: nothing to draw (opening it resizes + re-renders; perf 2026-11-06)
   const w = planCanvas._w, h = planCanvas._h, ctx = planCtx, X = planXf(), P = X.P, env = m.env;
   ctx.clearRect(0, 0, w, h);
   if (X.site) { ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, w, h); if (planCanvas.offsetParent) siteLoad(); if (siteReady) { ctx.globalAlpha = 0.9; ctx.drawImage(siteImg, 0, 0, w, h); ctx.globalAlpha = 1;
@@ -3689,7 +3694,7 @@ function drawPlan(m) {
 /* ===================== PROFILE ===================== */
 function profileLayout(w, h, maxElev) { const padLeft = 48, padRight = 14, padTop = 24, padBottom = 26, plotW = w - padLeft - padRight, plotH = h - padTop - padBottom; return { padLeft, padRight, padTop, padBottom, plotW, plotH, maxElev, toX: s => padLeft + (s / state.profileRange) * plotW, toY: e => padTop + plotH - (e / maxElev) * plotH }; }
 const LU_PROF = ['rgba(56,189,248,0.6)', 'rgba(148,163,184,0.6)', 'rgba(74,222,128,0.55)', 'rgba(234,200,140,0.5)', 'rgba(203,213,225,0.45)', 'rgba(250,204,21,0.45)', 'rgba(148,163,184,0.4)'];
-function drawProfile(m) {
+function drawProfile(m) { if (!profileCanvas.offsetParent) return;   // panel closed: nothing to draw (opening it resizes + re-renders; perf 2026-11-06)
   const w = profileCanvas._w, h = profileCanvas._h, ctx = pCtx, R = state.profileRange, inRange = m.crossings.filter(c => c.sIn < R);
   const nearLm = m.landmarks.filter(r => angDiff(r.bearing, state.heading) < 4 && r.dist < R);
   const maxElev = Math.max(120, m.hEye * 1.3, ...inRange.map(c => c.h * 1.12), ...nearLm.map(r => r.lm.h * 1.15));
@@ -4087,7 +4092,7 @@ const MAP_LABELS = [['#132', 10.5, 13.6], ['#136', 18.2, 6.8], ['#148', 31.5, 13
 const WALK_MAP = { s: 12, ox: -0.25, oy: -0.6, big: false, T: null };   // px per m (canvas css px), plan origin offset; big = expanded map (tap the minimap)
 // Map transform: small = 190×140 following the eye; big = whole walkable area fitted to the canvas, turned 90° (plan X down) when the canvas is taller than wide.
 function walkMapT(cv) {
-  const g0 = onGround(); if (!WALK_MAP.big) { WALK_MAP.ox = g0 ? state.walk.X - 7.9 : Math.max(-0.25, state.walk.X - 7.9); WALK_MAP.oy = g0 ? state.walk.Y - 5.8 : Math.max(-0.6, state.walk.Y - 5.8); return { w: 190, h: 140, sc: WALK_MAP.s, ox: WALK_MAP.ox, oy: WALK_MAP.oy, rot: false }; }   // follow the eye along the corridor
+  const g0 = onGround(); if (!WALK_MAP.big) { const k = WALK_MAP.s * (window.devicePixelRatio || 1), sn = v => g0 ? Math.round(v * k) / k : v; WALK_MAP.ox = sn(g0 ? state.walk.X - 7.9 : Math.max(-0.25, state.walk.X - 7.9)); WALK_MAP.oy = sn(g0 ? state.walk.Y - 5.8 : Math.max(-0.6, state.walk.Y - 5.8));   /* ground: origin on whole device pixels (cached layer blit) */ return { w: 190, h: 140, sc: WALK_MAP.s, ox: WALK_MAP.ox, oy: WALK_MAP.oy, rot: false }; }   // follow the eye along the corridor
   const r = cv.getBoundingClientRect(), w = r.width || 300, h = r.height || 300; let X0 = 1e9, Y0 = 1e9, X1 = -1e9, Y1 = -1e9; const add = (X, Y) => { X0 = Math.min(X0, X); X1 = Math.max(X1, X); Y0 = Math.min(Y0, Y); Y1 = Math.max(Y1, Y); };
   if (g0) { const r = GEO.trpf; for (let i = 0; i < r.length; i += 2) add(...P2W.inv(r[i], r[i + 1])); } else { UNIT_PLAN.outline.forEach(([X, Y]) => add(X, Y)); UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { add(x0, y0); add(x1, y1); }); } X0 -= 1; Y0 -= 1; X1 += 1; Y1 += 1;
   const rot = h > w * 1.1, pad = 12, top = 40, bot = 22, aw = w - 2 * pad, ah = h - top - bot, sc = rot ? Math.min(aw / (Y1 - Y0), ah / (X1 - X0)) : Math.min(aw / (X1 - X0), ah / (Y1 - Y0));
@@ -4103,7 +4108,16 @@ function walkMapBig(on) {
   WALK_MAP.big = !!on && !!state.walk; const cv = $('walkMap'); if (WALK_MAP.big && cv.parentNode !== document.body) { WALK_MAP.home = [cv.parentNode, cv.nextSibling]; document.body.appendChild(cv); } else if (!WALK_MAP.big && WALK_MAP.home) { WALK_MAP.home[0].insertBefore(cv, WALK_MAP.home[1]); WALK_MAP.home = null; }   // body child while big: pane ancestors would clip / contain position:fixed
   cv.classList.toggle('big', WALK_MAP.big); cv.title = WALK_MAP.big ? 'Tap a spot to walk there' : 'Tap to expand the map'; drawWalkMap();
 }
-function drawGroundMap(g, P) {   // walk map on the void deck: TRPF site, ground features, blocks overhead (faint), ground-storey obstacles
+// small ground map = translation of a fixed-scale picture (walk perf 2026-11-06: redrawing ≈2,200 road strips + every TRPF prism + obstacles cost 3–5 ms per walk step): drawn once into a
+// layer 3× the map size round the eye and blitted at whole device pixels (walkMapT snaps the map origin to device pixels); redrawn when the eye nears the layer edge or the world changes
+const GMAP = {};
+function drawGroundMap(g, P, T) { if (!T || T.l !== undefined) return drawGroundMap0(g, P);
+  const dpr = window.devicePixelRatio || 1, sc = T.sc, o = groundObs(), C = GMAP, W = T.w * 3, H = T.h * 3, fx = (C.ox0 !== undefined) ? (T.ox - C.ox0) * sc : -1, fy = (C.ox0 !== undefined) ? (T.oy - C.oy0) * sc : -1;
+  if (!(C.cv && C.t === TRPF && C.o === o && C.sc === sc && C.dpr === dpr && C.w === T.w && C.h === T.h && fx >= 0 && fy >= 0 && fx <= W - T.w && fy <= H - T.h)) {
+    const cv = C.cv || (C.cv = document.createElement('canvas')), bw = Math.round(W * dpr), bh = Math.round(H * dpr); if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+    Object.assign(C, { t: TRPF, o, sc, dpr, w: T.w, h: T.h, ox0: T.ox - T.w / sc, oy0: T.oy - T.h / sc }); const L = { w: W, h: H, sc, ox: C.ox0, oy: C.oy0 }, q = cv.getContext('2d'); q.setTransform(1, 0, 0, 1, 0, 0); q.clearRect(0, 0, bw, bh); q.setTransform(dpr, 0, 0, dpr, 0, 0); drawGroundMap0(q, (X, Y) => walkMapP(L, X, Y)); }
+  const dx = T.w - W + (T.ox - C.ox0) * sc, dy = T.h - H + (T.oy - C.oy0) * sc; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(C.cv, Math.round(dx * dpr), Math.round(dy * dpr)); g.restore(); }
+function drawGroundMap0(g, P) {   // walk map on the void deck: TRPF site, ground features, blocks overhead (faint), ground-storey obstacles
   const path = (r, fill) => { g.beginPath(); for (let i = 0; i < r.length; i += 2) { const [x, y] = P(...P2W.inv(r[i], r[i + 1])); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); g.fillStyle = fill; g.fill(); };
   const road = r => { path(r, '#475569'); g.strokeStyle = '#475569'; g.lineWidth = 1; g.stroke(); };   // opaque + 1 px stroke: no seams between the trapezoid strips
   SITE_ROADS.forEach(road); path(GEO.trpf, 'rgba(74,124,72,0.35)'); VD_FLAT.porches.forEach(r => path(r, 'rgba(203,213,225,0.3)')); SITE_ROADS.forEach(r => ringIn(GEO.trpf, (r[0] + r[4]) / 2, (r[1] + r[5]) / 2) && road(r)); [...VD_FLAT.plazas, VD_FLAT.court].forEach(r => path(r, 'rgba(203,213,225,0.3)')); VD_FLAT.pads.forEach(q => path(q.r, q.play ? 'rgba(96,165,250,0.55)' : 'rgba(251,191,36,0.4)'));
@@ -4131,7 +4145,7 @@ function mapTags(g, P, T) {
 function drawWalkMap() {
   const cv = $('walkMap'); if (!state.walk || !cv) return; const dpr = window.devicePixelRatio || 1, T = WALK_MAP.T = walkMapT(cv), bw = Math.round(T.w * dpr), bh = Math.round(T.h * dpr); if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const g = cv.getContext('2d'), sc = T.sc, P = (X, Y) => walkMapP(T, X, Y), R = (x0, y0, x1, y1) => { const [a, b] = P(x0, y0), [c, d] = P(x1, y1); return [Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b)]; }; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = WALK_MAP.big ? 'rgba(15,23,42,0.96)' : 'rgba(15,23,42,0.88)'; g.fillRect(0, 0, T.w, T.h);
-  if (onGround()) drawGroundMap(g, P);   // void deck / grounds: site, features, blocks above, ground-storey obstacles
+  if (onGround()) drawGroundMap(g, P, T);   // void deck / grounds: site, features, blocks above, ground-storey obstacles
   else { g.beginPath(); UNIT_PLAN.outline.forEach(([X, Y], i) => { const [x, y] = P(X, Y); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.fillStyle = 'rgba(148,163,184,0.18)'; g.fill(); }
   const g0 = onGround(); if (!g0) UNIT_PLAN.corr.walk.forEach(([x0, y0, x1, y1]) => { const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = 'rgba(148,163,184,0.12)'; g.fillRect(a, b, w, h); if (x1 === UNIT_PLAN.corr.stop) { const [p, q] = P(x1, y0), [p2, q2] = P(x1, y1); g.strokeStyle = '#f87171'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(p, q); g.lineTo(p2, q2); g.stroke(); } });   // corridor + stop line
   for (const [x0, y0, x1, y1, z0 = 0, z1 = UNIT_H, kind] of unitWalls()) { if (isExtKind(kind) || kind === 'stair' || z1 <= 0 || z0 >= UNIT_H) continue; const [a, b, w, h] = R(x0, y0, x1, y1); g.fillStyle = z1 <= 0.6 ? '#38bdf8' : z0 > 1.5 ? 'rgba(203,213,225,0.25)' : isDoorKind(kind) ? '#a16207' : '#cbd5e1'; g.fillRect(a, b, Math.max(1, w), Math.max(1, h)); }
@@ -5428,16 +5442,17 @@ function texInit() { const gl = GPU.gl; if (TEX.init) return; TEX.init = true; c
   TEX.a = mk(gl.TEXTURE_2D_ARRAY, 7); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.nm = mk(gl.TEXTURE_2D_ARRAY, 8); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.f = mk(gl.TEXTURE_2D_ARRAY, 11); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
   TEX.l = mk(gl.TEXTURE_2D, 9); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.c = mk(gl.TEXTURE_2D, 10); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
   for (const pr of [GPU.main, GPU.tree, GPU.gfill, GPU.sky]) { gl.useProgram(pr.p); for (const [k, v] of Object.entries(TEX.units)) if (pr.u[k]) gl.uniform1i(pr.u[k], v); }
-  const ld = f => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = 'tex/' + f; });
+  const ld = f => new Promise((ok, no) => { const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => ok(im)); im.onerror = no; im.src = 'tex/' + f; });   // decoded off the main thread before the upload (load perf 2026-11-06: texImage from an undecoded image decoded synchronously)
   const LM = lowMem(); if (LM >= 2) { gl.activeTexture(gl.TEXTURE0); return; }
   Promise.all(['mat.webp', 'nrm.webp', 'leaf.webp', 'sky.webp'].concat(LM ? [] : ['fac.webp']).map(ld)).then(([A, N, L, C, F]) => { const g = GPU.gl;
-    for (const [im, t, u] of [[A, TEX.a, 7], [N, TEX.nm, 8], [F, TEX.f, 11]]) { if (!im) continue; g.activeTexture(g.TEXTURE0 + u); g.bindTexture(g.TEXTURE_2D_ARRAY, t); const S = im.width;
+    const Q = [[A, TEX.a, 7], [N, TEX.nm, 8], [F, TEX.f, 11]].filter(q => q[0]), step = () => { const q = Q.shift(); if (q) { up(...q); return setTimeout(step, 0); } fin(); }; step();   // one texture per task (≈0.5 s blocks instead of one ≈2 s freeze right after the first view)
+    function up(im, t, u) { g.activeTexture(g.TEXTURE0 + u); g.bindTexture(g.TEXTURE_2D_ARRAY, t); const S = im.width;
       g.texImage3D(g.TEXTURE_2D_ARRAY, 0, g.RGBA8, S, S, im.height / S, 0, g.RGBA, g.UNSIGNED_BYTE, im); g.generateMipmap(g.TEXTURE_2D_ARRAY);
       g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR); g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_WRAP_S, g.REPEAT); g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_WRAP_T, g.REPEAT);
-      if (an) g.texParameterf(g.TEXTURE_2D_ARRAY, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, g.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT))); }
-    g.activeTexture(g.TEXTURE9); g.bindTexture(g.TEXTURE_2D, TEX.l); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, g.RGBA, g.UNSIGNED_BYTE, L); g.generateMipmap(g.TEXTURE_2D); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+      if (an) g.texParameterf(g.TEXTURE_2D_ARRAY, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, g.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT))); g.activeTexture(g.TEXTURE0); }
+    function fin() { g.activeTexture(g.TEXTURE9); g.bindTexture(g.TEXTURE_2D, TEX.l); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, g.RGBA, g.UNSIGNED_BYTE, L); g.generateMipmap(g.TEXTURE_2D); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
     g.activeTexture(g.TEXTURE10); g.bindTexture(g.TEXTURE_2D, TEX.c); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, g.RGBA, g.UNSIGNED_BYTE, C); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.REPEAT); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
-    g.activeTexture(g.TEXTURE0); TEX.on = 1; renderAll(); }).catch(e => console.warn('photo textures unavailable (procedural look kept):', e)); gl.activeTexture(gl.TEXTURE0); }
+    g.activeTexture(g.TEXTURE0); TEX.on = 1; renderAll(); } }).catch(e => console.warn('photo textures unavailable (procedural look kept):', e)); gl.activeTexture(gl.TEXTURE0); }
 function texU(pr, env) { const gl = GPU.gl, u = pr.u; if (u.uTexOn) gl.uniform1f(u.uTexOn, TEX.on && !GPU.noTex ? (lowMem() ? 2 : 1) : 0); if (u.uSkyU && env) { const W = env.W, s = env.sunVec; gl.uniform3f(u.uSkyU, W.cs > 2 ? 0 : W.clouds / 70, Math.atan2(s[0], s[2]), TEX.skyU); }
   if (u.uClit && env) { const [cl, cb] = cloudCols(env); gl.uniform3f(u.uClit, ...cl.map(v => v / 255)); gl.uniform3f(u.uCbase, ...cb.map(v => v / 255)); } }
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
@@ -6119,7 +6134,7 @@ function gpuRender(cam, env, pxW, pxH) {
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.useProgram(M.p); gpuAttrib(M, GPU.city);
   if (oAO) { gl.uniform1f(M.u.uAO, 1); gl.uniform1i(M.u.uDep, 4); gl.uniform2f(M.u.uRes, GPU.cv.width, GPU.cv.height); gl.uniform2f(M.u.uNF, NEAR, FAR); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, GPU.depTx); gl.activeTexture(gl.TEXTURE0); }
   opaque(); if (oAO) gl.uniform1f(M.u.uAO, 0);   /* opaque (alpha 1): blending off = same pixels, lets tile GPUs drop hidden fragments */
-  const fx = gpuFx(cam, env); if (fx.ship) { gpuAttrib(M, GPU.dyn.ship); gl.drawArrays(gl.TRIANGLES, 0, fx.ship); }   // ships (anchored + under way)
+  const fx = gpuFx(cam, env); for (const k of ['shipS', 'lift', 'ship']) if (fx[k]) { gpuAttrib(M, GPU.dyn[k]); gl.drawArrays(gl.TRIANGLES, 0, fx[k]); }   // ships (anchored + under way)
   if (state.showRoads && GPU.tunON) {   // tunnel troughs + interiors: below grade, so drawn only where the trough opening (y 0) is visible (stencil bit 8; the ground layer writes no depth)
     const zm = GPU.zm || GPU.dep; gl.enable(gl.STENCIL_TEST); gl.stencilMask(8); gl.clear(gl.STENCIL_BUFFER_BIT); gl.stencilFunc(gl.ALWAYS, 8, 8); gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
     gl.useProgram(GPU.zm.p); gpuCam(GPU.zm, cam, NEAR, FAR); gl.uniform1f(GPU.zm.u.uMirror, 0); gl.colorMask(false, false, false, false); gl.depthMask(false); gl.depthFunc(gl.LESS); gpuAttrib(GPU.zm, GPU.tunO); gl.drawArrays(gl.TRIANGLES, 0, GPU.tunON);
@@ -6318,12 +6333,15 @@ function handBloom(ctx, HV) {   // 2D bloom along the blade (screen-space, addit
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; for (const [k, al] of [[14, 0.05], [8, 0.08], [4, 0.12]]) { ctx.strokeStyle = `rgba(40,255,80,${al})`; ctx.lineWidth = r * k; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); } ctx.restore();
 }
 function gpuDyn(name, arr) { const gl = GPU.gl, b = GPU.dyn[name] || (GPU.dyn[name] = gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, b); const a = arr.length ? (ArrayBuffer.isView(arr) ? arr : new Float32Array(arr)) : new Float32Array(1);   // typed views uploaded as is (was a full copy per rebuild); storage reused while it fits (walk perf 2026-11-04)
-  if (b.cap >= a.length) gl.bufferSubData(gl.ARRAY_BUFFER, 0, a); else { gl.bufferData(gl.ARRAY_BUFFER, a, gl.DYNAMIC_DRAW); b.cap = a.length; } return b; }
+  gl.bufferData(gl.ARRAY_BUFFER, a, gl.DYNAMIC_DRAW); return b; }   // fresh storage each upload (2026-11-06): bufferSubData into a buffer the GPU may still be drawing from stalls the pipeline (≈100 % of fx upload time on llvmpipe)
 // Per-frame moving / night items: ships (prisms) + wakes, cars (drawCars/deckCars via CAR_SINK), Flyer ring + capsules, night landmarks. Uploads dynamic buffers; returns counts.
 // cars/ships/night sprites are rebuilt only when time, light, eye or roads change, or the view turns > 0.45 rad: built for a wedge 0.5 rad wider each side (off-screen sprites are clipped), so turning reuses them (lag cut 2026-10-31)
 function gpuFx(cam0, env) {
-  const C = GPU.fxC, t = simT(); if (C && C.env === env && C.t === t && C.ex === cam0.ex && C.ez === cam0.ez && C.roads === state.showRoads && C.hfov === cam0.hfov && Math.abs(Math.atan2(Math.sin(cam0.yaw - C.yaw), Math.cos(cam0.yaw - C.yaw))) < 0.45 && C.ml === w31Sig()) return C.r;
-  const cam = Object.assign({}, cam0, { inWedge: (a, b, c, d, r) => cam0.inWedge(a, b, c, d, r, 0.5) }), r = gpuFx0(cam, env); GPU.fxC = { ml: w31Sig(), env, t, ex: cam0.ex, ez: cam0.ez, roads: state.showRoads, hfov: cam0.hfov, yaw: cam0.yaw, r }; return r; }
+  const t = simT(), L = GPU.fxL || (GPU.fxL = {}), cam = Object.assign({}, cam0, { inWedge: (a, b, c, d, r) => cam0.inWedge(a, b, c, d, r, 0.5) });   // 3 layers (walk perf 2026-11-06), each rebuilt only when its own inputs change (was everything on any eye move: 18–30 ms JS per walk step):
+  const sk = WORLD_VER + '|' + GPU.noAO + '|' + t; if (L.sk !== sk) { L.sk = sk; const A = glArr(); SHIPS.forEach(([x, z, len], i) => shipMesh(A, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i)); MOVERS.forEach(Mv => shipMesh(A, moverX(Mv), Mv[1], Mv[2], Math.sign(Mv[3]), 20 + MOVERS.indexOf(Mv))); gpuDyn('shipS', A.a); L.ship = A.n; }   // ships: world + time
+  const C = L.c; if (!(C && C.env === env && C.t === t && Math.hypot(C.ex - cam0.ex, C.ez - cam0.ez, C.hy - cam0.hEye) < 1 && C.roads === state.showRoads && C.hfov === cam0.hfov && Math.abs(Math.atan2(Math.sin(cam0.yaw - C.yaw), Math.cos(cam0.yaw - C.yaw))) < 0.45)) { L.c = { env, t, ex: cam0.ex, ez: cam0.ez, hy: cam0.hEye, roads: state.showRoads, hfov: cam0.hfov, yaw: cam0.yaw }; L.r = gpuFx0(cam, env); }   // cars + sprites: time, light, roads, lens, wedge, eye within 1 m (car LOD 60/700 m, head/tail side)
+  const ls = w31Sig(); if (L.ls !== ls) { L.ls = ls; const A = glArr(); mscpLiftGeo(A); WKS.forEach(K => K.DynGeo(A)); gpuDyn('lift', A.a); L.lift = A.n; }   // lift cars / doors, stair fire doors: lift + walker storey state
+  return Object.assign({ shipS: L.ship, lift: L.lift }, L.r); }
 // 3D car (realism 2026-10-31; detailed body 2026-11-01, TY "the cars look horrible"; sizes estimates): ≤ CAR_LOD m from the eye = lofted body (chamfered sections: bumpers, hood, boot) + greenhouse
 // (raked windscreen / rear glass, A/B/C pillars + roof in body colour, side glass) + 4 wheels (tyre + silver rim) + head/tail lights, grille, mirrors, plate; 3 types by k (sedan / MPV / hatchback-SUV).
 // Templates built once per type in car-local metres (a = forward, b = left, y = up), transformed per car (no allocation); beyond = 4 boxes.
@@ -6412,10 +6430,7 @@ function shipMesh(Sh, x, z, L, dir, k) { const B = L < 50 ? L * 0.28 : L * 0.145
   box(0.94, 0.985, -B * 0.06, B * 0.06, fb, fb + 6, w); }   // forecastle mast
 function gpuFx0(cam, env) {
   const add = [], opq = [], la = [], lo = [], Sh = glArr(), Tc = glArr(), night = env.night, S = (o, x, y, z, ax, az, sx, sy, c, a, ty, pull = 0) => o.push(x, y, z, ax, az, sx, sy, c[0], c[1], c[2], a, ty, pull), box = (x0, z0, x1, z1) => [x0, z0, x1, z0, x1, z1, x0, z1];
-  const fxBlk = (k, key, f) => { const M = GPU[k] || (GPU[k] = new Map()), K = key + '|' + (GPU.pid || 0) % 11; let c = M.get(K); if (!c) { if (M.size && [...M.keys()][0].split('|').slice(0, -1).join('|') !== key) M.clear(); if (M.size >= 3) M.delete(M.keys().next().value); const T = glArr(), p0 = GPU.pid || 0; f(T); M.set(K, c = { a: T.b.slice(0, T.l), dp: (GPU.pid || 0) - p0 }); } else GPU.pid = (GPU.pid || 0) + c.dp; glCat(Sh, c.a); };   // ship meshes are eye-independent: built once per world (anchored) / per world + time (movers) and copied in (walk perf 2026-11-04: ≈7 ms per fx rebuild). glPrism's 1–3 cm growth cycles with GPU.pid % 11, so blocks are cached per entry residue (≤11 × 0.8 MB) and a hit advances GPU.pid as the build would: output bit-identical to rebuilding
-  fxBlk('shipC', WORLD_VER + '|' + GPU.noAO, T => SHIPS.forEach(([x, z, len], i) => shipMesh(T, x, z, len, hash01(x, z, 5) < 0.5 ? 1 : -1, i)));
-  mscpLiftGeo(Sh); WKS.forEach(K => K.DynGeo(Sh)); for (const q of mscpCarsNow()) if (cam.inWedge(q.wx - 3, q.wx + 3, q.wz - 3, q.wz + 3, 900)) carMesh(Sh, q.wx, q.y, q.wz, q.hx, q.hz, q.k, [0, 0, 0.3, 0], Math.hypot(q.wx - cam.ex, q.y - cam.hEye, q.wz - cam.ez) < CAR_LOD);   // carpark: parked cars by hour/day (view wedge, detailed ≤ CAR_LOD)   // stage 5 (2026-10-31): typed ship meshes
-  fxBlk('moverC', WORLD_VER + '|' + GPU.noAO + '|' + MOVERS.map(moverX).join(','), T => MOVERS.forEach(Mv => shipMesh(T, moverX(Mv), Mv[1], Mv[2], Math.sign(Mv[3]), 20 + MOVERS.indexOf(Mv))));
+  for (const q of mscpCarsNow()) if (cam.inWedge(q.wx - 3, q.wx + 3, q.wz - 3, q.wz + 3, 900)) carMesh(Sh, q.wx, q.y, q.wz, q.hx, q.hz, q.k, [0, 0, 0.3, 0], Math.hypot(q.wx - cam.ex, q.y - cam.hEye, q.wz - cam.ez) < CAR_LOD);   // carpark: parked cars by hour/day (view wedge, detailed ≤ CAR_LOD)   // stage 5 (2026-10-31): typed ship meshes
   MOVERS.forEach(Mv => { const [, z, len] = Mv, x = moverX(Mv), dir = Math.sign(Mv[3]), big = len > 60, a = x - dir * len * 0.4, b = x - dir * len * 0.22;
     S(opq, x - dir * len * 1.75, 0.2, z, 1, 0, len * 1.25, len * 0.2, [235 / 255, 240 / 255, 242 / 255], 0.35, 2);
     const fo = [242 / 255, 246 / 255, 248 / 255], ca = Math.cos(19.5 * DEG), sa = Math.sin(19.5 * DEG); S(opq, x - dir * len * 0.62, 0.22, z, 1, 0, len * 0.22, len * 0.07, fo, 0.75, 2); S(opq, x + dir * len * 0.47, 0.22, z, 1, 0, len * 0.06, len * 0.09, fo, 0.6, 2);   // r5: stern churn + bow wave
