@@ -718,7 +718,7 @@ function icons(root = document) { root.querySelectorAll('i[data-i]').forEach(el 
 <div id="trafTxt" class="text-[12px] mono text-slate-300 leading-snug"></div>
 <details class="info"><summary>About traffic</summary><div>Cars follow hour + day (▶ Animate moves them). Typical-day profile, not live data: no public hourly ECP counts; tuned so weekday peaks ≈60 km/h (LTA peak-hour average 55–60 km/h).</div></details></div>
             <details class="more" data-more="time"><summary></summary><div class="more-b"><div class="panel"><div class="flex justify-between text-[12px] mb-1"><span class="text-slate-300">Haze visibility</span><span id="visVal" class="mono text-sky-400 font-semibold"></span></div>
-<input type="range" id="visSlider" min="2" max="40" step="1" value="12" aria-label="Visibility" data-unit=" km">
+<input type="range" id="visSlider" min="2" max="60" step="1" value="12" aria-label="Visibility" data-unit=" km">
 <div class="text-[11px] text-slate-500 mt-1">T = e<sup>−3.912·d/V</sup></div></div></div></details>
             <div class="sec-h">Compare day (Light › Daylight over the day)</div>
             <div class="dp-row"><label class="chip date-other" style="justify-content:center"><i data-i="cal"></i><span id="cmpLbl">Compare…</span><input type="date" id="cmpDate2" aria-label="Compare date"></label></div>
@@ -2902,6 +2902,73 @@ const LANDMARKS = [
 ];
 const FLYER = [-1686, -824];
 const SHIPS = [[-600, -3800, 150], [300, -4300, 180], [1300, -3600, 140], [2200, -4600, 160], [-200, -5200, 200], [900, -5600, 170], [-1400, -4700, 130]];
+// Anchored ships (2026-11-07): + Eastern Anchorage spread ≈2.3–7 km off East Coast, x 2.5–12.5 km (seeded; positions estimates, real anchorage ≈1.24–1.28N 103.90–103.99E).
+(() => { let s = 9137; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); for (let k = 0; k < 400 && SHIPS.length < 31; k++) { const x = 2500 + r() * 10000, z = -2300 - r() * 4700;
+  if (SHIPS.every(([a, b]) => Math.hypot(a - x, b - z) > 520)) SHIPS.push([Math.round(x), Math.round(z), Math.round(90 + r() * r() * 240)]); } })();
+// Far islands (TY 2026-11-07 "what would I see on the horizon"): Southern Islands + Riau (Batam, Bintan, Karimun, Rempang/Galang …) from GEO.farIsles, render only
+// (not in physics / sightlines / metrics). Canopy heights, hills, Batam towers, Sebarok tanks, Raffles Lighthouse, town lights = estimates.
+const FAR_LL = (la, lo) => [(lo - 103.87826) * 111291, (la - 1.29682) * 110574];
+const FAR_H = { Sentosa: 14, 'Pulau Brani': 4, 'Jurong Island': 6, 'Pulau Bukom': 6, 'Pulau Bukom Kechil': 6, 'Pulau Semakau': 8, 'Pulau Satumu': 3, 'Pulau Sebarok': 4, 'Kusu Island': 6, "St John's / Lazarus": 12, 'Pulau Sudong': 14 };
+const FAR_GREY = new Set(['Pulau Brani', 'Jurong Island', 'Pulau Bukom', 'Pulau Bukom Kechil', 'Pulau Sebarok']);
+const FAR_ISLES = (GEO.farIsles || []).map(([n, r]) => ({ n, r, h: FAR_H[n] ?? (n === 'Kota Batam' && r.length > 400 ? 35 : 26), grey: FAR_GREY.has(n), batam: n === 'Kota Batam' }));   // Riau: ground + canopy ≈26 m, Batam main island 35 m (estimates)
+const farIsleAt = (x, z) => FAR_ISLES.find(I => ringIn(I.r, x, z)) || null;
+// hills [lat, lon, top m, radius km] (estimates; Gunung Bintan ~350 m, Gunung Jantan (Karimun) ~478 m, Sentosa Mt Imbiah / Serapong, Batam/Rempang low hills)
+const FAR_HILLS = [[1.2547, 103.8186, 60, 0.45], [1.2445, 103.8330, 70, 0.4], [1.2232, 103.8470, 28, 0.25], [1.03, 104.36, 350, 3.5], [1.065, 103.37, 478, 3.5],
+  [1.085, 104.02, 110, 3], [1.105, 103.965, 85, 2.2], [1.06, 104.08, 95, 2.5], [1.0, 103.89, 120, 3], [1.15, 104.06, 70, 1.6], [1.13, 103.995, 75, 1.8], [1.165, 104.09, 60, 1.5], [1.04, 103.99, 90, 2.5]];
+// Batam high-rise clusters [lat, lon, count, spread m, h min, h max] (Nagoya/Harbour Bay, Batam Centre, Sekupang; unverified estimates)
+const FAR_TOWERS = [[1.146, 104.005, 7, 900, 60, 130], [1.124, 104.052, 7, 1000, 70, 150], [1.112, 103.958, 3, 600, 45, 80]];
+// night: town lights [lat, lon, radius km, count] + sky-glow domes [lat, lon, size m, alpha] (estimates)
+const FAR_TOWNS = [[1.148, 104.0, 3.5, 170], [1.123, 104.05, 3, 130], [1.113, 103.955, 2.5, 70], [1.08, 103.975, 3, 70], [1.172, 104.1, 2, 30], [1.07, 103.93, 2, 40],
+  [1.153, 103.89, 0.8, 18], [1.159, 103.9, 0.5, 14], [1.065, 104.22, 1.5, 30], [1.17, 104.33, 3, 25], [1.0, 103.42, 2, 30], [1.2498, 103.8278, 1.2, 60], [1.2575, 103.8318, 0.6, 40], [1.2343, 103.7689, 0.8, 40], [1.2697, 103.7026, 3, 90]];
+const FAR_DOMES = [[1.125, 104.02, 7000, 0.12], [1.07, 103.95, 4000, 0.07], [0.92, 104.46, 5000, 0.08], [1.0, 103.42, 3000, 0.06], [1.2697, 103.7026, 4000, 0.08]];
+const RAFFLES_LH = FAR_LL(1.1600, 103.7406);   // Raffles Lighthouse (Pulau Satumu): 29 m tower; light Fl W 10s (character from memory, estimate)
+let FAR_LIGHTS = null;
+function farLights() { if (FAR_LIGHTS) return FAR_LIGHTS; let s = 4711; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647); FAR_LIGHTS = [];
+  for (const [la, lo, rk, n] of FAR_TOWNS) { const [cx, cz] = FAR_LL(la, lo); for (let i = 0, k = 0; i < n * 4 && k < n; i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * rk * 1000, x = cx + d * Math.cos(a), z = cz + d * Math.sin(a);
+    if (!farIsleAt(x, z)) continue; k++; const w = r(); FAR_LIGHTS.push([x, 8 + r() * r() * 60, z, w < 0.6 ? [1, 0.72, 0.42] : w < 0.9 ? [1, 0.93, 0.82] : [0.85, 0.92, 1], 0.5 + r() * 0.5]); if (FAR_LIGHTS.length > 2000) break; } }
+  return FAR_LIGHTS; }
+function farClip(P, x0, z0, x1, z1) {   // Sutherland–Hodgman: polygon ∩ axis-aligned cell
+  let o = P; for (const [ax, lim, keep] of [[0, x0, 1], [0, x1, -1], [1, z0, 1], [1, z1, -1]]) { const I = o; o = []; if (!I.length) break;
+    for (let i = 0; i < I.length; i++) { const p = I[i], q = I[(i + 1) % I.length], pi = (p[ax] - lim) * keep >= 0, qi = (q[ax] - lim) * keep >= 0;
+      if (pi) o.push(p); if (pi !== qi) { const t = (lim - p[ax]) / (q[ax] - p[ax]); o.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); } } }
+  return o; }
+function farKit(A) { const z4 = [0, 0, 0, 0], up = [0, 1, 0], c = v => v.map(q => q / 255);
+  const box = (x0, z0, x1, z1, y0, y1, col) => { const k = c(col), s = k.map(v => v * 0.86); A.quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], up, k, z4, z4, z4, z4);
+    A.quad([x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1], s, z4, z4, z4, z4); A.quad([x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1], [0, 0, 1], s, z4, z4, z4, z4);
+    A.quad([x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [-1, 0, 0], k, z4, z4, z4, z4); A.quad([x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0], [1, 0, 0], k, z4, z4, z4, z4); };
+  const cyl = (cx, cz, rr, y0, y1, col, k = 8) => { const q = c(col); for (let i = 0; i < k; i++) { const a0 = 2 * Math.PI * i / k, a1 = 2 * Math.PI * (i + 1) / k, am = (a0 + a1) / 2, n = [Math.cos(am), 0, Math.sin(am)];
+    A.quad([cx + rr * Math.cos(a0), y0, cz + rr * Math.sin(a0)], [cx + rr * Math.cos(a1), y0, cz + rr * Math.sin(a1)], [cx + rr * Math.cos(a1), y1, cz + rr * Math.sin(a1)], [cx + rr * Math.cos(a0), y1, cz + rr * Math.sin(a0)], n, q, z4, z4, z4, z4);
+    A.v([cx, y1, cz], up, q, z4); A.v([cx + rr * Math.cos(a0), y1, cz + rr * Math.sin(a0)], up, q, z4); A.v([cx + rr * Math.cos(a1), y1, cz + rr * Math.sin(a1)], up, q, z4); } };
+  for (const I of FAR_ISLES) { const r = I.r, n = r.length / 2, pts = []; for (let i = 0; i < n; i++) pts.push([r[2 * i], r[2 * i + 1]]);
+    const top = c(I.grey ? [138, 136, 128] : I.batam ? [88, 100, 78] : [68, 90, 56]), side = top.map(v => v * 0.78), sand = c(I.grey ? [150, 150, 146] : [190, 180, 156]), h = I.h, sb = Math.min(1.2, h * 0.3);
+    const near = !I.grey && Math.hypot(pts[0][0], pts[0][1]) < 17000, hp = near ? h * 0.55 : h;   // ≤17 km: canopy plate at 55% + hummocks (jittered 150 m grid) so islands don't read as flat tablets
+    { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+      const CS = 1500;   // top split into ≤1.5 km cells: earth curvature is applied per vertex, so a 30 km ear-clip triangle sagged up to ≈15 m below the (subdivided) sea plane and Batam vanished
+      for (let gx = x0; gx < x1; gx += CS) for (let gz = z0; gz < z1; gz += CS) { const q = farClip(pts, gx, gz, Math.min(gx + CS, x1), Math.min(gz + CS, z1)); if (q.length < 3) continue; const t = earClip(q); for (const k of t) A.v([q[k][0], hp, q[k][1]], up, top, z4); } }
+    if (near) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [x, z] of pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+      const sp = 150, NS = 7, tc = top.map(v => v * 0.92); for (let gx = x0; gx < x1; gx += sp) for (let gz = z0; gz < z1; gz += sp) { const x = gx + hash01(gx, gz, 3) * sp, zz = gz + hash01(gx, gz, 4) * sp; if (!ringIn(r, x, zz)) continue;
+        const R = sp * (0.6 + 0.35 * hash01(gx, gz, 5)), H = h * (0.75 + 0.5 * hash01(gx, gz, 6)), tp = [x, H, zz], col = hash01(gx, gz, 7) < 0.5 ? top : tc;
+        for (let j = 0; j < NS; j++) { const a0 = 2 * Math.PI * j / NS, a1 = 2 * Math.PI * (j + 1) / NS, m = (R * 0.62), q = (a, k, y) => [x + k * Math.cos(a), y, zz + k * Math.sin(a)], nn = a => [0.6 * Math.cos(a), 0.8, 0.6 * Math.sin(a)];
+          A.quad(q(a0, R, hp * 0.9), q(a1, R, hp * 0.9), q(a1, m, H * 0.82), q(a0, m, H * 0.82), nn((a0 + a1) / 2), col, z4, z4, z4, z4); A.v(q(a0, m, H * 0.82), up, col, z4); A.v(q(a1, m, H * 0.82), up, col, z4); A.v(tp, up, col, z4); } } }
+    let s = 0; for (let i = 0, j = n - 1; i < n; j = i++) s += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1];
+    for (let i = 0, j = n - 1; i < n; j = i++) { const [ax, az] = pts[j], [bx, bz] = pts[i], L = Math.hypot(bx - ax, bz - az) || 1, g = s > 0 ? 1 : -1, nn = [g * (bz - az) / L, 0, -g * (bx - ax) / L];
+      A.quad([ax, 0, az], [bx, 0, bz], [bx, sb, bz], [ax, sb, az], nn, sand, z4, z4, z4, z4); A.quad([ax, sb, az], [bx, sb, bz], [bx, h, bz], [ax, h, az], nn, side, z4, z4, z4, z4); } }
+  for (const [la, lo, H, rk] of FAR_HILLS) { const [cx, cz] = FAR_LL(la, lo), I = farIsleAt(cx, cz); if (!I) continue; const R = rk * 1000, NR = 7, NS = 24, col = c(I.grey ? [138, 136, 128] : [62, 84, 52]);
+    const P = (t, a) => [cx + R * t * Math.cos(a), H * (1 - t * t) ** 2, cz + R * t * Math.sin(a)], N = (t, a) => { const g = H * 4 * t * (1 - t * t) / R, l = Math.hypot(g, 1); return [g * Math.cos(a) / l, 1 / l, g * Math.sin(a) / l]; };
+    for (let i = 0; i < NR; i++) for (let j = 0; j < NS; j++) { const t0 = i / NR, t1 = (i + 1) / NR, a0 = 2 * Math.PI * j / NS, a1 = 2 * Math.PI * (j + 1) / NS;
+      A.v(P(t0, a0), N(t0, a0), col, z4); A.v(P(t1, a0), N(t1, a0), col, z4); A.v(P(t1, a1), N(t1, a1), col, z4); A.v(P(t0, a0), N(t0, a0), col, z4); A.v(P(t1, a1), N(t1, a1), col, z4); A.v(P(t0, a1), N(t0, a1), col, z4); } }
+  { let s = 271; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    for (const [la, lo, n, sp, h0, h1] of FAR_TOWERS) { const [cx, cz] = FAR_LL(la, lo); for (let i = 0, k = 0; i < n * 4 && k < n; i++) { const x = cx + (r() - 0.5) * 2 * sp, z = cz + (r() - 0.5) * 2 * sp; if (!farIsleAt(x, z)) continue; k++;
+      const w = 14 + r() * 14, d = 14 + r() * 12, ht = h0 + r() * (h1 - h0), sh = 200 + r() * 40; box(x - w, z - d, x + w, z + d, 0, ht, [sh, sh - 4, sh - 12]); } } }
+  { const [x, z] = FAR_LL(1.2017, 103.7964); for (let i = 0; i < 8; i++) cyl(x - 180 + (i % 4) * 110, z - 50 + Math.floor(i / 4) * 110, 22, 4, 20, [226, 228, 226]); }   // Pulau Sebarok oil terminal tanks
+  { const [x, z] = RAFFLES_LH; cyl(x, z, 2.6, 3, 25, [240, 240, 236]); cyl(x, z, 2.0, 25, 28, [70, 76, 80]); cyl(x, z, 2.4, 28, 29.5, [200, 60, 50]); box(x + 6, z - 8, x + 20, z + 2, 3, 8, [232, 228, 218]); } }
+function farNight(add, S) { const W = [1, 0.95, 0.85];
+  for (const [x, y, z, col, a] of farLights()) S(add, x, y, z, 0, 0, 6, 1.0, col, Math.min(1, a + 0.3), 5);
+  for (const [la, lo, sz, a] of FAR_DOMES) { const [x, z] = FAR_LL(la, lo); S(add, x, 250, z, 0, 0, sz, 4, [1, 0.62, 0.36], a * 3, 6); }
+  const on = !state.live || (simT() % 10) < 0.7; if (on) { S(add, RAFFLES_LH[0], 28, RAFFLES_LH[1], 0, 0, 5, 2.4, W, 1, 5); S(add, RAFFLES_LH[0], 28, RAFFLES_LH[1], 0, 0, 60, 6, W, 0.25, 6); }
+  const sl = (x, z, L, dir) => { const fb = Math.max(4, L * 0.05); S(add, x + dir * L * 0.47, fb + Math.max(6, L * 0.05), z, 0, 0, 2.5, 0.8, W, 0.9, 5); S(add, x - dir * L * 0.4, fb + Math.max(8, L * 0.1), z, 0, 0, 2.5, 0.8, W, 0.9, 5);
+    if (L > 60) for (let k = -1; k <= 1; k++) S(add, x + dir * k * L * 0.25, fb + 3, z, 0, 0, 2, 0.6, [1, 0.8, 0.55], 0.7, 5); };
+  SHIPS.forEach(([x, z, L]) => sl(x, z, L, hash01(x, z, 5) < 0.5 ? 1 : -1)); MOVERS.forEach(Mv => sl(moverX(Mv), Mv[1], Mv[2], Math.sign(Mv[3]))); }
 // Fixed field of typical Singapore fair-weather cumulus (direction space: azimuth, elevation, angular size).
 const CLOUDS = (() => { let s = 4242; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   return Array.from({ length: 70 }, () => { const el = 2 + Math.pow(r(), 1.6) * 22, size = (1.2 + r() * 3.2) * (1 - el / 40);
@@ -2911,7 +2978,7 @@ const STARS = (() => { let s = 12345; const rnd = () => ((s = (s * 16807) % 2147
 // Weather presets (visual only; daylight/sun metrics stay clear-sky, see Daylight-over-the-day overcast curve): direct-sun factor, ambient factor,
 // sky greying toward tint, darkness, cloud count/scale/grey; selecting one also sets Haze visibility (km).
 const WEATHER = {
-  clear: { label: 'Clear', vis: 20, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 14, cs: 1, cg: 0 },
+  clear: { label: 'Clear', vis: 60, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 14, cs: 1, cg: 0 },
   fair: { label: 'Fair, cumulus', vis: 12, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 70, cs: 1, cg: 0 },
   hazy: { label: 'Hazy', vis: 5, sun: 0.7, amb: 0.95, grey: 0.45, tint: [205, 196, 172], dark: 0.95, clouds: 35, cs: 1, cg: 0.2 },
   overcast: { label: 'Overcast', vis: 10, sun: 0, amb: 0.8, grey: 0.8, tint: [196, 200, 206], dark: 0.85, clouds: 70, cs: 2.6, cg: 0.55 },
@@ -3836,9 +3903,10 @@ function trafText() {
   const [qw, vw] = trafLane(day, state.hour, 0, true), [qe, ve] = trafLane(day, state.hour, 0, false), r = q => (Math.round(q * 3 / 100) * 100).toLocaleString('en-GB'), kmh = v => Math.round(v * 3.6);
   return `${TRAF_DAYS[day]} · ECP → city ≈${r(qw)} veh/h ${kmh(vw)} km/h · → east ≈${r(qe)} veh/h ${kmh(ve)} km/h (estimate)`;
 }
-// Ships under way in Singapore Strait (E/W, ~6 m/s), wrapped over x −4500..5000; anchored SHIPS stay put.
-const MOVERS = [[-3000, -4500, 220, 6], [1500, -5000, 160, -5], [3500, -6200, 260, 7], [-500, -6800, 120, -8], [200, -3900, 35, 9]];
-const moverX = ([x0, , , v]) => ((x0 + v * simT() + 4500) % 9500 + 9500) % 9500 - 4500;
+// Ships under way in Singapore Strait (6–8 m/s ≈ 12–15 kn) in the TSS lanes S of St John's / Sisters (2026-11-07; were 4.5–6.8 km S, real lanes ≈11–14 km): westbound (v < 0)
+// z −10.3 km (≈1.204N), eastbound z −11.8 km (≈1.190N), wrapped over x −9000..13000 (lane positions estimates); [x0, z, length, v, wrap x0, wrap width]; bumboat inshore keeps the old wrap.
+const MOVERS = [[-6000, -11800, 300, 7], [1500, -11800, 190, 6.5], [9000, -11750, 240, 7.5], [-2000, -10300, 330, -7], [5000, -10350, 160, -6], [11000, -10300, 220, -8], [-8000, -10250, 270, -6.5], [200, -3900, 35, 9, -4500, 9500]];
+const moverX = ([x0, , , v, a = -9000, w = 22000]) => ((x0 + v * simT() - a) % w + w) % w + a;
 // Rain: grey veil + streaks (reseeded 8×/s in Live).
 function drawRain(ctx, cam, env) {
   const W = env.W; if (!W.rain) return; const { w, h } = cam; ctx.fillStyle = 'rgba(150,158,168,0.14)'; ctx.fillRect(0, 0, w, h);
@@ -5243,13 +5311,13 @@ void main() { vec2 q = (gl_FragCoord.xy - uOff) / uRes * 2.0 - 1.0; vec3 d = nor
 // Instance: pos 3, (ax, az, size m, min px | half-width) 4, rgba 4, (type, pull m toward eye) 2. Additive: alpha × haze T; opaque: colour fogged.
 const GL_SPR_VS = GL_HDR + `in vec2 aQ; in vec3 aP; in vec4 aS, aC; in vec2 aT; uniform vec2 uVP; uniform float uBeta, uRange, uWetR; out vec2 vQ; out vec4 vC; out float vT, vF;
 void main() { float d, ty = aT.x; vec3 p = aP; vQ = aQ; vC = aC; vT = ty;
-  if (ty > 1.5) { vec2 ax = aS.xy; float sz = aS.z, hw = aS.w; if (uWetR > 0.5 && floor(ty + 0.5) == 2.0) { vec2 e = p.xz - uEye.xz; ax = e / max(length(e), 1e-3); sz *= 4.0; hw *= 0.6; vC.a *= 1.8; }   // wet road: lamp pools stretched toward the eye (reflection streaks, realism N3)
+  if (ty > 1.5 && ty < 4.5) { vec2 ax = aS.xy; float sz = aS.z, hw = aS.w; if (uWetR > 0.5 && floor(ty + 0.5) == 2.0) { vec2 e = p.xz - uEye.xz; ax = e / max(length(e), 1e-3); sz *= 4.0; hw *= 0.6; vC.a *= 1.8; }   // wet road: lamp pools stretched toward the eye (reflection streaks, realism N3)
     vec2 pr = vec2(-ax.y, ax.x); p += vec3(ax.x * aQ.x * sz + pr.x * aQ.y * hw, 0.0, ax.y * aQ.x * sz + pr.y * aQ.y * hw); gl_Position = project(p, d); }
   else { vec3 tw = uEye - p; float L = max(length(tw), 1e-3); float pl = min(aT.y, L * 0.5); p += tw / L * pl; vec4 c = project(p, d); float rm = max(min(aS.z, L * (aT.x > 0.5 ? 0.02 : 0.05)) * (L - pl) / L, aS.w * 2.0 * max(c.w, 0.0) / (uP.x * uVP.x)); c.x += aQ.x * rm * uP.x; c.y += aQ.y * rm * uP.y; gl_Position = c; }
-  vF = exp(-uBeta * d); if (d > uRange) vC.a = 0.0; }`;
+  vF = exp(-uBeta * d * (ty > 4.5 ? 0.15 : 1.0)); if (d > uRange) vC.a = 0.0; }`;   // types 5/6: far point lights / sky glow, weak haze (lights stay visible well past the meteorological range, Allard)
 const GL_SPR_FS = `#version 300 es
 precision highp float; in vec2 vQ; in vec4 vC; in float vT, vF; uniform vec3 uFog; uniform float uAdd; out vec4 o;
-void main() { float r = length(vQ), a = vC.a, t = floor(vT + 0.5); if (t == 0.0 || t == 2.0) a *= max(0.0, 1.0 - r); else if (t == 1.0 || t == 4.0) a *= 1.0 - smoothstep(0.75, 1.0, r);
+void main() { float r = length(vQ), a = vC.a, t = floor(vT + 0.5); if (t == 0.0 || t == 2.0 || t == 6.0) a *= max(0.0, 1.0 - r); else if (t == 1.0 || t == 4.0 || t == 5.0) a *= 1.0 - smoothstep(0.75, 1.0, r);
   vec3 c = vC.rgb; if (uAdd > 0.5) a *= vF; else c = mix(uFog, c, vF); if (a < 0.002) discard; o = vec4(c * a, a); }`;
 const GL_LINE_VS = GL_HDR + `in vec3 aPos; in vec4 aCol; uniform float uBeta, uRange; out vec4 vC; out float vF; void main() { float d; gl_Position = project(aPos, d); vC = aCol; vF = exp(-uBeta * d); if (d > uRange) vC.a = 0.0; }`;
 const GL_LINE_FS = `#version 300 es
@@ -5581,7 +5649,7 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
   const A = glChunks(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
-  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of rf30Kit()) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
+  if (state.showExisting) { gpuLandmarks(A); gpuFlyer(A); farKit(A); GPU.noAO = true; for (const P of LM_KIT) glPrism(A, P); for (const P of rf30Kit()) glPrism(A, P); for (const P of shoreKit()) glPrism(A, P); gpuRoofKit(A); gpuNearKit(A); gpuCondoKit(A); GPU.noAO = false; }
   gpuPlay(A); gpuEstate(A);
   if (state.showRoads) { gpuBridges(A); gpuTunnel(A); }
   const Pm = ALL.find(P => P.name === 'MSCP roof garden' && P.B); if (Pm) gpuGarden(A, Pm); WKS.forEach(K => K.Geo(A)); kit32(A, false); kit33(A); const k0 = A.n; if (state.showRoads) gpuRoadKit(A); GPU.opN = A.n;   // road kit last in the opaque range, own tiles: main pass + near shadow cascade only (not mirrored, not in the 3.2 km cascade)
@@ -6082,7 +6150,7 @@ function gpuRender(cam, env, pxW, pxH) {
   if (!gpuInit()) return false; const gl = GPU.gl, cv = GPU.cv; if (cv.width !== pxW || cv.height !== pxH) { cv.width = pxW; cv.height = pxH; }
   gpuWorld(); gpuShadows(env, cam); lampsNear(cam, env); gl.viewport(0, 0, pxW, pxH); gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
   gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  const M = GPU.main, F = GPU.flat, NEAR = state.walk && onGround() ? nearFit(pxW, pxH, 0.4) : 1, FAR = 40000;   // ground walk: near plane fitted inside the free radius around the eye (never sees into a column/wall)
+  const M = GPU.main, F = GPU.flat, NEAR = state.walk && onGround() ? nearFit(pxW, pxH, 0.4) : 1, FAR = 90000;   // ground walk: near plane fitted inside the free radius around the eye (never sees into a column/wall)
   // Room interior on: the room's opaque walls/frames/furniture (drawn later over this, alpha 1) go into depth at 0 first
   // (shrunk ≥2 px, GL_MASK_VS) so outside pixels behind them are never shaded (looking at a wall cost the whole city twice; lag cut 2026-10-31). Not on the void deck (its interior pass is depth-masked by the soffit).
   const nIn = GPU.mask && gpuInterior(env) ? GPU.mkN : 0, mask = () => { if (!nIn) return; const K = GPU.mk; gpuCam(K, cam, 0.05, 400); gl.uniform2f(K.u.uMRes, pxW, pxH); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.ALWAYS); gl.depthMask(true); gl.depthRange(0, 0); gl.colorMask(false, false, false, false);
@@ -6454,7 +6522,7 @@ function gpuNight(env, add, la, S) {   // as nightLandmarks: Supertrees (stem, c
   for (const t of SUPERTREES) { la.push(t.x, 0, t.z, ...st, 0.6, t.x, t.h, t.z, ...st, 0.6); S(add, t.x, t.h, t.z, 1, 0, 9, 9, rhapsody ? hsl((t.hue + hr * 3600 * 20) % 360) : pu, 0.85, 4); S(add, t.x, t.h, t.z, 0, 0, 27, 4.5, rhapsody ? [1, 160 / 255, 240 / 255] : pu, 0.25, 0); }
   LANDMARKS.filter(l => l.id === 'fdome' || l.id === 'cforest').forEach(l => S(add, l.x, l.h * 0.5, l.z, 0, 0, l.span * 0.7, 3, [170 / 255, 220 / 255, 1], 0.3, 0, l.span * 0.6));
   if (hr >= 19 || hr < 0.5) for (const P of NIGHT_CROWNS()) { const c = P.h > 240 ? [0.85, 0.92, 1] : [1, 0.9, 0.72]; for (const y of [P.h - 0.5, P.h - 4]) for (let i = 0, j = P.n - 1; i < P.n; j = i++) la.push(P.xs[j], y, P.zs[j], ...c, y === P.h - 0.5 ? 0.8 : 0.35, P.xs[i], y, P.zs[i], ...c, y === P.h - 0.5 ? 0.8 : 0.35); }   // CBD crown lighting 19:00–00:30 (realism r5; towers ≥150 m within 2.5 km of MBS: top outline + a second band 4 m down, estimate)
-  eventFx(hr, yy, mm, dd, add, la, S);
+  eventFx(hr, yy, mm, dd, add, la, S); farNight(add, S);
   const SP = EXISTING.find(P => P.name === 'Marina Bay Sands SkyPark'); if (!SP) return; const ec = [1, 235 / 255, 200 / 255];
   for (let i = 0, j = SP.n - 1; i < SP.n; j = i++) la.push(SP.xs[j], SP.base, SP.zs[j], ...ec, 0.85, SP.xs[i], SP.base, SP.zs[i], ...ec, 0.85);
   if (spectra) { const ph = (hr * 3600) / 8; for (let k = 0; k < 9; k++) { const f = k / 8, x = MBS_AX.a[0] + (MBS_AX.b[0] - MBS_AX.a[0]) * f, z = MBS_AX.a[1] + (MBS_AX.b[1] - MBS_AX.a[1]) * f, sw = Math.sin(ph + k) * 0.5, c = k % 3 ? [120 / 255, 1, 170 / 255] : [230 / 255, 240 / 255, 1];
@@ -6480,14 +6548,14 @@ function eventFx(hr, yy, mm, dd, add, la, S) {
       for (let t = 0; t < L; t += 18) { const x = x0 + (x1 - x0) * t / L, z = z0 + (z1 - z0) * t / L; S(add, x, 0.3, z, (x1 - x0) / L, (z1 - z0) / L, 14, 9, w, 0.35, 2); S(add, x, 10, z, 0, 0, 1.4, 1.0, w, 0.3, 0); } } }
 }
 function gpuSprites(cam, env, buf, n, additive, range) {
-  const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
+  const gl = GPU.gl, pr = GPU.spr, h = env.sky.hor; gpuCam(pr, cam, 1, 90000); gl.uniform2f(pr.u.uVP, cam.w, cam.h); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
   GPU.idx = false; for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   gl.bindBuffer(gl.ARRAY_BUFFER, GPU.corners); gl.enableVertexAttribArray(pr.a.aQ); gl.vertexAttribPointer(pr.a.aQ, 2, gl.FLOAT, false, 8, 0);
   gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (const [k, m, off] of [['aP', 3, 0], ['aS', 4, 12], ['aC', 4, 28], ['aT', 2, 44]]) { const l = pr.a[k]; if (l < 0) continue; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, m, gl.FLOAT, false, 52, off); gl.vertexAttribDivisor(l, 1); }
   const e0 = GL_DIAG ? gl.getError() : 0; gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n); if (GL_DIAG) glDiag('sprites', e0, gl.getError());
 }
 function gpuLines(cam, env, buf, n, additive, range = 1e9) {
-  const gl = GPU.gl, pr = GPU.line, h = env.sky.hor; gpuCam(pr, cam, 1, 40000); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
+  const gl = GPU.gl, pr = GPU.line, h = env.sky.hor; gpuCam(pr, cam, 1, 90000); gl.uniform1f(pr.u.uBeta, env.beta); gl.uniform1f(pr.u.uRange, range); gl.uniform3f(pr.u.uFog, h[0] / 255, h[1] / 255, h[2] / 255); gl.uniform1f(pr.u.uAdd, additive ? 1 : 0); if (pr.u.uWetR) gl.uniform1f(pr.u.uWetR, env.W.rain ? 1 : 0);
   GPU.idx = false; for (let i = 0; i < 8; i++) { gl.disableVertexAttribArray(i); gl.vertexAttribDivisor(i, 0); }
   gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(pr.a.aPos); gl.vertexAttribPointer(pr.a.aPos, 3, gl.FLOAT, false, 28, 0); if (pr.a.aCol >= 0) { gl.enableVertexAttribArray(pr.a.aCol); gl.vertexAttribPointer(pr.a.aCol, 4, gl.FLOAT, false, 28, 12); }
   gl.drawArrays(gl.LINES, 0, n);
