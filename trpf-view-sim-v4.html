@@ -859,7 +859,7 @@ TRPF blocks traced from HDB floor plans, placed via the site plan fitted to the 
 <canvas style="display:none" class="hero tap" data-hero="home" title="#134 plan: tap a room" aria-label="#134 plan: tap a room"></canvas>
 <div id="roomBar" class="room-menu room-hub"><div class="rm-h">Room window <span class="rm-sub">tap the plan or a room</span></div><canvas id="roomPlan" aria-label="Floor plan of #134: tap a room"></canvas><div class="rm-grid" id="roomGrid"></div></div>
 <label class="flex items-center gap-1.5 cursor-pointer text-slate-300"><input type="checkbox" id="balconyToggle" checked class="accent-sky-400">Room interior (walls, furniture)</label>
-<div class="grid grid-cols-2 gap-2"><button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)" style="min-height:44px;justify-content:center"><i data-i="window"></i>Open windows</button><button id="furnBtn" class="chip text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link" style="min-height:44px;justify-content:center"><i data-i="sofa"></i>Furnish</button></div>
+<div class="grid grid-cols-2 gap-2"><button id="winOpenBtn" class="chip" aria-pressed="false" title="Casement sashes swung open (Room interior)" style="min-height:44px;justify-content:center"><i data-i="window"></i>Open windows</button><button id="furnBtn" class="chip text-amber-300" aria-pressed="false" title="Furnish: layout editor (plan), saved layouts, share link" style="min-height:44px;justify-content:center"><i data-i="sofa"></i>Furnish</button><button id="lightsBtn" class="chip col-span-2" aria-pressed="false" title="House lights: Auto (on when dark or covered) → Off → On. Key L" style="min-height:44px;justify-content:center"><i data-i="bulb"></i><span id="lightsLbl">Lights: Auto</span></button></div>
 </div></section>
     </aside>
     <nav id="rail" class="rail" aria-label="Panels"><button class="rail-btn" data-p="view" aria-pressed="false" title="View"><span class="ic"><i data-i="eye"></i></span><span class="lb">View</span></button><button class="rail-btn" data-p="future" aria-pressed="false" title="Future"><span class="ic"><i data-i="build"></i></span><span class="lb">Future</span></button><button class="rail-btn" data-p="light" aria-pressed="false" title="Light"><span class="ic"><i data-i="sun"></i></span><span class="lb">Light</span></button><button class="rail-btn" data-p="maps" aria-pressed="false" title="Maps"><span class="ic"><i data-i="map"></i></span><span class="lb">Maps</span></button><button class="rail-btn" data-p="home" aria-pressed="false" title="Home"><span class="ic"><i data-i="home"></i></span><span class="lb">Home</span></button></nav>
@@ -4538,6 +4538,9 @@ function ltList() {
       for (const f of [0.28, 0.72]) L.push({ p: ax ? [x0 + w * f, cy, z] : [cx, y0 + d * f, z], I, c: col, r: rr }); } }
   return { P, L: L.slice(0, 28) };
 }
+const LT_NEXT = { auto: 'off', off: 'on', on: 'auto' };
+function lightsBtnUI() { const b = $('lightsBtn'); if (!b) return; const m = FURN.lt.m, on = ltState().on; $('lightsLbl').textContent = `Lights: ${m === 'auto' ? `Auto (${on ? 'on' : 'off'})` : m === 'on' ? 'On' : 'Off'}`; b.setAttribute('aria-pressed', String(on)); b.style.borderColor = on ? '#fbbf24' : ''; b.style.color = on ? '#fcd34d' : ''; }
+function lightsCycle() { FURN.lt.m = LT_NEXT[FURN.lt.m] || 'auto'; furnChanged(); ltUI(); buzz(); renderAll(); }
 let LT_CACHE = { fv: -1, v: null }; const ltCached = () => { if (LT_CACHE.fv !== FURN.fv) LT_CACHE = { fv: FURN.fv, v: ltList() }; return LT_CACHE.v; };
 function ltState() {   // daylight share through the current room's coverings + whether the lights are on (auto: sun < 2° or coverings pass < 25%)
   const sp = curSpot(), ids = sp && CV_WIN[sp.id] != null ? roomGroup(sp.id) : [], t = ids.length ? ids.reduce((a, id) => a + covF(id)[0], 0) / ids.length : 1, el = solarPosition(state.dateStr, state.hour).elDeg, m = FURN.lt.m;
@@ -4771,7 +4774,7 @@ function wallUI() {   // Walls & doors tab
     `<div class="fe-crow"><button class="chip" data-all="1">Close all</button><button class="chip" data-all="0">Open all</button><span class="text-[9px] text-slate-500" style="flex:1">Closed doors block walking. In Walk: tap a door, or press E for the door in front of you.</span></div>` + `<div class="text-[9px] text-slate-500 mt-1.5 leading-snug">Structural walls (black on the HDB plan) are locked. Removing a wall merges the rooms in the daylight readings (one floor area, all their windows). Door swings and bi-fold bath/yard doors follow the HDB plan; leaves and colours are estimates.</div>`;
 }
 function ltUI() {   // Lights & blinds tab
-  const box = $('feTabLt'); if (!box || FE.tab !== 'lt') return; const L = FURN.lt, V = FURN.cv, sel = (att, opts, v, dis) => `<select ${att} class="fe-selx"${dis ? ' disabled' : ''}>${Object.entries(opts).map(([k, n]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+  lightsBtnUI(); const box = $('feTabLt'); if (!box || FE.tab !== 'lt') return; const L = FURN.lt, V = FURN.cv, sel = (att, opts, v, dis) => `<select ${att} class="fe-selx"${dis ? ' disabled' : ''}>${Object.entries(opts).map(([k, n]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
   const LS = ltState(); let h = `<div class="fe-crow" style="margin-top:6px"><span class="fe-cl text-amber-300">Lights</span>${sel('id="feLtM"', { auto: 'Auto (dark or covered)', on: 'On', off: 'Off' }, L.m)}<span class="text-[10px] ${LS.on ? 'text-amber-300' : 'text-slate-500'}" style="flex:0 0 auto">${LS.on ? 'on' : 'off'}</span></div>`;
   h += Object.entries(LT_ROOMS).filter(([, R]) => !R.fix).map(([id, R]) => `<div class="fe-crow"><span class="fe-cl">${R.n}</span>${sel(`data-lt="${id}"`, LT_T, L.r[id].t)}${sel(`data-lk="${id}" style="flex:0 0 74px"`, { 3000: '3000 K', 4000: '4000 K', 6500: '6500 K' }, L.r[id].k, L.r[id].t === 'none')}</div>`).join('');
   h += `<div class="text-[11px] text-amber-300 mt-2">Curtains / blinds</div>` + Object.keys(CV_WIN).map(id => `<div class="fe-crow"><span class="fe-cl">${WIN[id].room}</span>${sel(`data-cv="${id}"`, CV_T, V.w[id].t)}${sel(`data-cs="${id}" style="flex:0 0 74px"`, CV_S, V.w[id].s, V.w[id].t === 'none')}</div>`).join('');
@@ -6283,7 +6286,7 @@ function gpuRenderInterior(cam, env, kIn) {
   if (!GPU.ok) return false; if (onGround() && !groundIndoor()) return false;   // void deck: interior pass only in / at the stair core (else it would paint over columns in front)
   const n = gpuInterior(env); if (!n) return false; const gl = GPU.gl, M = GPU.main, F = GPU.flat, sun = gpuShadowInterior();
   gl.viewport(0, 0, GPU.vw, GPU.vh); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  const LS = ltState(), lit0 = clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
+  const LS = ltState(), dark = env.night && !LS.on && state.spot !== 'corr' && !onGround(), lit0 = dark ? 0.14 : clamp(0.32 + env.ambient * 1.1 + (env.night ? 0.12 : 0), 0.2, 0.9), Wm = GPU.Wm;
   gpuCam(M, cam, 0.05, 400); gpuEnv(M, env, true); gl.uniform1f(M.u.uLitK, (0.12 + (lit0 - 0.12) * LS.kCov) * kIn); gl.uniform1f(M.u.uEmis, LS.on ? 1.35 : clamp(lit0 * kIn, 0.45, 0.95));
   gl.uniform2f(M.u.uPO, ...Wm.o); gl.uniform2f(M.u.uPU, ...Wm.u); gl.uniform2f(M.u.uPN, ...Wm.n); gl.uniform2f(M.u.uPP, ...Wm.p);
   const HV = state.walk && !state.walk.look && HAND.m ? handGeo(cam) : null, Ls = (LS.on ? ltCached().L : []).slice(0, HV && HV.light ? 27 : 28), p4 = [], r4 = [], c3 = [];
@@ -6674,7 +6677,7 @@ const drawFast = m => { PIN_VIS.fast = true; try { drawPerspective(m); } finally
 // while dragging / walking / scrubbing: 3D view rendered at ≤1.4 px per CSS px (phones are 2×) and scaled up; the full render 250 ms after input stops is full resolution again (lag cut 2026-10-31)
 const drawMove = m => { PIN_VIS.lo = true; try { drawFast(m); } finally { PIN_VIS.lo = false; } };
 function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; tiltCap(); if (!renderPending) drawMove(lastMath); }); }
-function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
+function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); lightsBtnUI(); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -6794,6 +6797,8 @@ $('shotBtn').addEventListener('click', () => {   // 📷 Photo mode: re-render t
   o.toBlob(b => { const name = `trpf-134-${state.dateStr}-${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}.png`, file = new File([b], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {}); else { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } }, 'image/png');
 });
+$('lightsBtn').addEventListener('click', lightsCycle);
+window.addEventListener('keydown', e => { if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) { e.preventDefault(); lightsCycle(); } });
 $('winOpenBtn').addEventListener('click', () => { state.winOpen = !state.winOpen; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; renderAll(); });
 // Walk joystick: knob offset → direction relative to heading + speed ≤ WALK_V (dead zone 12%); dragged past the ring (≥1.15 R, knob held at 1.15 R) or Run on / Shift held → RUN_V; one rAF loop while held
 { const J = $('walkJoy'), K = $('walkKnob'), J0 = { id: null, v: [0, 0], raf: 0, t: 0, out: false };
