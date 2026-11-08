@@ -1,7 +1,7 @@
-// Offline cache for the installed app: network first (always the latest from GitHub Pages), cache fallback when offline.
+// Offline cache for the installed app ('trpf134-city' = the app's own city-buffer cache, kept): network first (always the latest from GitHub Pages), cache fallback when offline.
 const CACHE = 'trpf134-v4', FILES = ['./', './index.html', './trpf-view-sim-v4.html', './geo.js', './site.jpg', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './tex/mat.webp', './tex/nrm.webp', './tex/leaf.webp', './tex/sky.webp', './tex/fac.webp'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== 'trpf134-city').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url); if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   e.respondWith(fetch(e.request).then(r => { if (r.ok) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); } return r; })

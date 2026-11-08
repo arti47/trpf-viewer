@@ -2527,7 +2527,9 @@ function vd31A(B, out, o = {}) {   // o (other blocks): tag, cl (outline closing
   const CI = (cx, cz, r, n = 12) => { const o = []; for (let i = 0; i < n; i++) { const a = (i / n) * 2 * Math.PI; o.push(...W(cx + r * Math.cos(a), cz + r * Math.sin(a))); } return o; };
   const H = VOID_DECK_HEIGHT - 0.2, ub = B.boxes.filter(b => !b[4] || b[4] === 'c'), cores = B.boxes.filter(b => b[4] === 'l' || b[4] === 's' || b[4] === 'h');
   const inSib = (x, z) => (B.sib || []).some(S => { const [X, Z] = blkToWorld(B, x, z), dx = X - S.ox, dz = Z - S.oz, u = S.c * dx + S.s * dz, v = -S.s * dx + S.c * dz; return S.boxes.some(q => u >= q[0] && u <= q[2] && v >= q[1] && v <= q[3]); });   // 33A main + SW wing share one deck
-  const inF = (x, z) => B.boxes.some(b => x >= b[0] - 1e-6 && x <= b[2] + 1e-6 && z >= b[1] - 1e-6 && z <= b[3] + 1e-6) && !VO.some(b => x > b[0] + 1e-6 && x < b[2] - 1e-6 && z > b[1] + 1e-6 && z < b[3] - 1e-6) || inSib(x, z), inCore = (x, z, m) => cores.some(b => x > b[0] - m && x < b[2] + m && z > b[1] - m && z < b[3] + m) || !!o.near && o.near(x, z, m);
+  const bGrid = bs => { const G = new Map(); for (const b of bs) for (let i = Math.floor(b[0] - 1e-6); i <= Math.floor(b[2] + 1e-6); i++) for (let j = Math.floor(b[1] - 1e-6); j <= Math.floor(b[3] + 1e-6); j++) { const k = (i + 4096) * 8192 + j + 4096; let L = G.get(k); if (!L) G.set(k, L = []); L.push(b); } return (x, z) => G.get((Math.floor(x) + 4096) * 8192 + Math.floor(z) + 4096) || []; };   // load perf 2026-11-08: 1 m buckets of the boxes (same tests, only boxes that can contain the point)
+  const gB = bGrid(B.boxes), gV = bGrid(B.voids || []);
+  const inF = (x, z) => gB(x, z).some(b => x >= b[0] - 1e-6 && x <= b[2] + 1e-6 && z >= b[1] - 1e-6 && z <= b[3] + 1e-6) && !gV(x, z).some(b => x > b[0] + 1e-6 && x < b[2] - 1e-6 && z > b[1] + 1e-6 && z < b[3] - 1e-6) || inSib(x, z), inCore = (x, z, m) => cores.some(b => x > b[0] - m && x < b[2] + m && z > b[1] - m && z < b[3] + m) || !!o.near && o.near(x, z, m);
   const tag = o.tag || 'Blk 31A', VO = B.voids || [], cl = o.cl || 0;
   const P = (nm, y1, y0, ring, c, x) => { const p = vdP(nm === 'planter' ? `${tag} planter` : `${tag} ${nm}`, y1, y0, ring, c, x); out.push(p); return p; };
   const F = (ax, g, ns, t0, t1, d0, d1, y0, y1, c, nm = 'void deck fitting') => P(nm, y1, y0, ax === 'x' ? R(t0, g + ns * d0, t1, g + ns * d1) : R(g + ns * d0, t0, g + ns * d1, t1), c);   // on a box face: 'x' = face z = g (normal ns·z), 'z' = face x = g
@@ -2617,7 +2619,9 @@ function voidDeckPrisms() {   // ground-storey prisms (rebuilt with TRPF; 31A mo
         bar(0, Le, 0, 0.05, 2.3, 2.38, AL); bar(0, Le, 0, 0.05, 0.12, 0.2, AL);   // transom + bottom rail
         const k = Math.max(1, Math.ceil(Le / 1.6)); for (let j = 0; j <= k; j++) { const t = Math.min(Math.max(j * Le / k, 0.05), Le - 0.05); bar(t - 0.05, t + 0.05, -0.02, 0.08, 0.12, 2.75, AL); }   // mullions (corners included)
         if (i === li && Le > 3) { const t = Le / 2; bar(t - 0.95, t + 0.95, 0, 0.03, 0.12, 2.3, [70, 84, 90]); bar(t - 0.04, t + 0.04, -0.02, 0.09, 0.12, 2.3, AL); for (const s of [-0.18, 0.18]) bar(t + s - 0.02, t + s + 0.02, 0.03, 0.08, 0.9, 1.5, [190, 194, 196]); } }); } });   // glass doors (pair) + pull handles
-  const near = (x, z, m) => cores.some(r => ringIn(r, x, z) || polyD(r, x, z) < m) || facR.some(r => ringIn(r, x, z) || polyD(r, x, z) < m);
+  const RB = new WeakMap(), rNear = (r, x, z, m) => { let b = RB.get(r); if (!b) { b = [Infinity, -Infinity, Infinity, -Infinity]; for (let i = 0; i + 1 < r.length; i += 2) { b[0] = Math.min(b[0], r[i]); b[1] = Math.max(b[1], r[i]); b[2] = Math.min(b[2], r[i + 1]); b[3] = Math.max(b[3], r[i + 1]); } RB.set(r, b); }
+    return x > b[0] - m && x < b[1] + m && z > b[2] - m && z < b[3] + m && (ringIn(r, x, z) || polyD(r, x, z) < m); };   // bbox reject first (outside bbox + m: not inside, edge distance ≥ m; load perf 2026-11-08)
+  const near = (x, z, m) => cores.some(r => rNear(r, x, z, m)) || facR.some(r => rNear(r, x, z, m));
   const [sx, sz] = P2W(14.8, 9.0);   // keep the 32A stair door + approach clear
   // typical new BTO void deck (research + TY model photos 2026-10-30): the facade's stack walls come down as white pilasters on the 1F edge (columns flush with the ceiling edge, ≤4.5 m apart),
   // few interior columns (8 m grid ≥3 m inside the edge), light skirting, LED batten lights in rows on the white soffit, seating sets in the open bays
@@ -5387,19 +5391,20 @@ function f2h(x) { F2H_F[0] = x; const u = F2H_U[0], sg = (u >>> 16) & 0x8000, e 
 function gpuTileStream(A, v0, n, dOff, sort, D) { const gl = GPU.gl, C = A.C, CU = A.CU || (A.CU = C.map(q => new Uint32Array(q.buffer))), TPC = GLCH / 3, nt = n / 3, t0 = v0 / 3, at = t => { const g = t0 + t, ci = (g / TPC) | 0; return [C[ci], (g - ci * TPC) * 39]; };
   const W = D.wr, SB = new ArrayBuffer(CVB * 3 * 8192), F = new Float32Array(SB), I = new Int16Array(SB), U = new Uint16Array(SB), B8 = new Uint8Array(SB), IX = new Uint32Array(3 * 8192), T = []; let sv = 0, iv = 0;   // indexed (2026-11-04 memory audit): identical vertices (exact bits) among the last 8 unique ones share one packed vertex; D.wr = write pass (pass 1 only counts D.u)   // packed city vertex (2026-11-04, iPhone context loss at 3.24M vertices): pos f32×3 | normal snorm16×3 (length = AO) | colour f16×3 | tex f32×4 = 44 B (was 13 floats = 52 B)
   const flush = () => { if (W && sv) gl.bufferSubData(gl.ARRAY_BUFFER, D.so * CVB, B8, 0, sv * CVB); if (W && iv) gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, D.io * 4, IX, 0, iv); D.so += sv; D.io += iv; sv = iv = 0; }, R = D.r, sn = x => Math.round((x > 1 ? 1 : x < -1 ? -1 : x || 0) * 32767);
-  const put = t => { const [q, o] = at(t), qu = CU[(t0 + t) / TPC | 0]; for (let v = 0; v < 3; v++) { const s = o + v * 13; let u = -1;
-    for (let j = 0; j < R.length; j++) { const r = R[j]; if (!r) break; const a = r[0], p = r[1]; let k = 0; while (k < 13 && a[p + k] === qu[s + k]) k++; if (k === 13) { u = r[2]; break; } }
-    if (u < 0) { u = D.u++; R[D.ri] = [qu, s, u]; D.ri = (D.ri + 1) & 7; if (W) { const b = sv * 11, h = sv * 22; F[b] = q[s]; F[b + 1] = q[s + 1]; F[b + 2] = q[s + 2]; I[h + 6] = sn(q[s + 3]); I[h + 7] = sn(q[s + 4]); I[h + 8] = sn(q[s + 5]); I[h + 9] = 0; U[h + 10] = f2h(q[s + 6]); U[h + 11] = f2h(q[s + 7]); U[h + 12] = f2h(q[s + 8]); U[h + 13] = 0; F[b + 7] = q[s + 9]; F[b + 8] = q[s + 10]; F[b + 9] = q[s + 11]; F[b + 10] = q[s + 12]; sv++; } }
+  const RB = D.rb || (D.rb = new Uint32Array(8 * 13)), RU = D.ru || (D.ru = new Int32Array(8).fill(-1));   // last 8 unique vertices as bit copies (load perf 2026-11-08: was [array, offset, id] per vertex → GC churn; entries are distinct, so scan order doesn't matter)
+  const put = t => { const g = t0 + t, ci = (g / TPC) | 0, q = C[ci], qu = CU[ci], o = (g - ci * TPC) * 39; for (let v = 0; v < 3; v++) { const s = o + v * 13; let u = -1;
+    for (let j = 0; j < 8; j++) { if (RU[j] < 0) break; const p = j * 13; let k = 0; while (k < 13 && RB[p + k] === qu[s + k]) k++; if (k === 13) { u = RU[j]; break; } }
+    if (u < 0) { u = D.u++; { const p = D.ri * 13; for (let k = 0; k < 13; k++) RB[p + k] = qu[s + k]; RU[D.ri] = u; } D.ri = (D.ri + 1) & 7; if (W) { const b = sv * 11, h = sv * 22; F[b] = q[s]; F[b + 1] = q[s + 1]; F[b + 2] = q[s + 2]; I[h + 6] = sn(q[s + 3]); I[h + 7] = sn(q[s + 4]); I[h + 8] = sn(q[s + 5]); I[h + 9] = 0; U[h + 10] = f2h(q[s + 6]); U[h + 11] = f2h(q[s + 7]); U[h + 12] = f2h(q[s + 8]); U[h + 13] = 0; F[b + 7] = q[s + 9]; F[b + 8] = q[s + 10]; F[b + 9] = q[s + 11]; F[b + 10] = q[s + 12]; sv++; } }
     if (W) IX[iv++] = u; } if (iv + 3 > 3 * 8192) flush(); };
   if (!sort) { for (let t = 0; t < nt; t++) put(t); flush(); return T; }
   const [ux, uz] = UNIT134, key = new Int32Array(nt), m = new Map();
-  for (let t = 0; t < nt; t++) { const [a, o] = at(t), x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = Math.hypot(x - ux, z - uz) < 1500, c = near ? 150 : 600;
+  for (let t = 0; t < nt; t++) { const gg = t0 + t, cj = (gg / TPC) | 0, a = C[cj], o = (gg - cj * TPC) * 39, x = (a[o] + a[o + 13] + a[o + 26]) / 3, z = (a[o + 2] + a[o + 15] + a[o + 28]) / 3, near = Math.hypot(x - ux, z - uz) < 1500, c = near ? 150 : 600;
     const k = (near ? 0 : 1) * 1e8 + (Math.floor(z / c) + 5000) * 1e4 + (Math.floor(x / c) + 5000); let id = m.get(k); if (id === undefined) m.set(k, id = m.size); key[t] = id; }
   const ks = [...m.keys()].sort((p, q) => p - q), rank = new Int32Array(m.size); ks.forEach((k, i) => { rank[m.get(k)] = i; });
   const cnt = new Int32Array(m.size + 1); for (let t = 0; t < nt; t++) cnt[rank[key[t]] + 1]++; for (let i = 0; i < m.size; i++) cnt[i + 1] += cnt[i];
   const pos = cnt.slice(0, m.size), ord = new Int32Array(nt); for (let t = 0; t < nt; t++) ord[pos[rank[key[t]]]++] = t;   // stable, same order as gpuTileSort
   for (let i = 0; i < m.size; i++) { const b = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
-    for (let p = cnt[i]; p < cnt[i + 1]; p++) { const t = ord[p], [a, o0] = at(t); for (let v = 0; v < 3; v++) { const o = o0 + v * 13; for (let k = 0; k < 3; k++) { const q = a[o + k]; if (q < b[2 * k]) b[2 * k] = q; if (q > b[2 * k + 1]) b[2 * k + 1] = q; } } put(t); }
+    for (let p = cnt[i]; p < cnt[i + 1]; p++) { const t = ord[p], gg = t0 + t, cj = (gg / TPC) | 0, a = C[cj], o0 = (gg - cj * TPC) * 39; for (let v = 0; v < 3; v++) { const o = o0 + v * 13; for (let k = 0; k < 3; k++) { const q = a[o + k]; if (q < b[2 * k]) b[2 * k] = q; if (q > b[2 * k + 1]) b[2 * k + 1] = q; } } put(t); }
     T.push([dOff + cnt[i] * 3, (cnt[i + 1] - cnt[i]) * 3, b[0], b[1], b[2], b[3], b[4], b[5]]); }
   flush(); return T; }
 // Wall sky-visibility AO (realism 2026-10-31, L3): from 2 points on the face, march out along the normal (≤75 m) through the 40 m grid; the steepest
@@ -5524,23 +5529,31 @@ function gpuIdx(a, st) { const f = new Float32Array(a), m = new Map(), V = [], I
   const gl = GPU.gl, b = gpuBuf(new Float32Array(V)), ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(I), gl.STATIC_DRAW); (GPU.tIdx || (GPU.tIdx = new Map())).set(b, { ib, n: I.length }); return b; }
 // Photo textures (UE5-lifelike pass 2026-11-01): tex/mat.webp + nrm.webp = vertical strips of 512² layers → TEXTURE_2D_ARRAY (mips, anisotropic), leaf.webp = leaf-card atlas,
 // sky.webp = photo cloud layer. Units 7–10 (shadow maps 1–3, depth 4/6). Placeholders until loaded (GL_FS works without them: uTexOn 0 = previous procedural look), then a full render.
+// first view (before the splash goes, photo textures still loading → a full render follows when they arrive): no bloom readback (it stalled the CPU on the whole first GPU frame), not counted in GPU.fullMs (load perf 2026-11-08)
+const firstView = () => !BENCH.load && !!TEX.pend;
 const TEX = { on: 0, n: 11, skyU: 0.5972, units: { uMatA: 7, uMatN: 8, uLeaf: 9, uCldT: 10, uFac: 11 } };
 function texInit() { const gl = GPU.gl; if (TEX.init) return; TEX.init = true; const an = gl.getExtension('EXT_texture_filter_anisotropic');
   const mk = (tgt, unit) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(tgt, t); return t; }, px = new Uint8Array([128, 128, 255, 255]);
   TEX.a = mk(gl.TEXTURE_2D_ARRAY, 7); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.nm = mk(gl.TEXTURE_2D_ARRAY, 8); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.f = mk(gl.TEXTURE_2D_ARRAY, 11); gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
   TEX.l = mk(gl.TEXTURE_2D, 9); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px); TEX.c = mk(gl.TEXTURE_2D, 10); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
   for (const pr of [GPU.main, GPU.tree, GPU.gfill, GPU.sky]) { gl.useProgram(pr.p); for (const [k, v] of Object.entries(TEX.units)) if (pr.u[k]) gl.uniform1i(pr.u[k], v); }
-  const ld = f => new Promise((ok, no) => { const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => ok(im)); im.onerror = no; im.src = 'tex/' + f; });   // decoded off the main thread before the upload (load perf 2026-11-06: texImage from an undecoded image decoded synchronously)
-  const LM = lowMem(); if (LM >= 2) { gl.activeTexture(gl.TEXTURE0); return; }
-  Promise.all(['mat.webp', 'nrm.webp', 'leaf.webp', 'sky.webp'].concat(LM ? [] : ['fac.webp']).map(ld)).then(([A, N, L, C, F]) => { const g = GPU.gl;
-    const Q = [[A, TEX.a, 7], [N, TEX.nm, 8], [F, TEX.f, 11]].filter(q => q[0]), step = () => { const q = Q.shift(); if (q) { up(...q); return setTimeout(step, 0); } fin(); }; step();   // one texture per task (≈0.5 s blocks instead of one ≈2 s freeze right after the first view)
+  const LM = lowMem(); if (LM >= 2) { gl.activeTexture(gl.TEXTURE0); return; } TEX.pend = 1;
+  const go = ([A, N, L, C, F], now) => { const g = GPU.gl;
+    const Q = [[A, TEX.a, 7], [N, TEX.nm, 8], [F, TEX.f, 11]].filter(q => q[0]), step = () => { const q = Q.shift(); if (q) { up(...q); return now ? step() : setTimeout(step, 0); } fin(); }; step();   // one texture per task (≈0.5 s blocks instead of one ≈2 s freeze right after the first view)
     function up(im, t, u) { g.activeTexture(g.TEXTURE0 + u); g.bindTexture(g.TEXTURE_2D_ARRAY, t); const S = im.width;
       g.texImage3D(g.TEXTURE_2D_ARRAY, 0, g.RGBA8, S, S, im.height / S, 0, g.RGBA, g.UNSIGNED_BYTE, im); g.generateMipmap(g.TEXTURE_2D_ARRAY);
       g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR); g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_WRAP_S, g.REPEAT); g.texParameteri(g.TEXTURE_2D_ARRAY, g.TEXTURE_WRAP_T, g.REPEAT);
       if (an) g.texParameterf(g.TEXTURE_2D_ARRAY, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, g.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT))); g.activeTexture(g.TEXTURE0); }
     function fin() { g.activeTexture(g.TEXTURE9); g.bindTexture(g.TEXTURE_2D, TEX.l); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, g.RGBA, g.UNSIGNED_BYTE, L); g.generateMipmap(g.TEXTURE_2D); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR_MIPMAP_LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
     g.activeTexture(g.TEXTURE10); g.bindTexture(g.TEXTURE_2D, TEX.c); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA8, g.RGBA, g.UNSIGNED_BYTE, C); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.REPEAT); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
-    g.activeTexture(g.TEXTURE0); TEX.on = 1; renderAll(); } }).catch(e => console.warn('photo textures unavailable (procedural look kept):', e)); gl.activeTexture(gl.TEXTURE0); }
+    g.activeTexture(g.TEXTURE0); TEX.on = 1; TEX.pend = 0; if (!now) renderAll(); } };
+  const bad = e => { TEX.pend = 0; console.warn('photo textures unavailable (procedural look kept):', e); };
+  (TEX.pre || texPre()).then(a => go(a, false)).catch(bad); gl.activeTexture(gl.TEXTURE0); }   // uploaded after the first view (a sync upload before it made the first textured GPU frame ≈2× slower headless)
+// photo textures requested + decoded at startup (initApp), in parallel with the city build, instead of after the first view (load perf 2026-11-08)
+function texPre() { if (TEX.pre) return TEX.pre; const LM = lowMem(); if (LM >= 2) return (TEX.pre = Promise.resolve([]));
+  const ld0 = f => new Promise((ok, no) => { const im = new Image(); im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => ok(im)); im.onerror = no; im.src = 'tex/' + f; });
+  const ld = f => typeof createImageBitmap === 'function' ? fetch('tex/' + f).then(r => { if (!r.ok) throw new Error(f); return r.blob(); }).then(b => createImageBitmap(b, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' })).catch(() => ld0(f)) : ld0(f);   // ImageBitmap: decoded off the main thread to raw pixels → texImage is a plain copy (the <img> path re-decoded/converted during the upload; load perf 2026-11-08)   // decoded off the main thread before the upload (load perf 2026-11-06: texImage from an undecoded image decoded synchronously)
+  return (TEX.pre = Promise.all(['mat.webp', 'nrm.webp', 'leaf.webp', 'sky.webp'].concat(LM ? [] : ['fac.webp']).map(ld))); }
 function texU(pr, env) { const gl = GPU.gl, u = pr.u; if (u.uTexOn) gl.uniform1f(u.uTexOn, TEX.on && !GPU.noTex ? (lowMem() ? 2 : 1) : 0); if (u.uSkyU && env) { const W = env.W, s = env.sunVec; gl.uniform3f(u.uSkyU, W.cs > 2 ? 0 : W.clouds / 70, Math.atan2(s[0], s[2]), TEX.skyU); }
   if (u.uClit && env) { const [cl, cb] = cloudCols(env); gl.uniform3f(u.uClit, ...cl.map(v => v / 255)); gl.uniform3f(u.uCbase, ...cb.map(v => v / 255)); } }
 function gpuBuf(data) { const gl = GPU.gl, b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
@@ -5664,8 +5677,8 @@ function slimKitP(A, P) { const wh = [238, 238, 234].map(v => v / 255), sf = [21
     band(P.h + 0.25, 0.75, false); } }
 function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candidates (per prism) | new towers]; new-tower edge lines
   if (GPU.ver === WORLD_VER) return; GPU.ver = WORLD_VER; const gl = GPU.gl, C = WC.ver === WORLD_VER ? WC.e : null;
-  if (C && C.city) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
-    for (const k of ['city', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = gpuBuf(C.city); GPU.edges = gpuBuf(C.edges); GPU.gx = gpuBuf(C.gx); GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; C.city = C.edges = C.gx = null; return; }   // uploaded: drop the JS copies (memory)
+  if (C && C.cb) { GPU.opN = C.opN; GPU.own = C.own.map(([i, s, n]) => [ALL[i], s, n]); GPU.newR = C.newR; GPU.relR = C.relR || [0, 0]; GPU.tiles = C.tiles || null; GPU.rkT = C.rkT || []; GPU.newList = ALL.filter(P => P.kind === 'new');   // startup cache hit: same inputs → same buffers
+    for (const k of ['city', 'cityIB', 'edges', 'gx']) if (GPU[k]) gl.deleteBuffer(GPU[k]); GPU.city = C.cb.v; GPU.city.pk = 1; GPU.cityIB = C.cb.i; GPU.edges = C.cb.e; GPU.gx = C.cb.g; GPU.cityU = C.cityU; GPU.edgeN = C.edgeN; GPU.cityN = C.cityN; GPU.gxN = C.gxN; GPU.cityB = C.cityB; C.cb = null; return; }   // city cache (2026-11-08): GL buffers already filled chunk by chunk from IndexedDB in wcLoad (no JS copy)
   const A = glChunks(), own = [], E = [];
   for (const P of ALL) if (P.kind !== 'new' && !P.nogl && !P.wdoor && !P.wlift && !(P.name === 'Blk 32A' && !P.tank)) { const M = state.showExisting ? massOf(P) : null; if (M) for (const q of M) glPrism(A, q); else glPrism(A, P); }   // stage 4: rule massing (render only)
   GPU.noAO = true; for (const P of TRPF_RELIEF) if (!P.rel32) glPrism(A, P); GPU.noAO = false;
@@ -5680,16 +5693,16 @@ function gpuWorld() {   // city prisms per WORLD_VER: [opaque | own-unit candida
     const c = hexRgb(P.group.color).map(v => v / 255); for (let i = 0, j = P.n - 1; i < P.n; j = i++) { E.push(P.xs[i], P.base, P.zs[i], ...c, P.xs[i], P.h, P.zs[i], ...c, P.xs[j], P.h, P.zs[j], ...c, P.xs[i], P.h, P.zs[i], ...c); } }
   if (GPU.city) gl.deleteBuffer(GPU.city); if (GPU.edges) gl.deleteBuffer(GPU.edges); const NV = A.n; GPU.city = gl.createBuffer(); GPU.city.pk = 1;   // chunks → tile-sorted straight into the GPU buffer (memory 2026-11-03: no full-size JS copy; was CA + growable buffer ≈3× the city in JS)
   const pass = wr => { const D = { wr, u: 0, so: 0, io: 0, r: new Array(8), ri: 0 }; GPU.tiles = gpuTileStream(A, 0, k0, 0, true, D); GPU.rkT = gpuTileStream(A, k0, GPU.opN - k0, k0, true, D); gpuTileStream(A, GPU.opN, NV - GPU.opN, GPU.opN, false, D); return D.u; };   // pass 1 counts unique vertices, pass 2 packs them + the Uint32 index (draw ranges keep their vertex numbering = index positions)
-  const NU = pass(false); if (GPU.cityIB) gl.deleteBuffer(GPU.cityIB); GPU.cityIB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.city); gl.bufferData(gl.ARRAY_BUFFER, Math.max(NU, 1) * CVB, gl.STATIC_DRAW); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, GPU.cityIB); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Math.max(NV, 1) * 4, gl.STATIC_DRAW); pass(true); GPU.cityU = NU; A.C = A.b = A.CU = null;
-  GPU.newR = [ns, NV - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); GPU.edges = gpuBuf(new Float32Array(E)); GPU.edgeN = E.length / 6; GPU.cityN = NV;
+  const NU = pass(false); if (GPU.cityIB) gl.deleteBuffer(GPU.cityIB); GPU.cityIB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, GPU.city); gl.bufferData(gl.ARRAY_BUFFER, Math.max(NU, 1) * CVB, gl.STATIC_DRAW); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, GPU.cityIB); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Math.max(NV, 1) * 4, gl.STATIC_DRAW); pass(true); GPU.cityU = NU; A.C = A.b = A.CU = null; const EF = new Float32Array(E);
+  GPU.newR = [ns, NV - ns]; GPU.own = own; GPU.newList = ALL.filter(P => P.kind === 'new'); GPU.edges = gpuBuf(EF); GPU.edgeN = E.length / 6; GPU.cityN = NV;
   const X = glArr(), up = [0, 1, 0], z4 = [0, 0, 0, 0], c = v => v.map(q => q / 255);   // ground details (TRPF playground / fitness pad, condo pools), drawn over land use
   gpuGrounds(X);
   if (state.showExisting) { const pv = c([200, 196, 188]); shPaveRuns().forEach(([x0, x1, z0, z1]) => X.quad([x0, 0.2, z0], [x1, 0.2, z0], [x1, 0.2, z1], [x0, 0.2, z1], up, pv, z4, z4, z4, z4)); }   // Sports Hub plaza paving
   condoGrounds(X);
   if (state.showExisting) rf30Grounds(X);   // Riverfront W corner: drive, aprons, plaza
   CONDO_POOLS.forEach(q => X.quad([q[0], 0.3, q[1]], [q[2], 0.3, q[3]], [q[4], 0.3, q[5]], [q[6], 0.3, q[7]], up, c([70, 170, 200]), z4, z4, z4, z4));
-  if (GPU.gx) gl.deleteBuffer(GPU.gx); GPU.gx = gpuBuf(new Float32Array(X.a.length ? X.a : [0])); GPU.gxN = X.n;
-  if (WC.ver === WORLD_VER && WC.key) WC.save = { opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN };
+  if (GPU.gx) gl.deleteBuffer(GPU.gx); const GF = new Float32Array(X.a.length ? X.a : [0]); GPU.gx = gpuBuf(GF); GPU.gxN = X.n; GPU.cityB = { v: Math.max(NU, 1) * CVB, i: Math.max(NV, 1) * 4, e: EF.byteLength, g: GF.byteLength };
+  if (WC.ver === WORLD_VER && WC.key) WC.save = { opN: GPU.opN, newR: GPU.newR, relR: GPU.relR, tiles: GPU.tiles, rkT: GPU.rkT, own: own.map(([P, s, n]) => [ALL.indexOf(P), s, n]), edgeN: GPU.edgeN, cityN: GPU.cityN, gxN: GPU.gxN, cityU: NU, cityB: GPU.cityB };
 }
 // covered linkways paved all the way (TY 2026-11-01 "pave all the way… make it natural"): each linkway end that isn't already on paving is extended along its own direction until it
 // meets paving (site road, block apron, plaza/porch/drive/court/pad, jogging track, footpath; ≤25 m), else bent toward the nearest paved point ≤15 m (smooth quadratic curve); cached
@@ -6614,13 +6627,13 @@ function gpuEdges(cam, env) {   // new-tower outlines in their group colour (as 
   const gl = GPU.gl, F = GPU.flat; let i = 0;
   for (const P of GPU.newList) { const c = hexRgb(P.group.color), d = Math.hypot(P.cx - cam.ex, P.cz - cam.ez), T = transmittance(d, env), m = mix(env.sky.hor, c, T); gl.uniform4f(F.u.uColor, m[0] / 255, m[1] / 255, m[2] / 255, 1); gl.drawArrays(gl.LINES, i, P.n * 4); i += P.n * 4; }
 }
-function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { const t0 = performance.now(), full = cv === perspectiveCanvas && !PIN_VIS.fast && !PIN_VIS.lo; drawPerspective0(m, cv, ctx); if (full) { const dt = performance.now() - t0; GPU.fullMs = GPU.fullMs ? GPU.fullMs * 0.6 + dt * 0.4 : dt; } if (cv === perspectiveCanvas) { drawTape(); drawStrip(); } }   // on-screen: compass tape + floor strip follow every frame; GPU.fullMs = full-render cost (bloom readback syncs the GPU): fast devices keep full res while moving
+function drawPerspective(m, cv = perspectiveCanvas, ctx = vCtx) { const t0 = performance.now(), full = cv === perspectiveCanvas && !PIN_VIS.fast && !PIN_VIS.lo && !firstView(); drawPerspective0(m, cv, ctx); if (full) { const dt = performance.now() - t0; GPU.fullMs = GPU.fullMs ? GPU.fullMs * 0.6 + dt * 0.4 : dt; } if (cv === perspectiveCanvas) { drawTape(); drawStrip(); } }   // on-screen: compass tape + floor strip follow every frame; GPU.fullMs = full-render cost (bloom readback syncs the GPU): fast devices keep full res while moving
 function drawPerspective0(m, cv, ctx) {   // cv: on-screen view, or the offscreen photo canvas (same CSS size, larger backing)
   const w = cv._w, h = cv._h, cam = makeCamera(w, h, roomEyeWorld()), env = m.env;
   const lo = PIN_VIS.lo && cv === perspectiveCanvas && !(GPU.fullMs < 50) ? Math.min(1, Math.max(1, 0.7 * cv.width / w) / (cv.width / w)) : 1; GPU.tgt = [Math.round(cv.width * lo), Math.round(cv.height * lo)];   // GL canvas size for this frame (the half-res sky goes into a corner of it: no realloc per frame)
   // post FX (bloom, sun shafts, flare) also on moving frames when the device is fast (full render < 50 ms): they used to switch off while walking/turning and pop back 250 ms after stopping (TY 2026-11-01 "light shifts awkwardly"); vignette + grain on every frame
   const fx = !(PIN_VIS.fast && cv === perspectiveCanvas) || GPU.fullMs < 50;
-  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); const gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, GPU.cv.height - GPU.vh, GPU.vw, GPU.vh, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); BLOOM.flare = null; bloom = fx && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
+  ctx.clearRect(0, 0, w, h); drawSkyAndSea(ctx, cam, env, m); const gpu = (GPU.mask = !!(state.showBalcony && curSpot() && !onGround()), gpuRender(cam, env, Math.round(cv.width * lo), Math.round(cv.height * lo))); GPU.mask = false; let bloom = false; BLOOM.inter = false; BLOOM.fcov = false; if (gpu) { ctx.drawImage(GPU.cv, 0, GPU.cv.height - GPU.vh, GPU.vw, GPU.vh, 0, 0, w, h); if (cv === perspectiveCanvas) bldOutline(ctx, cam); drawRain(ctx, cam, env); BLOOM.flare = null; bloom = fx && !(firstView() && cv === perspectiveCanvas) && bloomGrab(ctx, w, h, (() => { const p = env.sun.elDeg > -1 && env.direct > 0.02 && cam.dirToScreen(env.sunVec[0], env.sunVec[1], env.sunVec[2]); return p ? { x: p[0], y: p[1], k: env.direct, warm: env.warm } : null; })()); }
   else { ctx.fillStyle = '#e2e8f0'; ctx.font = '600 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('3D view needs WebGL2 (not available in this browser)', w / 2, h / 2); }
   const pinPts = [], photo = cv !== perspectiveCanvas;   // photo (offscreen): no text/overlays on the saved image (TY 2026-11-02)
   if (state.showLabels && !photo) {
@@ -6684,7 +6697,7 @@ const drawFast = m => { PIN_VIS.fast = true; try { drawPerspective(m); } finally
 // while dragging / walking / scrubbing: 3D view rendered at ≤1.4 px per CSS px (phones are 2×) and scaled up; the full render 250 ms after input stops is full resolution again (lag cut 2026-10-31)
 const drawMove = m => { PIN_VIS.lo = true; try { drawFast(m); } finally { PIN_VIS.lo = false; } };
 function renderView() { if (!lastMath) return renderAll(); clearTimeout(idleT); idleT = setTimeout(renderAll, 250); if (viewPending) return; viewPending = true; requestAnimationFrame(() => { viewPending = false; tiltCap(); if (!renderPending) drawMove(lastMath); }); }
-function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); lightsBtnUI(); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); drawRoomPanel(); drawLightChart(); drawRoomHud(); drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
+function renderNow() { renderPending = false; tiltCap(); const m = computeSightlines(); lastMath = m; updateDashboard(m); lightsBtnUI(); drawPlan(m); drawProfile(m); drawPerspective(m); drawWalkMap(); furnDrawPlan(); drawSunChart(); if (BENCH.load) { drawRoomPanel(); drawLightChart(); drawRoomHud(); } else requestAnimationFrame(() => setTimeout(() => { drawRoomPanel(); drawLightChart(); drawRoomHud(); }, 0));   /* first view: room light/heat readings right after the first paint (load perf 2026-11-08) */ drawTimeTrack(); drawRoomPlan(); drawHeroes(m); scnImpSchedule(); bldCardUI(); }
 function regen() { generateTowers(); rebuildIndex(); renderAll(); }
 const custom = () => { scenarioPreset.value = 'custom'; };
 const localXY = (cv, e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -7199,12 +7212,39 @@ function wcHash() { let a = 0x811c9dc5, b = 0x9747b28c; const f = new Float64Arr
   seen.clear(); ALL.forEach(P => { seen.clear(); val(P, 0); }); val(CONDO_POOLS, 0); w(state.showExisting ? 1 : 0);
   return (a >>> 0).toString(36) + (b >>> 0).toString(36); }
 const wcDB = () => new Promise((res, rej) => { const r = indexedDB.open('trpf134-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('w'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+// City cache (2026-11-08, load + write time): the built city GL buffers (vertices, index, edges, ground details ≈135 MB) are read back from the GPU after a first visit
+// (getBufferSubData, 4 MB per stream pull, ≤6 ms each) and streamed into one Cache Storage response (WC_CC; IndexedDB took ≈20 s to write 130 MB in 4 MB records, the
+// Cache API ≈0.7 s); IndexedDB 'cm' = {key, n} is written after the put completes (= valid). On a hit wcLoad streams the response body straight into fresh GL buffers
+// (≈1 MB pieces, no full JS copy), so gpuWorld (≈2.5 s) is skipped. Any key change clears IndexedDB + the city cache. sw.js keeps WC_CC on activation.
+const WC_CH = 4 << 20, WC_BUFS = ['v', 'i', 'e', 'g'], WC_CC = 'trpf134-city', WC_CU = 'city.bin';
+const wcCaches = () => typeof caches !== 'undefined' && window.isSecureContext;
 function wcLoad() { WC.ver = WORLD_VER; try { WC.key = wcHash(); } catch (_) { WC.key = ''; return Promise.resolve(); }
-  const get = wcDB().then(db => new Promise(res => { const os = () => db.transaction('w', 'readwrite').objectStore('w'), done = () => { db.close(); res(); }, k = os().get('k');   // key first: a stale entry is deleted unread (old entries held the 160 MB+ city buffer; reading one per deploy spiked memory, 2026-11-03)
-    k.onsuccess = () => { if (k.result !== WC.key) { const d = os().delete('world'); d.onsuccess = d.onerror = done; return; } const q = os().get('world'); q.onsuccess = () => { const e = q.result; WC.e = e && e.key === WC.key ? e : null; done(); }; q.onerror = done; }; k.onerror = done; }));
-  return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600))]); }   // private mode / blocked storage: build as before
-function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null;
-  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key: WC.key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); WC.rk = null; t.objectStore('w').put(WC.key, 'k'); t.oncomplete = t.onerror = () => db.close(); }).catch(() => {}); }
+  let late = false; const get = wcDB().then(db => new Promise(res => { const os = () => db.transaction('w', 'readwrite').objectStore('w'), done = () => { db.close(); res(); }, k = os().get('k');   // key first: a stale store is cleared unread (old entries held the 160 MB+ city; reading one per deploy spiked memory, 2026-11-03)
+    k.onsuccess = () => { if (k.result !== WC.key) { os().clear(); if (wcCaches()) WC.del = caches.delete(WC_CC).catch(() => {}); return done(); } if (late) return done();   // stale version: cleared in the background (close waits for it)
+      const t = db.transaction('w', 'readonly'), st = t.objectStore('w'), q = st.get('world'), m = st.get('cm');
+      t.oncomplete = () => { db.close(); if (late) return res(); const e = q.result, cm = m.result; WC.e = e && e.key === WC.key ? e : null; if (!WC.e || !cm || cm.key !== WC.key || !e.cityB || !wcCaches()) return res();
+        const gl = GPU.gl; if (!gl || gl.isContextLost()) return res(); const B = e.cityB, cb = {}, seg = []; let tot = 0;
+        for (const b of WC_BUFS) { cb[b] = gl.createBuffer(); const tg = b === 'i' ? gl.ELEMENT_ARRAY_BUFFER : gl.ARRAY_BUFFER; gl.bindBuffer(tg, cb[b]); gl.bufferData(tg, B[b], gl.STATIC_DRAW); seg.push([b, tg, tot, B[b]]); tot += B[b]; }
+        const fail = () => { for (const b of WC_BUFS) gl.deleteBuffer(cb[b]); res(); };
+        caches.open(WC_CC).then(c => c.match(WC_CU)).then(r => { if (!r || !r.body || cm.n !== tot) return fail(); const rd = r.body.getReader(); let pos = 0, si = 0;
+          const pump = () => rd.read().then(({ done: fin, value: v }) => { if (fin) { if (pos === tot && !gl.isContextLost()) { WC.e.cb = cb; res(); } else fail(); return; }
+            let off = 0; while (off < v.byteLength) { while (si < seg.length && pos >= seg[si][2] + seg[si][3]) si++; if (si === seg.length) { rd.cancel(); return fail(); }   // piece may straddle two buffers
+              const [b, tg, s0, n] = seg[si], take = Math.min(v.byteLength - off, s0 + n - pos); gl.bindBuffer(tg, cb[b]); gl.bufferSubData(tg, pos - s0, v, off, take); off += take; pos += take; }
+            return pump(); });
+          return pump(); }).catch(fail); };
+      t.onerror = t.onabort = done; }; k.onerror = done; }));
+  return Promise.race([get.catch(() => {}), new Promise(r => setTimeout(r, 600)).then(() => { if (!WC.e) late = true; else return get.catch(() => {}); })]); }   // private mode / blocked storage: build as before (a confirmed hit may take longer than 600 ms to stream)
+function wcStore() { const S = WC.save; if (!S || !WC.key) return; WC.save = null; const key = WC.key;
+  wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put(Object.assign({ key, rk: WC.rk || null, trees: TT_BASE || { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }, sh: SH_RUNS }, S), 'world'); WC.rk = null; t.objectStore('w').put(key, 'k');
+    t.oncomplete = () => { db.close(); wcStoreCity(key, S.cityB); }; t.onerror = () => db.close(); }).catch(() => {}); }
+function wcStoreCity(key, B) { const gl = GPU.gl, v0 = GPU.city, ver = GPU.ver; let F = null; try { F = localStorage.getItem('trpf134.ccFail'); } catch (_) {} if (!B || !gl || !v0 || F === key || !wcCaches()) return;   // a failed write (quota) isn't retried for this version
+  const bufs = { v: GPU.city, i: GPU.cityIB, e: GPU.edges, g: GPU.gx }, list = []; let tot = 0; for (const b of WC_BUFS) { for (let o = 0; o < B[b]; o += WC_CH) list.push([b, o]); tot += B[b]; } let n = 0, chg = false;
+  const rs = new ReadableStream({ pull: ctl => new Promise(r => setTimeout(r, 16)).then(() => {   // one readback per pull, spaced so input stays responsive
+    if (GPU.city !== v0 || GPU.ver !== ver || gl.isContextLost() || WC.key !== key) { chg = true; throw new Error('world changed'); }
+    if (n === list.length) return ctl.close(); const [b, o] = list[n++], a = new Uint8Array(Math.min(WC_CH, B[b] - o)); gl.bindBuffer(gl.COPY_READ_BUFFER, bufs[b]); gl.getBufferSubData(gl.COPY_READ_BUFFER, o, a); gl.bindBuffer(gl.COPY_READ_BUFFER, null); ctl.enqueue(a); }) }, { highWaterMark: 1 });
+  const ok = () => wcDB().then(db => { const t = db.transaction('w', 'readwrite'); t.objectStore('w').put({ key, n: tot }, 'cm'); t.oncomplete = t.onerror = () => db.close(); });
+  setTimeout(() => (WC.del || Promise.resolve()).then(() => caches.open(WC_CC)).then(c => c.put(WC_CU, new Response(rs, { headers: { 'content-type': 'application/octet-stream' } }))).then(ok)
+    .catch(() => { if (!chg && WC.key === key) try { localStorage.setItem('trpf134.ccFail', key); } catch (_) {} caches.delete(WC_CC).catch(() => {}); }), 500); }
 /* ===================== UX ROUND 4 (2026-10-31): scenario chip, hold-to-compare, pinch/wheel lens, double-tap face, haptics, phone dock, plan full screen, panel width + keys ===================== */
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(6); } catch (_) {} };
 const SCN_SHORT = { movein: '2029', low: 'Low', base: 'Base', tall: 'Upside', build: '2032', allres: 'Full', custom: 'Custom' };
@@ -7251,11 +7291,12 @@ let initialized = false;
 function initApp() {
   if (initialized) return; initialized = true; splStep('Building the city…', 0.45);
   try { gpuStart(); } catch (e) { console.warn(e); }   // shaders compile in the driver while the city is built
+  try { if (GPU.gl) texPre().catch(() => {}); } catch (e) {}
   buildGroupRows(); generateTowers(); rebuildIndex(); wcLoad().then(() => { splStep('Drawing the first view…', 0.8); setTimeout(initApp2, 30); }); }
 function splStep(t, k) { const a = $('splStep'), b = $('splBar'); if (a) a.textContent = t; if (b) b.style.width = `${k * 100}%`; }
 function initApp2() { const E = WC.e;
   if (E) { Object.assign(TREES, E.trees); SH_RUNS = E.sh; } else generateTrees(); TT_BASE = { n: TREES.n, x: TREES.x, z: TREES.z, h: TREES.h, g: TREES.g }; towerTrees();
-  furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); setTimeout(() => { if (!E) wcStore(); else if (GPU.ver === WC.ver) WC.e = null; }, 2000);   // hit: drop the loaded entry once the startup world is built (≈5 MB JS)
+  furnBindUI(); furnInit(); viewLoad(); $('balconyToggle').checked = state.showBalcony; $('winOpenBtn').setAttribute('aria-pressed', String(state.winOpen)); $('winOpenBtn').style.borderColor = state.winOpen ? '#34d399' : ''; resizeCanvases(); setTimeout(() => { const cb = WC.e && WC.e.cb; if (cb) { for (const k in cb) GPU.gl.deleteBuffer(cb[k]); WC.e.cb = null; } if (!E || WC.save) wcStore(); else if (GPU.ver === WC.ver) WC.e = null; }, 2000);   // hit: drop the loaded entry once the startup world is built (≈5 MB JS)
   setInterval(viewSave, 2000); addEventListener('pagehide', viewSave); document.addEventListener('visibilitychange', () => { if (document.hidden) viewSave(); });
   const spl = $('splash'); if (spl) { spl.style.opacity = '0'; setTimeout(() => spl.remove(), 450); } BENCH.load = performance.now(); if (/[?&]bench/.test(location.search)) { setTimeout(glBench, 1500); const bb = document.createElement('button'); bb.textContent = '⏱ Bench'; bb.style.cssText = 'position:fixed;left:8px;bottom:120px;z-index:98;padding:8px 12px;border-radius:8px;background:#000c;color:#fde68a;border:1px solid #fde68a55;font:600 13px system-ui'; bb.onclick = e => { e.stopPropagation(); const c = document.querySelector('pre.benchCard'); if (c) c.remove(); else glBench(); }; document.body.appendChild(bb); }   // ?bench: re-run anywhere (e.g. while walking: adds the walk-step row)
   let pending = false; const sz = () => [profileCanvas.parentElement, perspectiveCanvas.parentElement, planCanvas.parentElement, planCanvas].map(e => `${e.clientWidth}x${e.clientHeight}`).join() + FURN.open, last = { k: sz() };
