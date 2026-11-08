@@ -2990,7 +2990,7 @@ const STARS = (() => { let s = 12345; const rnd = () => ((s = (s * 16807) % 2147
 // sky greying toward tint, darkness, cloud count/scale/grey; selecting one also sets Haze visibility (km).
 const WEATHER = {
   clear: { label: 'Clear', vis: 60, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 14, cs: 1, cg: 0 },
-  fair: { label: 'Fair, cumulus', vis: 12, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 70, cs: 1, cg: 0 },
+  fair: { label: 'Fair, cumulus', vis: 25, sun: 1, amb: 1, grey: 0, dark: 1, clouds: 70, cs: 1, cg: 0 },
   hazy: { label: 'Hazy', vis: 5, sun: 0.7, amb: 0.95, grey: 0.45, tint: [205, 196, 172], dark: 0.95, clouds: 35, cs: 1, cg: 0.2 },
   overcast: { label: 'Overcast', vis: 10, sun: 0, amb: 0.8, grey: 0.8, tint: [196, 200, 206], dark: 0.85, clouds: 70, cs: 2.6, cg: 0.55 },
   rain: { label: 'Rain shower', vis: 3, sun: 0, amb: 0.55, grey: 0.9, tint: [150, 156, 166], dark: 0.62, clouds: 70, cs: 3, cg: 0.75, rain: true }
@@ -3014,7 +3014,7 @@ const GROUPS = [
 ];
 const state = {
   vx: UNIT134[0], vz: UNIT134[1], spot: 'living', facadeLimit: true, obsFloor: 27, heading: 220, pitchDeg: -1.5, focalLength: 50,
-  profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 12, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
+  profileRange: 4000, planMode: 'site', hour: 13, dateStr: todayISO(), visibilityKm: 25, standDist: 0.5, eyeOffset: 1.55, posture: 'stand',
   groups: { N: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, S: { on: true, min: 30, max: 44, gpr: 4.0, net: 0.7, low: 10, step: true }, EA: { on: true, min: 26, max: 30, plots: { E1: { floors: 26, towers: 3, slim: 1 }, E2: { floors: 24, towers: 3, slim: 1 } } }, RE: { on: false, min: 30, max: 40 }, RS: { on: false, min: 30, max: 40 }, RT: { on: false, min: 30, max: 40 }, KB: { on: false, min: 25, max: 40 }, KA: { on: false, min: 5, max: 12 }, LI: { on: false, min: 20, max: 40, gpr: 3.0, net: 0.5, low: 10, step: false } },
   showExisting: true, showRoads: true, spacing: 95, footprint: 34, seed: 1, opacity: 1, xray: false, showBalcony: true, winOpen: false, walk: null, showLabels: false, glass: 'light', weather: 'fair', exposure: false, ao: true, live: false, traffic: 'auto'
 };
